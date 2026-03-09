@@ -1,0 +1,19 @@
+{
+  "name": "ai-orchestrator",
+  "version": "1.0.0",
+  "description": "AI Orchestrator MVP foundation",
+  "type": "module",
+  "scripts": {
+    "bootstrap": "node --experimental-strip-types apps/control-plane/src/cli.ts bootstrap",
+    "show-state": "node --experimental-strip-types apps/control-plane/src/cli.ts show-state",
+    "export-backlog": "node --experimental-strip-types apps/control-plane/src/cli.ts export-backlog",
+    "test": "node --test --experimental-strip-types tests/**/*.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^4.3.6"
+  }
+}
