@@ -33,6 +33,7 @@ export interface Feature {
 export interface BacklogTask {
   id: string;
   featureId: string;
+  splitFromTaskId?: string;
   title: string;
   kind: BacklogTaskKind;
   status: BacklogTaskStatus;
@@ -67,6 +68,10 @@ export function validateBacklogTask(task: BacklogTask): string[] {
 
   if (!task.kind) {
     issues.push(`Task ${task.id} must declare a kind`);
+  }
+
+  if (task.splitFromTaskId === task.id) {
+    issues.push(`Task ${task.id} cannot split from itself`);
   }
 
   return issues;

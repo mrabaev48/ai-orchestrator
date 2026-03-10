@@ -10,6 +10,7 @@ import {
   requiresReview,
   requiresTesting,
   routeTaskToRole,
+  splitTaskForRetry,
   shouldStopRun,
 } from '../../workflow/src/index.ts';
 import type { RoleRegistry } from '../../agents/src/index.ts';
@@ -196,16 +197,61 @@ export class Orchestrator {
     runId: string,
   ): Promise<RunCycleResult> {
     const retryCount = state.execution.retryCounts[task.id] ?? 0;
-    const action = nextFailureAction(retryCount, this.config.workflow.maxRetriesPerTask);
+    const action = nextFailureAction(task, retryCount, this.config.workflow.maxRetriesPerTask);
 
     const failure = await this.stateStore.recordFailure({
       taskId: task.id,
       role,
       reason,
-      retrySuggested: action === 'retry',
+      retrySuggested: action !== 'block',
     });
     state.failures.push(failure);
     state.execution.retryCounts[task.id] = (state.execution.retryCounts[task.id] ?? 0) + 1;
+
+    if (action === 'split') {
+      const splitPlan = splitTaskForRetry(task, reason);
+      task.status = 'blocked';
+      if (!state.execution.blockedTaskIds.includes(task.id)) {
+        state.execution.blockedTaskIds.push(task.id);
+      }
+
+      const feature = state.backlog.features[task.featureId];
+      for (const childTask of splitPlan.childTasks) {
+        state.backlog.tasks[childTask.id] = childTask;
+        if (feature && !feature.taskIds.includes(childTask.id)) {
+          feature.taskIds.push(childTask.id);
+        }
+      }
+
+      const artifact = makeArtifact('report', `Task split for ${task.id}`, {
+        taskId: task.id,
+        reason,
+        childTaskIds: splitPlan.childTasks.map((childTask) => childTask.id).join(','),
+      });
+      const decision = {
+        id: crypto.randomUUID(),
+        title: `Split task ${task.id}`,
+        decision: `Split ${task.id} into ${splitPlan.childTasks.map((childTask) => childTask.id).join(', ')}`,
+        rationale: splitPlan.rationale,
+        affectedAreas: [...task.affectedModules],
+        createdAt: new Date().toISOString(),
+      };
+      state.artifacts.push(artifact);
+      state.decisions.push(decision);
+      await this.stateStore.save(state);
+      await this.stateStore.recordEvent(
+        makeEvent(
+          'TASK_SPLIT',
+          {
+            taskId: task.id,
+            childTaskIds: splitPlan.childTasks.map((childTask) => childTask.id),
+            reason,
+          },
+          { runId },
+        ),
+      );
+      return { runId, taskId: task.id, status: 'idle', stopReason: 'task_split' };
+    }
 
     if (action === 'block') {
       task.status = 'blocked';

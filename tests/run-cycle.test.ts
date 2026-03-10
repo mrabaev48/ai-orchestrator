@@ -106,6 +106,19 @@ test('runCycle happy path completes task and records summary artifact', async ()
 
 test('runCycle blocks task after repeated review failures', async () => {
   const state = makeState(['[reject] review should fail']);
+  state.backlog.tasks['task-1']!.splitFromTaskId = 'parent-task';
+  state.backlog.tasks['parent-task'] = {
+    id: 'parent-task',
+    featureId: 'feature-1',
+    title: 'Parent task',
+    kind: 'implementation',
+    status: 'blocked',
+    priority: 'p0',
+    dependsOn: [],
+    acceptanceCriteria: ['done'],
+    affectedModules: ['packages/execution'],
+    estimatedRisk: 'medium',
+  };
   state.execution.retryCounts['task-1'] = 1;
   const store = new InMemoryStateStore(state);
   const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
@@ -118,4 +131,23 @@ test('runCycle blocks task after repeated review failures', async () => {
   assert.equal(loaded.backlog.tasks['task-1']?.status, 'blocked');
   assert.equal(loaded.execution.blockedTaskIds.includes('task-1'), true);
   assert.equal(loaded.failures.length, 1);
+});
+
+test('runCycle splits parent task after repeated review failures', async () => {
+  const state = makeState(['[reject] review should fail', 'keep scope narrow']);
+  state.execution.retryCounts['task-1'] = 1;
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+
+  const result = await orchestrator.runCycle();
+  const loaded = await store.load();
+
+  assert.equal(result.status, 'idle');
+  assert.equal(result.stopReason, 'task_split');
+  assert.equal(loaded.backlog.tasks['task-1']?.status, 'blocked');
+  assert.equal(loaded.backlog.tasks['task-1--part-1']?.splitFromTaskId, 'task-1');
+  assert.equal(loaded.backlog.tasks['task-1--part-2']?.dependsOn[0], 'task-1--part-1');
+  assert.equal(loaded.decisions.some((decision) => decision.title.includes('Split task task-1')), true);
+  assert.equal(store.events.some((event) => event.eventType === 'TASK_SPLIT'), true);
 });

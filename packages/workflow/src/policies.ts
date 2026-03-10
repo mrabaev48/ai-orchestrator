@@ -10,6 +10,8 @@ export interface StopConditionResult {
   reason?: string;
 }
 
+export type FailureAction = 'retry' | 'split' | 'block';
+
 export function shouldStopRun(
   state: ProjectState,
   limits: { maxStepsPerRun: number; maxRetriesPerTask: number },
@@ -38,6 +40,12 @@ export function selectNextTask(state: ProjectState): BacklogTask | undefined {
       const priorityDelta = priorityWeight(right.priority) - priorityWeight(left.priority);
       if (priorityDelta !== 0) {
         return priorityDelta;
+      }
+
+      const splitDelta =
+        Number(Boolean(right.splitFromTaskId)) - Number(Boolean(left.splitFromTaskId));
+      if (splitDelta !== 0) {
+        return splitDelta;
       }
 
       const retryDelta =
@@ -74,10 +82,15 @@ export function requiresTesting(task: BacklogTask): boolean {
 }
 
 export function nextFailureAction(
+  task: BacklogTask,
   retryCount: number,
   maxRetriesPerTask: number,
-): 'retry' | 'block' {
-  return retryCount + 1 >= maxRetriesPerTask ? 'block' : 'retry';
+): FailureAction {
+  if (retryCount + 1 < maxRetriesPerTask) {
+    return 'retry';
+  }
+
+  return task.splitFromTaskId ? 'block' : 'split';
 }
 
 export function isReviewApproved(result: ReviewResult): boolean {

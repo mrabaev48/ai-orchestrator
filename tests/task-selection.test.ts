@@ -52,3 +52,52 @@ test('selectNextTask respects dependencies and priority', () => {
   const selected = selectNextTask(state);
   assert.equal(selected?.id, 'task-2');
 });
+
+test('selectNextTask prefers valid split child tasks over equivalent unsplit work', () => {
+  const state = createEmptyProjectState({
+    projectId: 'p1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+
+  state.backlog.tasks['task-a'] = {
+    id: 'task-a',
+    featureId: 'f1',
+    title: 'Regular task',
+    kind: 'implementation',
+    status: 'todo',
+    priority: 'p1',
+    dependsOn: [],
+    acceptanceCriteria: ['done'],
+    affectedModules: [],
+    estimatedRisk: 'low',
+  };
+  state.backlog.tasks['task-parent'] = {
+    id: 'task-parent',
+    featureId: 'f1',
+    title: 'Parent task',
+    kind: 'implementation',
+    status: 'blocked',
+    priority: 'p1',
+    dependsOn: [],
+    acceptanceCriteria: ['done'],
+    affectedModules: [],
+    estimatedRisk: 'medium',
+  };
+  state.backlog.tasks['task-parent--part-1'] = {
+    id: 'task-parent--part-1',
+    featureId: 'f1',
+    splitFromTaskId: 'task-parent',
+    title: 'Child task',
+    kind: 'implementation',
+    status: 'todo',
+    priority: 'p1',
+    dependsOn: [],
+    acceptanceCriteria: ['done'],
+    affectedModules: [],
+    estimatedRisk: 'medium',
+  };
+
+  const selected = selectNextTask(state);
+  assert.equal(selected?.id, 'task-parent--part-1');
+});
