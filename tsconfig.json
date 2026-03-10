@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "lib": ["ES2023"],
     "target": "ES2023",
     "module": "nodenext",
     "moduleResolution": "nodenext",
@@ -10,11 +11,13 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node"]
   },
   "include": [
     "apps/**/*.ts",
     "packages/**/*.ts",
+    "packages/**/*.d.ts",
     "tests/**/*.ts"
   ]
 }

@@ -62,7 +62,7 @@ const envSchema = z.object({
 
 export interface LoadRuntimeConfigOptions {
   cwd?: string;
-  env?: NodeJS.ProcessEnv;
+  env?: Record<string, string | undefined>;
 }
 
 export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): RuntimeConfig {
@@ -76,23 +76,23 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
   }
 
   const fileConfig = loadConfigFile(cwd, env.data.RUNTIME_CONFIG_FILE);
+  const resolvedSqlitePath = path.resolve(cwd, fileConfig.state?.sqlitePath ?? env.data.SQLITE_PATH);
   const merged = {
     llm: {
       provider: env.data.LLM_PROVIDER,
       model: env.data.LLM_MODEL,
-      apiKey: env.data.LLM_API_KEY,
       temperature: env.data.LLM_TEMPERATURE,
       timeoutMs: env.data.LLM_TIMEOUT_MS,
+      ...(env.data.LLM_API_KEY ? { apiKey: env.data.LLM_API_KEY } : {}),
       ...fileConfig.llm,
     },
     state: {
+      ...fileConfig.state,
       backend: env.data.STATE_BACKEND,
-      sqlitePath: path.resolve(cwd, env.data.SQLITE_PATH),
+      sqlitePath: resolvedSqlitePath,
       snapshotOnBootstrap: env.data.SNAPSHOT_ON_BOOTSTRAP,
       snapshotOnTaskCompletion: env.data.SNAPSHOT_ON_TASK_COMPLETION,
       snapshotOnMilestoneCompletion: env.data.SNAPSHOT_ON_MILESTONE_COMPLETION,
-      ...fileConfig.state,
-      sqlitePath: path.resolve(cwd, fileConfig.state?.sqlitePath ?? env.data.SQLITE_PATH),
     },
     workflow: {
       maxStepsPerRun: env.data.MAX_STEPS_PER_RUN,
@@ -125,16 +125,20 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
 }
 
 export function redactSecrets<T>(value: T): T {
+  return redactSecretsInternal(value) as T;
+}
+
+function redactSecretsInternal(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.map((item) => redactSecrets(item)) as T;
+    return value.map((item) => redactSecretsInternal(item));
   }
 
   if (value && typeof value === 'object') {
     const output: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      output[key] = isSecretKey(key) ? '<redacted>' : redactSecrets(entry);
+      output[key] = isSecretKey(key) ? '<redacted>' : redactSecretsInternal(entry);
     }
-    return output as T;
+    return output;
   }
 
   return value;

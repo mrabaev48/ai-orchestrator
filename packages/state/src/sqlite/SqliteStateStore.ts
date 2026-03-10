@@ -155,12 +155,12 @@ export class SqliteStateStore implements StateStore {
     if (!current.execution.completedTaskIds.includes(taskId)) {
       current.execution.completedTaskIds.push(taskId);
     }
-    current.execution.activeTaskId = undefined;
+    delete current.execution.activeTaskId;
 
     const event = makeEvent('TASK_COMPLETED', {
       taskId,
       summary,
-    }, { runId: current.execution.activeRunId });
+    }, current.execution.activeRunId ? { runId: current.execution.activeRunId } : {});
 
     this.withTransaction(() => {
       this.insertEvent(event);

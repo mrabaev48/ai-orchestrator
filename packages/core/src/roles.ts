@@ -47,9 +47,9 @@ export interface RoleResponse<TOutput> {
 
 export interface AgentRole<TInput, TOutput> {
   readonly name: AgentRoleName;
-  execute(
+  execute: (
     request: RoleRequest<TInput>,
     context: RoleExecutionContext,
-  ): Promise<RoleResponse<TOutput>>;
-  validate?(response: RoleResponse<TOutput>): void | Promise<void>;
+  ) => Promise<RoleResponse<TOutput>>;
+  validate?: (response: RoleResponse<TOutput>) => void | Promise<void>;
 }

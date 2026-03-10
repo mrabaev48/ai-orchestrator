@@ -17,11 +17,11 @@ export interface RecordFailureInput {
 }
 
 export interface StateStore {
-  load(): Promise<ProjectState>;
-  save(state: ProjectState): Promise<void>;
-  recordEvent(event: DomainEvent): Promise<void>;
-  recordFailure(input: RecordFailureInput): Promise<FailureRecord>;
-  recordArtifact(artifact: ArtifactRecord): Promise<void>;
-  recordDecision(decision: DecisionLogItem): Promise<void>;
-  markTaskDone(taskId: string, summary: string): Promise<void>;
+  load: () => Promise<ProjectState>;
+  save: (state: ProjectState) => Promise<void>;
+  recordEvent: (event: DomainEvent) => Promise<void>;
+  recordFailure: (input: RecordFailureInput) => Promise<FailureRecord>;
+  recordArtifact: (artifact: ArtifactRecord) => Promise<void>;
+  recordDecision: (decision: DecisionLogItem) => Promise<void>;
+  markTaskDone: (taskId: string, summary: string) => Promise<void>;
 }

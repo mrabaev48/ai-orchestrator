@@ -29,6 +29,6 @@ export function makeEvent<TPayload>(
     eventType,
     createdAt: new Date().toISOString(),
     payload,
-    runId: context.runId,
+    ...(context.runId ? { runId: context.runId } : {}),
   };
 }

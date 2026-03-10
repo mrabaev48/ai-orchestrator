@@ -26,11 +26,11 @@ export interface LogEntry extends LogContext {
 }
 
 export interface Logger {
-  debug(message: string, entry?: Partial<LogEntry>): void;
-  info(message: string, entry?: Partial<LogEntry>): void;
-  warn(message: string, entry?: Partial<LogEntry>): void;
-  error(message: string, entry?: Partial<LogEntry>): void;
-  withContext(context: LogContext): Logger;
+  debug: (message: string, entry?: Partial<LogEntry>) => void;
+  info: (message: string, entry?: Partial<LogEntry>) => void;
+  warn: (message: string, entry?: Partial<LogEntry>) => void;
+  error: (message: string, entry?: Partial<LogEntry>) => void;
+  withContext: (context: LogContext) => Logger;
 }
 
 export interface LoggerOptions {
@@ -50,7 +50,9 @@ export function createLogger(config: RuntimeConfig, options: LoggerOptions = {})
 }
 
 function createChildLogger(level: LogLevel, context: LogContext, options: LoggerOptions): Logger {
-  const sink = options.sink ?? ((line: string) => console.log(line));
+  const sink = options.sink ?? ((line: string) => {
+    console.log(line);
+  });
   const now = options.now ?? (() => new Date());
 
   const write = (entryLevel: LogLevel, message: string, entry: Partial<LogEntry> = {}): void => {
@@ -70,10 +72,18 @@ function createChildLogger(level: LogLevel, context: LogContext, options: Logger
   };
 
   return {
-    debug: (message, entry) => write('debug', message, entry),
-    info: (message, entry) => write('info', message, entry),
-    warn: (message, entry) => write('warn', message, entry),
-    error: (message, entry) => write('error', message, entry),
+    debug: (message, entry) => {
+      write('debug', message, entry);
+    },
+    info: (message, entry) => {
+      write('info', message, entry);
+    },
+    warn: (message, entry) => {
+      write('warn', message, entry);
+    },
+    error: (message, entry) => {
+      write('error', message, entry);
+    },
     withContext(childContext) {
       return createChildLogger(level, { ...context, ...childContext }, options);
     },

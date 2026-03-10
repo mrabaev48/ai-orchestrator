@@ -10,8 +10,8 @@ import type { StateStore, RecordFailureInput } from '../StateStore.ts';
 import { StateStoreError } from '../../../shared/src/index.ts';
 
 export class InMemoryStateStore implements StateStore {
-  private state: ProjectState;
   readonly events: DomainEvent[] = [];
+  private state: ProjectState;
 
   constructor(initialState: ProjectState) {
     assertProjectState(initialState);
@@ -77,7 +77,7 @@ export class InMemoryStateStore implements StateStore {
     if (!current.execution.completedTaskIds.includes(taskId)) {
       current.execution.completedTaskIds.push(taskId);
     }
-    current.execution.activeTaskId = undefined;
+    delete current.execution.activeTaskId;
     current.artifacts.push({
       id: crypto.randomUUID(),
       type: 'run_summary',
