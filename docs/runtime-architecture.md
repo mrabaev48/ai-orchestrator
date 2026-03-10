@@ -13,6 +13,7 @@ The runtime is organized as a layered backend with explicit composition at the e
   - application services for control-plane operations
   - bootstrap/discovery service for initial repository understanding
   - architecture analysis service for decision-ready findings
+  - planning service for milestone-aware backlog updates
   - read models for CLI and future API consumers
 - `packages/execution`
   - orchestrator runtime and run-cycle coordination

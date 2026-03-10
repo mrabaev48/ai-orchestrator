@@ -2,6 +2,7 @@ import {
   ArchitectureService,
   BootstrapService,
   ControlPlaneService,
+  PlanningService,
   createApplicationContext,
 } from '../../../packages/application/src/index.ts';
 import {
@@ -11,7 +12,7 @@ import {
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
 
-type CommandName = 'bootstrap' | 'analyze-architecture' | 'run-cycle' | 'show-state' | 'export-backlog';
+type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'run-cycle' | 'show-state' | 'export-backlog';
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -33,6 +34,7 @@ async function main(): Promise<void> {
   });
   const bootstrapService = new BootstrapService(application.stateStore, application.roleRegistry, logger);
   const architectureService = new ArchitectureService(application.stateStore, application.roleRegistry, logger);
+  const planningService = new PlanningService(application.stateStore, application.roleRegistry, logger);
   const controlPlaneService = new ControlPlaneService(application.stateStore, logger);
 
   switch (command) {
@@ -44,6 +46,9 @@ async function main(): Promise<void> {
       return;
     case 'analyze-architecture':
       await analyzeArchitecture(architectureService);
+      return;
+    case 'plan-backlog':
+      await planBacklog(planningService);
       return;
     case 'show-state':
       await showState(controlPlaneService, args.json === 'true');
@@ -94,6 +99,11 @@ async function exportBacklog(
 async function analyzeArchitecture(service: ArchitectureService): Promise<void> {
   const analysis = await service.analyze();
   console.log(JSON.stringify(analysis));
+}
+
+async function planBacklog(service: PlanningService): Promise<void> {
+  const plan = await service.plan();
+  console.log(JSON.stringify(plan));
 }
 
 function parseArgs(argv: string[]): Record<string, string> {

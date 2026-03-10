@@ -5,6 +5,8 @@ import type {
 } from '../../core/src/architecture-findings.ts';
 import type { FailureRecord } from '../../core/src/failures.ts';
 import type { ProjectDiscovery } from '../../core/src/discovery.ts';
+import type { Backlog, Epic, Feature, Priority } from '../../core/src/backlog.ts';
+import type { Milestone } from '../../core/src/milestones.ts';
 import type { ReviewResult } from '../../core/src/review.ts';
 import type {
   AgentRole,
@@ -33,6 +35,17 @@ interface BootstrapRepositorySnapshot {
 interface ArchitectInput {
   discovery: ProjectDiscovery;
   sourceImports: Record<string, string[]>;
+}
+
+interface PlannerInput {
+  discovery: ProjectDiscovery;
+  findings: ArchitectureFinding[];
+}
+
+interface PlanningOutput {
+  milestone: Milestone;
+  backlog: Backlog;
+  summary: string;
 }
 
 interface PromptEngineerInput {
@@ -160,6 +173,103 @@ export class ArchitectRole implements AgentRole<ArchitectInput, ArchitectureAnal
     for (const finding of response.output.findings) {
       if (finding.affectedModules.length === 0) {
         throw new Error('Architecture findings must include affected modules');
+      }
+    }
+  };
+}
+
+export class PlannerRole implements AgentRole<PlannerInput, PlanningOutput> {
+  readonly name = 'planner' as const;
+
+  execute = async (
+    request: RoleRequest<PlannerInput>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<PlanningOutput>> => {
+    void context;
+
+    const sortedFindings = [...request.input.findings].sort(
+      (left, right) => severityRank(right.severity) - severityRank(left.severity),
+    );
+
+    const milestoneId = 'milestone-architecture-hardening';
+    const epicEntries = new Map<string, Epic>();
+    const features: Record<string, Feature> = {};
+    const tasks: Backlog['tasks'] = {};
+
+    let previousTaskId: string | undefined;
+
+    for (const [index, finding] of sortedFindings.entries()) {
+      const epicId = `epic-${slugify(finding.subsystem)}`;
+      const featureId = `feature-${slugify(finding.subsystem)}-${index + 1}`;
+      const taskId = `task-${slugify(finding.subsystem)}-${index + 1}`;
+
+      if (!epicEntries.has(epicId)) {
+        epicEntries.set(epicId, {
+          id: epicId,
+          title: `${humanizeSubsystem(finding.subsystem)} hardening`,
+          goal: `Reduce ${finding.subsystem} architecture risk`,
+          status: 'todo',
+          featureIds: [],
+        });
+      }
+
+      epicEntries.get(epicId)?.featureIds.push(featureId);
+      features[featureId] = {
+        id: featureId,
+        epicId,
+        title: humanizeIssueType(finding.issueType),
+        outcome: finding.recommendation,
+        risks: [finding.impact],
+        taskIds: [taskId],
+      };
+      tasks[taskId] = {
+        id: taskId,
+        featureId,
+        title: `Address ${finding.issueType} in ${finding.subsystem}`,
+        kind: 'architecture',
+        status: 'todo',
+        priority: mapSeverityToPriority(finding.severity),
+        dependsOn: previousTaskId ? [previousTaskId] : [],
+        acceptanceCriteria: [
+          `Finding "${finding.description}" is addressed with explicit module-boundary changes`,
+          `Evidence for ${finding.subsystem} risk reduction is recorded`,
+        ],
+        affectedModules: [...finding.affectedModules],
+        estimatedRisk: mapSeverityToRisk(finding.severity),
+      };
+      previousTaskId = taskId;
+    }
+
+    const backlog: Backlog = {
+      epics: Object.fromEntries(epicEntries.entries()),
+      features,
+      tasks,
+    };
+    const milestone: Milestone = {
+      id: milestoneId,
+      title: 'Architecture hardening',
+      goal: 'Reduce architecture risk before broader feature expansion',
+      status: 'in_progress',
+      epicIds: Object.keys(backlog.epics),
+      entryCriteria: ['Discovery and architecture analysis completed'],
+      exitCriteria: ['All planned architecture tasks are completed'],
+    };
+
+    return makeResponse(this.name, 'Produced milestone-aware backlog plan', {
+      milestone,
+      backlog,
+      summary: `Planned ${Object.keys(backlog.tasks).length} architecture task(s) from ${sortedFindings.length} finding(s).`,
+    });
+  };
+
+  validate = (response: RoleResponse<PlanningOutput>): void => {
+    if (Object.keys(response.output.backlog.tasks).length === 0) {
+      throw new Error('Planner output must contain at least one task');
+    }
+
+    for (const task of Object.values(response.output.backlog.tasks)) {
+      if (task.acceptanceCriteria.length === 0) {
+        throw new Error(`Planned task ${task.id} is missing acceptance criteria`);
       }
     }
   };
@@ -321,4 +431,53 @@ function highestSeverity(findings: ArchitectureFinding[]): ArchitectureFinding['
   return [...findings]
     .sort((left, right) => severityWeight[right.severity] - severityWeight[left.severity])[0]
     ?.severity ?? 'low';
+}
+
+function mapSeverityToPriority(severity: ArchitectureFinding['severity']): Priority {
+  if (severity === 'critical') {
+    return 'p0';
+  }
+
+  if (severity === 'high') {
+    return 'p1';
+  }
+
+  if (severity === 'medium') {
+    return 'p2';
+  }
+
+  return 'p3';
+}
+
+function mapSeverityToRisk(severity: ArchitectureFinding['severity']): 'low' | 'medium' | 'high' {
+  if (severity === 'critical' || severity === 'high') {
+    return 'high';
+  }
+
+  if (severity === 'medium') {
+    return 'medium';
+  }
+
+  return 'low';
+}
+
+function severityRank(severity: ArchitectureFinding['severity']): number {
+  return {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+  }[severity];
+}
+
+function slugify(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function humanizeSubsystem(subsystem: string): string {
+  return subsystem.replace(/[_-]+/g, ' ');
+}
+
+function humanizeIssueType(issueType: ArchitectureFinding['issueType']): string {
+  return issueType.replace(/_/g, ' ');
 }
