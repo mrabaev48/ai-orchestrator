@@ -1,4 +1,6 @@
 import { StateIntegrityError } from '../../shared/src/index.ts';
+import type { ArchitectureFinding } from './architecture-findings.ts';
+import { validateArchitectureFinding } from './architecture-findings.ts';
 import type { ArtifactRecord } from './artifacts.ts';
 import type { Backlog } from './backlog.ts';
 import { validateBacklogTask } from './backlog.ts';
@@ -16,6 +18,8 @@ export interface ProjectArchitecture {
   subsystemMap: Record<string, string[]>;
   unstableAreas: string[];
   criticalPaths: string[];
+  findings: ArchitectureFinding[];
+  analysisSummary?: string;
 }
 
 export interface RepoHealth {
@@ -69,6 +73,7 @@ export function createEmptyProjectState(input: {
       subsystemMap: {},
       unstableAreas: [],
       criticalPaths: [],
+      findings: [],
     },
     discovery: createEmptyProjectDiscovery(),
     repoHealth: {
@@ -99,6 +104,11 @@ export function validateProjectState(state: ProjectState): ValidationResult {
   const issues: string[] = [];
 
   issues.push(...validateProjectDiscovery(state.discovery));
+  issues.push(...state.architecture.findings.flatMap((finding) => validateArchitectureFinding(finding)));
+
+  if (state.architecture.analysisSummary != null && !state.architecture.analysisSummary.trim()) {
+    issues.push('Architecture analysisSummary must not be empty when present');
+  }
 
   if (state.currentMilestoneId && !state.milestones[state.currentMilestoneId]) {
     issues.push(`currentMilestoneId references missing milestone: ${state.currentMilestoneId}`);

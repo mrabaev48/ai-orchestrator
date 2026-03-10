@@ -1,5 +1,6 @@
 export type ArtifactType =
   | 'bootstrap_analysis'
+  | 'architecture_analysis'
   | 'optimized_prompt'
   | 'run_summary'
   | 'backlog_export'

@@ -1,4 +1,5 @@
 export * from './artifacts.ts';
+export * from './architecture-findings.ts';
 export * from './backlog.ts';
 export * from './decisions.ts';
 export * from './discovery.ts';
