@@ -10,6 +10,7 @@ export interface StateSummaryView {
     milestones: number;
     tasks: number;
     failures: number;
+    architectureFindings: number;
     completedTasks: number;
     blockedTasks: number;
   };
@@ -31,6 +32,7 @@ export function toStateSummaryView(state: ProjectState): StateSummaryView {
       milestones: Object.keys(state.milestones).length,
       tasks: Object.keys(state.backlog.tasks).length,
       failures: state.failures.length,
+      architectureFindings: state.architecture.findings.length,
       completedTasks: state.execution.completedTaskIds.length,
       blockedTasks: state.execution.blockedTaskIds.length,
     },
