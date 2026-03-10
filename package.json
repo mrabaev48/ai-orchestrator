@@ -10,6 +10,7 @@
     "generate-docs": "node --experimental-strip-types apps/control-plane/src/cli.ts generate-docs",
     "assess-release": "node --experimental-strip-types apps/control-plane/src/cli.ts assess-release",
     "check-state": "node --experimental-strip-types apps/control-plane/src/cli.ts check-state",
+    "prepare-export": "node --experimental-strip-types apps/control-plane/src/cli.ts prepare-export",
     "run-cycle": "node --experimental-strip-types apps/control-plane/src/cli.ts run-cycle",
     "show-state": "node --experimental-strip-types apps/control-plane/src/cli.ts show-state",
     "export-backlog": "node --experimental-strip-types apps/control-plane/src/cli.ts export-backlog",

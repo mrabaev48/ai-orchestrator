@@ -3,6 +3,7 @@ import {
   BootstrapService,
   ControlPlaneService,
   DocumentationService,
+  IntegrationExportService,
   PlanningService,
   ReleaseReadinessService,
   StateIntegrityService,
@@ -15,7 +16,7 @@ import {
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
 
-type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'run-cycle' | 'show-state' | 'export-backlog';
+type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'show-state' | 'export-backlog';
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -49,6 +50,12 @@ async function main(): Promise<void> {
     application.roleRegistry,
     logger,
   );
+  const integrationExportService = new IntegrationExportService(
+    application.stateStore,
+    application.roleRegistry,
+    runtimeConfig,
+    logger,
+  );
   const stateIntegrityService = new StateIntegrityService(
     application.stateStore,
     application.roleRegistry,
@@ -77,6 +84,9 @@ async function main(): Promise<void> {
       return;
     case 'check-state':
       await checkStateIntegrity(stateIntegrityService);
+      return;
+    case 'prepare-export':
+      await prepareExport(integrationExportService, args.out);
       return;
     case 'show-state':
       await showState(controlPlaneService, args.json === 'true');
@@ -147,6 +157,11 @@ async function assessRelease(service: ReleaseReadinessService): Promise<void> {
 async function checkStateIntegrity(service: StateIntegrityService): Promise<void> {
   const report = await service.inspect();
   console.log(JSON.stringify(report));
+}
+
+async function prepareExport(service: IntegrationExportService, out?: string): Promise<void> {
+  const outputPath = await service.prepare(out);
+  console.log(outputPath);
 }
 
 function parseArgs(argv: string[]): Record<string, string> {

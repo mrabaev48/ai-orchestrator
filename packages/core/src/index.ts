@@ -5,6 +5,7 @@ export * from './decisions.ts';
 export * from './discovery.ts';
 export * from './events.ts';
 export * from './failures.ts';
+export * from './integration-export.ts';
 export * from './milestones.ts';
 export * from './project-state.ts';
 export * from './review.ts';

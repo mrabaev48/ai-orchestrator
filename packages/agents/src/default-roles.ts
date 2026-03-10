@@ -9,6 +9,10 @@ import type { Backlog, Epic, Feature, Priority } from '../../core/src/backlog.ts
 import type { Milestone } from '../../core/src/milestones.ts';
 import type { ReleaseAssessment } from '../../core/src/release-assessment.ts';
 import type { StateIntegrityAssessment, StateIntegrityFinding } from '../../core/src/state-integrity.ts';
+import type {
+  IntegrationExportPayload,
+  IntegrationExportRecord,
+} from '../../core/src/integration-export.ts';
 import type { ReviewResult } from '../../core/src/review.ts';
 import type {
   AgentRole,
@@ -76,6 +80,12 @@ interface ReleaseAuditorInput {
 
 interface StateStewardInput {
   issues: string[];
+}
+
+interface IntegrationManagerInput {
+  mappedEntities: IntegrationExportRecord[];
+  missingRequiredFields: string[];
+  exportBlockers: string[];
 }
 
 interface PromptEngineerInput {
@@ -417,6 +427,39 @@ export class StateStewardRole implements AgentRole<StateStewardInput, StateInteg
   validate = (response: RoleResponse<StateIntegrityAssessment>): void => {
     if (!response.output.summary.trim()) {
       throw new Error('State integrity assessment must include a summary');
+    }
+  };
+}
+
+export class IntegrationManagerRole implements AgentRole<
+  IntegrationManagerInput,
+  IntegrationExportPayload
+> {
+  readonly name = 'integration_manager' as const;
+
+  execute = async (
+    request: RoleRequest<IntegrationManagerInput>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<IntegrationExportPayload>> => {
+    void context;
+
+    const recommendedFixes = [
+      ...request.input.missingRequiredFields.map((field) => `Fill missing field: ${field}`),
+      ...request.input.exportBlockers.map((blocker) => `Resolve export blocker: ${blocker}`),
+    ];
+
+    return makeResponse(this.name, 'Prepared integration export payload', {
+      integrationTarget: 'generic_json',
+      mappedEntities: [...request.input.mappedEntities],
+      missingRequiredFields: [...request.input.missingRequiredFields],
+      exportBlockers: [...request.input.exportBlockers],
+      recommendedFixes,
+    });
+  };
+
+  validate = (response: RoleResponse<IntegrationExportPayload>): void => {
+    if (response.output.mappedEntities.length === 0) {
+      throw new Error('Integration export payload must contain mapped entities');
     }
   };
 }
