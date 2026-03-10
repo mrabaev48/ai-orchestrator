@@ -2,6 +2,7 @@ import {
   ArchitectureService,
   BootstrapService,
   ControlPlaneService,
+  DocumentationService,
   PlanningService,
   createApplicationContext,
 } from '../../../packages/application/src/index.ts';
@@ -12,7 +13,7 @@ import {
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
 
-type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'run-cycle' | 'show-state' | 'export-backlog';
+type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'run-cycle' | 'show-state' | 'export-backlog';
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -34,6 +35,12 @@ async function main(): Promise<void> {
   });
   const bootstrapService = new BootstrapService(application.stateStore, application.roleRegistry, logger);
   const architectureService = new ArchitectureService(application.stateStore, application.roleRegistry, logger);
+  const documentationService = new DocumentationService(
+    application.stateStore,
+    application.roleRegistry,
+    runtimeConfig,
+    logger,
+  );
   const planningService = new PlanningService(application.stateStore, application.roleRegistry, logger);
   const controlPlaneService = new ControlPlaneService(application.stateStore, logger);
 
@@ -49,6 +56,9 @@ async function main(): Promise<void> {
       return;
     case 'plan-backlog':
       await planBacklog(planningService);
+      return;
+    case 'generate-docs':
+      await generateDocs(documentationService, args.out);
       return;
     case 'show-state':
       await showState(controlPlaneService, args.json === 'true');
@@ -104,6 +114,11 @@ async function analyzeArchitecture(service: ArchitectureService): Promise<void> 
 async function planBacklog(service: PlanningService): Promise<void> {
   const plan = await service.plan();
   console.log(JSON.stringify(plan));
+}
+
+async function generateDocs(service: DocumentationService, out?: string): Promise<void> {
+  const outputPath = await service.generate(out);
+  console.log(outputPath);
 }
 
 function parseArgs(argv: string[]): Record<string, string> {

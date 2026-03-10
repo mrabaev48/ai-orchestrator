@@ -48,6 +48,24 @@ interface PlanningOutput {
   summary: string;
 }
 
+interface DocsWriterInput {
+  projectName: string;
+  summary: string;
+  affectedModules: string[];
+  behaviorChanges: string[];
+  designRationale: string[];
+  followUpGaps: string[];
+}
+
+interface DocumentationOutput {
+  summary: string;
+  affectedModules: string[];
+  behaviorChanges: string[];
+  designRationale: string[];
+  followUpGaps: string[];
+  markdown: string;
+}
+
 interface PromptEngineerInput {
   task: BacklogTask;
   stateSummary: string;
@@ -271,6 +289,55 @@ export class PlannerRole implements AgentRole<PlannerInput, PlanningOutput> {
       if (task.acceptanceCriteria.length === 0) {
         throw new Error(`Planned task ${task.id} is missing acceptance criteria`);
       }
+    }
+  };
+}
+
+export class DocsWriterRole implements AgentRole<DocsWriterInput, DocumentationOutput> {
+  readonly name = 'docs_writer' as const;
+
+  execute = async (
+    request: RoleRequest<DocsWriterInput>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<DocumentationOutput>> => {
+    void context;
+
+    const markdown = [
+      `# ${request.input.projectName} update summary`,
+      '',
+      request.input.summary,
+      '',
+      '## Affected modules',
+      ...request.input.affectedModules.map((entry) => `- ${entry}`),
+      '',
+      '## Behavior changes',
+      ...request.input.behaviorChanges.map((entry) => `- ${entry}`),
+      '',
+      '## Design rationale',
+      ...request.input.designRationale.map((entry) => `- ${entry}`),
+      '',
+      '## Follow-up gaps',
+      ...request.input.followUpGaps.map((entry) => `- ${entry}`),
+      '',
+    ].join('\n');
+
+    return makeResponse(this.name, 'Generated bounded documentation artifact', {
+      summary: request.input.summary,
+      affectedModules: [...request.input.affectedModules],
+      behaviorChanges: [...request.input.behaviorChanges],
+      designRationale: [...request.input.designRationale],
+      followUpGaps: [...request.input.followUpGaps],
+      markdown,
+    });
+  };
+
+  validate = (response: RoleResponse<DocumentationOutput>): void => {
+    if (!response.output.markdown.trim()) {
+      throw new Error('Documentation output must include markdown');
+    }
+
+    if (response.output.affectedModules.length === 0) {
+      throw new Error('Documentation output must include affected modules');
     }
   };
 }

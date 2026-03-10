@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, promises as fs, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { SafetyViolationError } from '../../shared/src/index.ts';
@@ -32,10 +32,23 @@ export interface ToolSet {
 }
 
 export function createLocalToolSet(allowedWritePaths: string[]): ToolSet {
-  const guardPath = (targetPath: string): string => {
+  const normalizePath = (targetPath: string): string => {
     const resolved = path.resolve(targetPath);
+    const existingPath = existsSync(resolved) ? resolved : path.dirname(resolved);
+
+    try {
+      const realBase = realpathSync(existingPath);
+      const relativeSuffix = path.relative(existingPath, resolved);
+      return relativeSuffix ? path.join(realBase, relativeSuffix) : realBase;
+    } catch {
+      return resolved;
+    }
+  };
+
+  const guardPath = (targetPath: string): string => {
+    const resolved = normalizePath(targetPath);
     const hasAllowedWritePath = allowedWritePaths.some((basePath) =>
-      resolved.startsWith(path.resolve(basePath)),
+      resolved.startsWith(normalizePath(basePath)),
     );
     if (!hasAllowedWritePath) {
       throw new SafetyViolationError(`Write outside allowed scope is forbidden: ${resolved}`);
@@ -58,7 +71,9 @@ export function createLocalToolSet(allowedWritePaths: string[]): ToolSet {
     fileSystem: {
       readFile: async (filePath) => fs.readFile(path.resolve(filePath), 'utf8'),
       writeFile: async (filePath, content) => {
-        await fs.writeFile(guardPath(filePath), content, 'utf8');
+        const guardedPath = guardPath(filePath);
+        await fs.mkdir(path.dirname(guardedPath), { recursive: true });
+        await fs.writeFile(guardedPath, content, 'utf8');
       },
       listFiles: async (dirPath) => {
         const entries = await fs.readdir(path.resolve(dirPath));
