@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "bootstrap": "node --experimental-strip-types apps/control-plane/src/cli.ts bootstrap",
+    "run-cycle": "node --experimental-strip-types apps/control-plane/src/cli.ts run-cycle",
     "show-state": "node --experimental-strip-types apps/control-plane/src/cli.ts show-state",
     "export-backlog": "node --experimental-strip-types apps/control-plane/src/cli.ts export-backlog",
     "hooks:install": "node scripts/install-git-hooks.mjs",

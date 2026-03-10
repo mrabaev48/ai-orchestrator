@@ -13,12 +13,21 @@ import {
   type ProjectState,
 } from '../../../packages/core/src/index.ts';
 import {
+  CoderRole,
+  PromptEngineerRole,
+  ReviewerRole,
+  RoleRegistry,
+  TaskManagerRole,
+  TesterRole,
+} from '../../../packages/agents/src/index.ts';
+import { Orchestrator } from '../../../packages/execution/src/index.ts';
+import {
   InMemoryStateStore,
   SqliteStateStore,
   type StateStore,
 } from '../../../packages/state/src/index.ts';
 
-type CommandName = 'bootstrap' | 'show-state' | 'export-backlog';
+type CommandName = 'bootstrap' | 'run-cycle' | 'show-state' | 'export-backlog';
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -42,6 +51,9 @@ async function main(): Promise<void> {
       return;
     case 'show-state':
       await showState(store, args.json === 'true');
+      return;
+    case 'run-cycle':
+      await runCycle(store, runtimeConfig, logger);
       return;
     case 'export-backlog':
       await exportBacklog(store, args.format ?? 'md', args.out);
@@ -86,6 +98,23 @@ async function showState(store: StateStore, asJson: boolean): Promise<void> {
   console.log(`Milestones: ${Object.keys(state.milestones).length}`);
   console.log(`Tasks: ${Object.keys(state.backlog.tasks).length}`);
   console.log(`Failures: ${state.failures.length}`);
+}
+
+async function runCycle(
+  store: StateStore,
+  runtimeConfig: ReturnType<typeof loadRuntimeConfig>,
+  logger: ReturnType<typeof createLogger>,
+): Promise<void> {
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new CoderRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const orchestrator = new Orchestrator(store, registry, runtimeConfig, logger);
+  const result = await orchestrator.runCycle();
+  console.log(JSON.stringify(result));
 }
 
 async function exportBacklog(store: StateStore, format: string, out?: string): Promise<void> {

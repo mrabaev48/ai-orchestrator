@@ -1,0 +1,303 @@
+import type { ArtifactRecord, BacklogTask, ProjectState } from '../../core/src/index.ts';
+import { assertProjectState, makeEvent } from '../../core/src/index.ts';
+import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
+import { SchemaValidationError } from '../../shared/src/index.ts';
+import type { StateStore } from '../../state/src/index.ts';
+import type { ToolSet } from '../../tools/src/index.ts';
+import { createLocalToolSet } from '../../tools/src/index.ts';
+import {
+  nextFailureAction,
+  requiresReview,
+  requiresTesting,
+  routeTaskToRole,
+  shouldStopRun,
+} from '../../workflow/src/index.ts';
+import type { RoleRegistry } from '../../agents/src/index.ts';
+import type {
+  AgentRole,
+  RoleExecutionContext,
+  RoleRequest,
+  RoleResponse,
+} from '../../core/src/roles.ts';
+
+export interface RunCycleResult {
+  runId: string;
+  status: 'completed' | 'blocked' | 'idle';
+  taskId?: string;
+  stopReason?: string;
+}
+
+export class Orchestrator {
+  private readonly tools: ToolSet;
+  private readonly stateStore: StateStore;
+  private readonly roleRegistry: RoleRegistry;
+  private readonly config: RuntimeConfig;
+  private readonly logger: Logger;
+
+  constructor(
+    stateStore: StateStore,
+    roleRegistry: RoleRegistry,
+    config: RuntimeConfig,
+    logger: Logger,
+  ) {
+    this.stateStore = stateStore;
+    this.roleRegistry = roleRegistry;
+    this.config = config;
+    this.logger = logger;
+    this.tools = createLocalToolSet(config.tools.allowedWritePaths);
+  }
+
+  async runCycle(): Promise<RunCycleResult> {
+    const state = await this.stateStore.load();
+    assertProjectState(state);
+
+    const stop = shouldStopRun(state, this.config.workflow);
+    if (stop.stop) {
+      return {
+        runId: state.execution.activeRunId ?? crypto.randomUUID(),
+        status: 'idle',
+        ...(stop.reason ? { stopReason: stop.reason } : {}),
+      };
+    }
+
+    const runId = crypto.randomUUID();
+    const taskManager = this.roleRegistry.get<{ state: ProjectState }, BacklogTask | null>('task_manager');
+    const taskSelection = await this.executeRole(taskManager, {
+      role: 'task_manager',
+      objective: 'Select next executable task',
+      input: { state },
+      acceptanceCriteria: ['Return a single executable task or null'],
+    }, this.makeContext('task_manager', runId, state));
+
+    const task = taskSelection.output;
+    if (!task) {
+      return { runId, status: 'idle', stopReason: 'no_executable_task' };
+    }
+
+    state.execution.activeRunId = runId;
+    state.execution.activeTaskId = task.id;
+    await this.stateStore.recordEvent(makeEvent('TASK_SELECTED', { taskId: task.id }, { runId }));
+
+    const failures = state.failures.filter((failure) => failure.taskId === task.id);
+    const promptEngineer = this.roleRegistry.get<
+      { task: BacklogTask; stateSummary: string; failures: typeof failures; outputSchema: Record<string, unknown> },
+      { id: string; role: string; systemPrompt: string; taskPrompt: string; contextSummary: string; constraints: string[]; outputSchema: Record<string, unknown> }
+    >('prompt_engineer');
+
+    const promptResponse = await this.executeRole(promptEngineer, {
+      role: 'prompt_engineer',
+      objective: 'Optimize task prompt',
+      input: {
+        task,
+        stateSummary: summarizeState(state),
+        failures,
+        outputSchema: { type: 'object', title: 'CodeExecutionOutput' },
+      },
+      acceptanceCriteria: ['Prompt includes acceptance criteria and failure constraints'],
+    }, this.makeContext('prompt_engineer', runId, state, task.id));
+
+    await this.stateStore.recordEvent(makeEvent('PROMPT_GENERATED', { taskId: task.id, promptId: promptResponse.output.id }, { runId }));
+    await this.stateStore.recordArtifact(makeArtifact('optimized_prompt', `Prompt for ${task.id}`, {
+      taskId: task.id,
+      promptId: promptResponse.output.id,
+    }));
+
+    const roleName = routeTaskToRole(task);
+    const executor = this.roleRegistry.get<
+      { task: BacklogTask; prompt: typeof promptResponse.output },
+      { changed: boolean; summary: string }
+    >(roleName);
+
+    const executionResponse = await this.executeRole(executor, {
+      role: roleName,
+      objective: `Execute ${task.id}`,
+      input: { task, prompt: promptResponse.output },
+      acceptanceCriteria: task.acceptanceCriteria,
+    }, this.makeContext(roleName, runId, state, task.id));
+
+    await this.stateStore.recordEvent(makeEvent('ROLE_EXECUTED', { taskId: task.id, role: roleName }, { runId }));
+
+    if (requiresReview(task)) {
+      const reviewer = this.roleRegistry.get<
+        { task: BacklogTask; result: typeof executionResponse.output },
+        { approved: boolean; blockingIssues: string[]; nonBlockingSuggestions: string[]; missingTests: string[]; notes: string[] }
+      >('reviewer');
+
+      const review = await this.executeRole(reviewer, {
+        role: 'reviewer',
+        objective: `Review ${task.id}`,
+        input: { task, result: executionResponse.output },
+        acceptanceCriteria: ['Approve or return blocking issues'],
+      }, this.makeContext('reviewer', runId, state, task.id));
+
+      if (!review.output.approved || review.output.blockingIssues.length > 0) {
+        await this.stateStore.recordEvent(makeEvent('REVIEW_REJECTED', { taskId: task.id }, { runId }));
+        return this.handleFailure(state, task, 'reviewer', 'review_rejected', runId);
+      }
+
+      await this.stateStore.recordEvent(makeEvent('REVIEW_APPROVED', { taskId: task.id }, { runId }));
+    }
+
+    if (requiresTesting(task)) {
+      const tester = this.roleRegistry.get<
+        { task: BacklogTask; result: typeof executionResponse.output },
+        { passed: boolean; testPlan: string[]; evidence: string[]; failures: string[]; missingCoverage: string[] }
+      >('tester');
+
+      const testing = await this.executeRole(tester, {
+        role: 'tester',
+        objective: `Test ${task.id}`,
+        input: { task, result: executionResponse.output },
+        acceptanceCriteria: ['Return explicit evidence'],
+      }, this.makeContext('tester', runId, state, task.id));
+
+      if (!testing.output.passed || testing.output.failures.length > 0) {
+        await this.stateStore.recordEvent(makeEvent('TEST_FAILED', { taskId: task.id }, { runId }));
+        return this.handleFailure(state, task, 'tester', 'test_failed', runId);
+      }
+
+      await this.stateStore.recordEvent(makeEvent('TEST_PASSED', { taskId: task.id }, { runId }));
+    }
+
+    await this.stateStore.markTaskDone(task.id, executionResponse.output.summary);
+    task.status = 'done';
+    if (!state.execution.completedTaskIds.includes(task.id)) {
+      state.execution.completedTaskIds.push(task.id);
+    }
+    delete state.execution.activeTaskId;
+    state.execution.stepCount += 1;
+    await this.stateStore.save(state);
+    await this.stateStore.recordArtifact(makeArtifact('run_summary', `Run summary for ${task.id}`, {
+      runId,
+      taskId: task.id,
+      status: 'completed',
+    }));
+    await this.stateStore.recordEvent(makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId }));
+
+    this.logger.info('Run cycle completed', {
+      event: 'cycle_end',
+      runId,
+      taskId: task.id,
+      result: 'ok',
+    });
+
+    return {
+      runId,
+      taskId: task.id,
+      status: 'completed',
+    };
+  }
+
+  private async handleFailure(
+    state: ProjectState,
+    task: BacklogTask,
+    role: 'reviewer' | 'tester',
+    reason: string,
+    runId: string,
+  ): Promise<RunCycleResult> {
+    const retryCount = state.execution.retryCounts[task.id] ?? 0;
+    const action = nextFailureAction(retryCount, this.config.workflow.maxRetriesPerTask);
+
+    const failure = await this.stateStore.recordFailure({
+      taskId: task.id,
+      role,
+      reason,
+      retrySuggested: action === 'retry',
+    });
+    state.failures.push(failure);
+    state.execution.retryCounts[task.id] = (state.execution.retryCounts[task.id] ?? 0) + 1;
+
+    if (action === 'block') {
+      task.status = 'blocked';
+      if (!state.execution.blockedTaskIds.includes(task.id)) {
+        state.execution.blockedTaskIds.push(task.id);
+      }
+      const artifact = makeArtifact('report', `Escalation for ${task.id}`, {
+        taskId: task.id,
+        reason,
+      });
+      state.artifacts.push(artifact);
+      await this.stateStore.recordArtifact(artifact);
+      await this.stateStore.save(state);
+      await this.stateStore.recordEvent(makeEvent('TASK_BLOCKED', { taskId: task.id, reason }, { runId }));
+      return { runId, taskId: task.id, status: 'blocked', stopReason: reason };
+    }
+
+    await this.stateStore.save(state);
+    return { runId, taskId: task.id, status: 'idle', stopReason: reason };
+  }
+
+  private makeContext(
+    role: RoleExecutionContext['role'],
+    runId: string,
+    state: ProjectState,
+    taskId?: string,
+  ): RoleExecutionContext {
+    return {
+      role,
+      runId,
+      ...(taskId ? { taskId } : {}),
+      stateSummary: summarizeState(state),
+      toolProfile: {
+        allowedWritePaths: this.config.tools.allowedWritePaths,
+        canWriteRepo: role === 'coder' || role === 'docs_writer',
+        canApproveChanges: false,
+        canRunTests: role === 'tester',
+      },
+      logger: this.logger.withContext({
+        runId,
+        role,
+        ...(taskId ? { taskId } : {}),
+      }),
+    };
+  }
+
+  private async executeRole<TInput, TOutput>(
+    role: AgentRole<TInput, TOutput>,
+    request: RoleRequest<TInput>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<TOutput>> {
+    const firstAttempt = await role.execute(request, context);
+    try {
+      await role.validate?.(firstAttempt);
+      return firstAttempt;
+    } catch {
+      context.logger.warn('Role validation failed, retrying once', {
+        event: 'schema_validation_retry',
+      });
+      const secondAttempt = await role.execute(request, context);
+      try {
+        await role.validate?.(secondAttempt);
+      } catch (validationError) {
+        throw new SchemaValidationError('Role response schema validation failed', {
+          cause: validationError,
+          retrySuggested: false,
+        });
+      }
+      return secondAttempt;
+    }
+  }
+}
+
+function summarizeState(state: ProjectState): string {
+  return [
+    `project=${state.projectName}`,
+    `milestones=${Object.keys(state.milestones).length}`,
+    `tasks=${Object.keys(state.backlog.tasks).length}`,
+    `completed=${state.execution.completedTaskIds.length}`,
+  ].join(' ');
+}
+
+function makeArtifact(
+  type: ArtifactRecord['type'],
+  title: string,
+  metadata: Record<string, string>,
+): ArtifactRecord {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    title,
+    metadata,
+    createdAt: new Date().toISOString(),
+  };
+}
