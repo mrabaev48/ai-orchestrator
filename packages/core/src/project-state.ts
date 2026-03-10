@@ -143,6 +143,9 @@ export function validateProjectState(state: ProjectState): ValidationResult {
 
   for (const task of Object.values(state.backlog.tasks)) {
     issues.push(...validateBacklogTask(task));
+    if (task.splitFromTaskId && !state.backlog.tasks[task.splitFromTaskId]) {
+      issues.push(`Task ${task.id} splitFromTaskId references missing task ${task.splitFromTaskId}`);
+    }
     for (const dependency of task.dependsOn) {
       if (!state.backlog.tasks[dependency]) {
         issues.push(`Task ${task.id} depends on missing task ${dependency}`);
