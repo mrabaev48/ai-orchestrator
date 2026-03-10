@@ -72,3 +72,41 @@ test('dashboard api health endpoints expose liveness and readiness', async () =>
     await app.close();
   }
 });
+
+test('dashboard api query endpoints expose read-only dashboard views', async () => {
+  const runtimeConfig = makeRuntimeConfig();
+  const runtimeContext: DashboardRuntimeContext = {
+    config: {
+      host: '127.0.0.1',
+      port: 0,
+      runtime: runtimeConfig,
+    },
+    logger: createLogger(runtimeConfig, { sink: () => {} }),
+  };
+  const app = await createDashboardApiApp(runtimeContext);
+
+  await app.init();
+
+  try {
+    const queryController = new DashboardQueryController(app.get(DashboardReadApiService));
+    const state = await queryController.getStateSummary();
+    const milestones = await queryController.getMilestones();
+    const backlog = await queryController.getBacklog();
+    const events = await queryController.getEvents({});
+    const failures = await queryController.getFailures({});
+    const decisions = await queryController.getDecisions({});
+    const artifacts = await queryController.getArtifacts({});
+    const latestRun = await queryController.getLatestRunSummary();
+
+    assert.equal(state.projectId, 'dashboard-api');
+    assert.deepEqual(milestones, []);
+    assert.equal(Array.isArray(backlog.tasks), true);
+    assert.equal(Array.isArray(events.items), true);
+    assert.equal(Array.isArray(failures.items), true);
+    assert.equal(Array.isArray(decisions.items), true);
+    assert.equal(Array.isArray(artifacts.items), true);
+    assert.equal(latestRun, null);
+  } finally {
+    await app.close();
+  }
+});

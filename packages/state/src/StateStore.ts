@@ -2,6 +2,7 @@ import type {
   ArtifactRecord,
   DecisionLogItem,
   DomainEvent,
+  DomainEventType,
   FailureRecord,
   ProjectState,
 } from '../../core/src/index.ts';
@@ -16,9 +17,16 @@ export interface RecordFailureInput {
   retrySuggested?: boolean;
 }
 
+export interface ListEventsQuery {
+  limit?: number;
+  offset?: number;
+  eventType?: DomainEventType;
+}
+
 export interface StateStore {
   load: () => Promise<ProjectState>;
   save: (state: ProjectState) => Promise<void>;
+  listEvents: (query?: ListEventsQuery) => Promise<DomainEvent[]>;
   recordEvent: (event: DomainEvent) => Promise<void>;
   recordFailure: (input: RecordFailureInput) => Promise<FailureRecord>;
   recordArtifact: (artifact: ArtifactRecord) => Promise<void>;
