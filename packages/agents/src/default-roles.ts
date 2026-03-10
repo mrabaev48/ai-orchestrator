@@ -1,4 +1,8 @@
 import type { BacklogTask } from '../../core/src/backlog.ts';
+import type {
+  ArchitectureAnalysis,
+  ArchitectureFinding,
+} from '../../core/src/architecture-findings.ts';
 import type { FailureRecord } from '../../core/src/failures.ts';
 import type { ProjectDiscovery } from '../../core/src/discovery.ts';
 import type { ReviewResult } from '../../core/src/review.ts';
@@ -24,6 +28,11 @@ interface BootstrapRepositorySnapshot {
   configFiles: string[];
   entryPoints: string[];
   testInfrastructure: string[];
+}
+
+interface ArchitectInput {
+  discovery: ProjectDiscovery;
+  sourceImports: Record<string, string[]>;
 }
 
 interface PromptEngineerInput {
@@ -105,6 +114,53 @@ export class BootstrapAnalystRole implements AgentRole<
   validate = (response: RoleResponse<ProjectDiscovery>): void => {
     if (response.output.recommendedNextStep !== 'architecture_analysis') {
       throw new Error('Bootstrap analysis must hand off to architecture analysis');
+    }
+  };
+}
+
+export class ArchitectRole implements AgentRole<ArchitectInput, ArchitectureAnalysis> {
+  readonly name = 'architect' as const;
+
+  execute = async (
+    request: RoleRequest<ArchitectInput>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<ArchitectureAnalysis>> => {
+    void context;
+
+    const findings: ArchitectureFinding[] = [];
+    findings.push(...findDirectSourceImportFindings(request.input.sourceImports));
+
+    if (request.input.discovery.criticalPaths.length >= 2) {
+      findings.push({
+        subsystem: 'runtime',
+        issueType: 'critical_path_gap',
+        description: `Critical execution path spans ${request.input.discovery.criticalPaths.length} structural entry points`,
+        impact: 'Coordinated runtime changes are more likely to cross package boundaries and regress without explicit contracts.',
+        recommendation: 'Preserve stable service and port boundaries around critical runtime packages before adding richer orchestration flows.',
+        affectedModules: [...request.input.discovery.criticalPaths],
+        severity: 'medium',
+      });
+    }
+
+    const riskSummary = findings.length === 0
+      ? 'No material architecture findings detected from the current discovery baseline.'
+      : `Detected ${findings.length} architecture finding(s); prioritize ${highestSeverity(findings)}-severity constraints first.`;
+
+    return makeResponse(this.name, 'Produced structured architecture findings', {
+      findings,
+      riskSummary,
+    });
+  };
+
+  validate = (response: RoleResponse<ArchitectureAnalysis>): void => {
+    if (!response.output.riskSummary.trim()) {
+      throw new Error('Architecture analysis must include a risk summary');
+    }
+
+    for (const finding of response.output.findings) {
+      if (finding.affectedModules.length === 0) {
+        throw new Error('Architecture findings must include affected modules');
+      }
     }
   };
 }
@@ -229,4 +285,40 @@ function buildHealthObservations(snapshot: BootstrapRepositorySnapshot): string[
   }
 
   return observations;
+}
+
+function findDirectSourceImportFindings(
+  sourceImports: Record<string, string[]>,
+): ArchitectureFinding[] {
+  const offenders = Object.entries(sourceImports)
+    .filter(([, imports]) => imports.some((entry) => /packages\/.+\/src\//.test(entry)));
+
+  if (offenders.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      subsystem: 'module_boundaries',
+      issueType: 'contract_instability',
+      description: 'Application entrypoints import package source paths directly instead of a stable package boundary.',
+      impact: 'Internal source path coupling increases refactor cost and makes package contracts easier to break accidentally.',
+      recommendation: 'Expose package-level entrypoints and prefer importing through stable public module boundaries.',
+      affectedModules: offenders.map(([filePath]) => filePath),
+      severity: 'medium',
+    },
+  ];
+}
+
+function highestSeverity(findings: ArchitectureFinding[]): ArchitectureFinding['severity'] {
+  const severityWeight: Record<ArchitectureFinding['severity'], number> = {
+    low: 1,
+    medium: 2,
+    high: 3,
+    critical: 4,
+  };
+
+  return [...findings]
+    .sort((left, right) => severityWeight[right.severity] - severityWeight[left.severity])[0]
+    ?.severity ?? 'low';
 }

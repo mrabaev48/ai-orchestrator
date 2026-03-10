@@ -27,6 +27,7 @@ test('toStateSummaryView maps raw state into a stable read model', () => {
       milestones: 0,
       tasks: 0,
       failures: 0,
+      architectureFindings: 0,
       completedTasks: 1,
       blockedTasks: 1,
     },
