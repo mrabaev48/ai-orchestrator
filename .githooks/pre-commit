@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -eu
+
+echo "Running pre-commit checks..."
+npm run lint
+npm run typecheck
+npm test
