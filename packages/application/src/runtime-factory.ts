@@ -2,6 +2,7 @@ import {
   ArchitectRole,
   BootstrapAnalystRole,
   CoderRole,
+  PlannerRole,
   PromptEngineerRole,
   ReviewerRole,
   RoleRegistry,
@@ -55,6 +56,7 @@ export function createRoleRegistry(): RoleRegistry {
   const registry = new RoleRegistry();
   registry.register(new BootstrapAnalystRole());
   registry.register(new ArchitectRole());
+  registry.register(new PlannerRole());
   registry.register(new TaskManagerRole());
   registry.register(new PromptEngineerRole());
   registry.register(new CoderRole());
