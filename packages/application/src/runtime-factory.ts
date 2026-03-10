@@ -8,6 +8,7 @@ import {
   ReleaseAuditorRole,
   ReviewerRole,
   RoleRegistry,
+  StateStewardRole,
   TaskManagerRole,
   TesterRole,
 } from '../../agents/src/index.ts';
@@ -61,6 +62,7 @@ export function createRoleRegistry(): RoleRegistry {
   registry.register(new PlannerRole());
   registry.register(new DocsWriterRole());
   registry.register(new ReleaseAuditorRole());
+  registry.register(new StateStewardRole());
   registry.register(new TaskManagerRole());
   registry.register(new PromptEngineerRole());
   registry.register(new CoderRole());

@@ -17,6 +17,7 @@ const defaultTemplates: Record<AgentRoleName, string> = {
   architect: 'Assess architecture boundaries, dependencies, and risks.',
   planner: 'Produce an actionable backlog and milestone-aware plan.',
   release_auditor: 'Assess release readiness with explicit blockers, warnings, and evidence.',
+  state_steward: 'Assess orchestration state integrity and produce repair guidance.',
   task_manager: 'Select the next best executable task.',
   prompt_engineer: 'Refine prompts for bounded, schema-driven execution.',
   coder: 'Implement only the requested bounded task.',

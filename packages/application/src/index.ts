@@ -5,4 +5,5 @@ export * from './documentation-service.ts';
 export * from './planning-service.ts';
 export * from './read-models.ts';
 export * from './release-readiness-service.ts';
+export * from './state-integrity-service.ts';
 export * from './runtime-factory.ts';

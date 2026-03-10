@@ -8,6 +8,7 @@ import type { ProjectDiscovery } from '../../core/src/discovery.ts';
 import type { Backlog, Epic, Feature, Priority } from '../../core/src/backlog.ts';
 import type { Milestone } from '../../core/src/milestones.ts';
 import type { ReleaseAssessment } from '../../core/src/release-assessment.ts';
+import type { StateIntegrityAssessment, StateIntegrityFinding } from '../../core/src/state-integrity.ts';
 import type { ReviewResult } from '../../core/src/review.ts';
 import type {
   AgentRole,
@@ -71,6 +72,10 @@ interface ReleaseAuditorInput {
   blockers: string[];
   warnings: string[];
   evidence: string[];
+}
+
+interface StateStewardInput {
+  issues: string[];
 }
 
 interface PromptEngineerInput {
@@ -387,6 +392,35 @@ export class ReleaseAuditorRole implements AgentRole<ReleaseAuditorInput, Releas
   };
 }
 
+export class StateStewardRole implements AgentRole<StateStewardInput, StateIntegrityAssessment> {
+  readonly name = 'state_steward' as const;
+
+  execute = async (
+    request: RoleRequest<StateStewardInput>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<StateIntegrityAssessment>> => {
+    void context;
+
+    const findings = request.input.issues.map((issue) => mapIntegrityFinding(issue));
+    const isOk = findings.length === 0;
+    const summary = isOk
+      ? 'State integrity check passed with no issues.'
+      : `State integrity check found ${findings.length} issue(s); unsafe changes require escalation.`;
+
+    return makeResponse(this.name, 'Assessed state integrity', {
+      ok: isOk,
+      findings,
+      summary,
+    });
+  };
+
+  validate = (response: RoleResponse<StateIntegrityAssessment>): void => {
+    if (!response.output.summary.trim()) {
+      throw new Error('State integrity assessment must include a summary');
+    }
+  };
+}
+
 export class PromptEngineerRole implements AgentRole<PromptEngineerInput, OptimizedPrompt> {
   readonly name = 'prompt_engineer' as const;
   private readonly pipeline = new PromptPipeline();
@@ -592,4 +626,20 @@ function humanizeSubsystem(subsystem: string): string {
 
 function humanizeIssueType(issueType: ArchitectureFinding['issueType']): string {
   return issueType.replace(/_/g, ' ');
+}
+
+function mapIntegrityFinding(issue: string): StateIntegrityFinding {
+  const isMissingReference = /missing/i.test(issue);
+  const isBlockedState = /blocked/i.test(issue);
+
+  return {
+    issue,
+    severity: isMissingReference ? 'high' : isBlockedState ? 'medium' : 'low',
+    repairRecommendation: isMissingReference
+      ? 'Repair or remove invalid references before continuing orchestration.'
+      : isBlockedState
+        ? 'Reconcile blocked-task state with failures, artifacts, and task status.'
+        : 'Review the state transition and correct the inconsistent field explicitly.',
+    safeToAutoRepair: false,
+  };
 }
