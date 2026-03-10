@@ -8,6 +8,7 @@
     "analyze-architecture": "node --experimental-strip-types apps/control-plane/src/cli.ts analyze-architecture",
     "plan-backlog": "node --experimental-strip-types apps/control-plane/src/cli.ts plan-backlog",
     "generate-docs": "node --experimental-strip-types apps/control-plane/src/cli.ts generate-docs",
+    "assess-release": "node --experimental-strip-types apps/control-plane/src/cli.ts assess-release",
     "run-cycle": "node --experimental-strip-types apps/control-plane/src/cli.ts run-cycle",
     "show-state": "node --experimental-strip-types apps/control-plane/src/cli.ts show-state",
     "export-backlog": "node --experimental-strip-types apps/control-plane/src/cli.ts export-backlog",

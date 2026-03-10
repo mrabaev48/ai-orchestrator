@@ -2,6 +2,7 @@ export type ArtifactType =
   | 'bootstrap_analysis'
   | 'architecture_analysis'
   | 'documentation'
+  | 'release_assessment'
   | 'optimized_prompt'
   | 'run_summary'
   | 'backlog_export'

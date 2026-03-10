@@ -4,6 +4,7 @@ import {
   ControlPlaneService,
   DocumentationService,
   PlanningService,
+  ReleaseReadinessService,
   createApplicationContext,
 } from '../../../packages/application/src/index.ts';
 import {
@@ -13,7 +14,7 @@ import {
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
 
-type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'run-cycle' | 'show-state' | 'export-backlog';
+type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'run-cycle' | 'show-state' | 'export-backlog';
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -42,6 +43,11 @@ async function main(): Promise<void> {
     logger,
   );
   const planningService = new PlanningService(application.stateStore, application.roleRegistry, logger);
+  const releaseReadinessService = new ReleaseReadinessService(
+    application.stateStore,
+    application.roleRegistry,
+    logger,
+  );
   const controlPlaneService = new ControlPlaneService(application.stateStore, logger);
 
   switch (command) {
@@ -59,6 +65,9 @@ async function main(): Promise<void> {
       return;
     case 'generate-docs':
       await generateDocs(documentationService, args.out);
+      return;
+    case 'assess-release':
+      await assessRelease(releaseReadinessService);
       return;
     case 'show-state':
       await showState(controlPlaneService, args.json === 'true');
@@ -119,6 +128,11 @@ async function planBacklog(service: PlanningService): Promise<void> {
 async function generateDocs(service: DocumentationService, out?: string): Promise<void> {
   const outputPath = await service.generate(out);
   console.log(outputPath);
+}
+
+async function assessRelease(service: ReleaseReadinessService): Promise<void> {
+  const assessment = await service.assess();
+  console.log(JSON.stringify(assessment));
 }
 
 function parseArgs(argv: string[]): Record<string, string> {

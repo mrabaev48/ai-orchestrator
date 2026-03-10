@@ -9,4 +9,5 @@ export * from './milestones.ts';
 export * from './project-state.ts';
 export * from './review.ts';
 export * from './roles.ts';
+export * from './release-assessment.ts';
 export * from './testing.ts';

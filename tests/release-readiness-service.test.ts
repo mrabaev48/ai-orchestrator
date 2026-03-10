@@ -1,0 +1,98 @@
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import {
+  ArchitectureService,
+  BootstrapService,
+  DocumentationService,
+  PlanningService,
+  ReleaseReadinessService,
+  createRoleRegistry,
+} from '../packages/application/src/index.ts';
+import { createEmptyProjectState } from '../packages/core/src/index.ts';
+import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
+import { InMemoryStateStore } from '../packages/state/src/index.ts';
+
+function makeRuntimeConfig(allowedWritePath: string): RuntimeConfig {
+  return {
+    llm: {
+      provider: 'mock',
+      model: 'mock-model',
+      temperature: 0.2,
+      timeoutMs: 1000,
+    },
+    state: {
+      backend: 'memory',
+      sqlitePath: '/tmp/unused.db',
+      snapshotOnBootstrap: true,
+      snapshotOnTaskCompletion: true,
+      snapshotOnMilestoneCompletion: true,
+    },
+    workflow: {
+      maxStepsPerRun: 5,
+      maxRetriesPerTask: 2,
+    },
+    tools: {
+      allowedWritePaths: [allowedWritePath],
+      typescriptDiagnosticsEnabled: true,
+    },
+    logging: {
+      level: 'error',
+      format: 'json',
+    },
+  };
+}
+
+test('ReleaseReadinessService generates structured assessment artifact', async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'ai-orchestrator-release-service-'));
+
+  try {
+    mkdirSync(path.join(tempDir, 'apps/control-plane/src'), { recursive: true });
+    mkdirSync(path.join(tempDir, 'packages/application/src'), { recursive: true });
+    mkdirSync(path.join(tempDir, 'packages/execution/src'), { recursive: true });
+    writeFileSync(path.join(tempDir, 'package.json'), '{"name":"demo"}', 'utf8');
+    writeFileSync(path.join(tempDir, 'tsconfig.json'), '{}', 'utf8');
+    writeFileSync(
+      path.join(tempDir, 'apps/control-plane/src/cli.ts'),
+      "import '../../../packages/application/src/index.ts';\n",
+      'utf8',
+    );
+
+    const state = createEmptyProjectState({
+      projectId: 'project-1',
+      projectName: 'Project',
+      summary: 'Summary',
+    });
+    state.repoHealth.tests = 'passing';
+    state.repoHealth.typecheck = 'passing';
+    state.repoHealth.build = 'passing';
+    state.repoHealth.lint = 'passing';
+
+    const store = new InMemoryStateStore(state);
+    const roleRegistry = createRoleRegistry();
+    const logger = createLogger(makeRuntimeConfig(tempDir), { sink: () => {} });
+
+    await new BootstrapService(store, roleRegistry, logger, tempDir).bootstrap(state, true);
+    await new ArchitectureService(store, roleRegistry, logger, tempDir).analyze();
+    await new PlanningService(store, roleRegistry, logger).plan();
+    const previousCwd = process.cwd();
+    process.chdir(tempDir);
+
+    try {
+      await new DocumentationService(store, roleRegistry, makeRuntimeConfig(tempDir), logger).generate();
+      const assessment = await new ReleaseReadinessService(store, roleRegistry, logger).assess();
+      const loaded = await store.load();
+
+      assert.equal(assessment.verdict, 'ready');
+      assert.equal(loaded.artifacts.some((artifact) => artifact.type === 'release_assessment'), true);
+      assert.equal(store.events.some((event) => event.eventType === 'RELEASE_ASSESSED'), true);
+    } finally {
+      process.chdir(previousCwd);
+    }
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
