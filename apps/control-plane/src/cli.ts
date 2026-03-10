@@ -1,31 +1,13 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-
+import {
+  ControlPlaneService,
+  createApplicationContext,
+} from '../../../packages/application/src/index.ts';
 import {
   createLogger,
   loadRuntimeConfig,
   OrchestratorError,
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
-import {
-  createEmptyProjectState,
-  makeEvent,
-  type ProjectState,
-} from '../../../packages/core/src/index.ts';
-import {
-  CoderRole,
-  PromptEngineerRole,
-  ReviewerRole,
-  RoleRegistry,
-  TaskManagerRole,
-  TesterRole,
-} from '../../../packages/agents/src/index.ts';
-import { Orchestrator } from '../../../packages/execution/src/index.ts';
-import {
-  InMemoryStateStore,
-  SqliteStateStore,
-  type StateStore,
-} from '../../../packages/state/src/index.ts';
 
 type CommandName = 'bootstrap' | 'run-cycle' | 'show-state' | 'export-backlog';
 
@@ -38,138 +20,68 @@ async function main(): Promise<void> {
   const runtimeConfig = loadRuntimeConfig();
   const logger = createLogger(runtimeConfig);
   const args = parseArgs(rest);
-  const state = createEmptyProjectState({
-    projectId: args['project-id'] ?? 'ai-orchestrator',
-    projectName: args['project-name'] ?? 'AI Orchestrator',
-    summary: args.summary ?? 'MVP runtime state',
+  const application = createApplicationContext({
+    config: runtimeConfig,
+    logger,
+    initialStateInput: {
+      projectId: args['project-id'] ?? 'ai-orchestrator',
+      projectName: args['project-name'] ?? 'AI Orchestrator',
+      summary: args.summary ?? 'MVP runtime state',
+    },
   });
-  const store = createStore(runtimeConfig.state.backend, runtimeConfig.state.sqlitePath, state);
+  const controlPlaneService = new ControlPlaneService(application.stateStore, logger);
 
   switch (command) {
     case 'bootstrap':
-      await bootstrap(store, state, logger, runtimeConfig.state.snapshotOnBootstrap);
+      await controlPlaneService.bootstrap(
+        application.initialState,
+        runtimeConfig.state.snapshotOnBootstrap,
+      );
       return;
     case 'show-state':
-      await showState(store, args.json === 'true');
+      await showState(controlPlaneService, args.json === 'true');
       return;
     case 'run-cycle':
-      await runCycle(store, runtimeConfig, logger);
+      await runCycle(application.orchestrator);
       return;
     case 'export-backlog':
-      await exportBacklog(store, args.format ?? 'md', args.out);
+      await exportBacklog(
+        controlPlaneService,
+        (args.format ?? 'md') as 'md' | 'json',
+        args.out,
+      );
       return;
     default:
       throw new ConfigError(`Unknown command: ${String(command)}`);
   }
 }
 
-async function bootstrap(
-  store: StateStore,
-  state: ProjectState,
-  logger: ReturnType<typeof createLogger>,
-  snapshotOnBootstrap: boolean,
-): Promise<void> {
-  if (snapshotOnBootstrap) {
-    await store.save(state);
-  }
-
-  await store.recordEvent(
-    makeEvent('BOOTSTRAP_COMPLETED', {
-      projectId: state.projectId,
-      projectName: state.projectName,
-    }),
-  );
-
-  logger.info('Bootstrap completed', {
-    event: 'bootstrap_completed',
-    result: 'ok',
-  });
-}
-
-async function showState(store: StateStore, asJson: boolean): Promise<void> {
-  const state = await store.load();
+async function showState(service: ControlPlaneService, asJson: boolean): Promise<void> {
+  const view = await service.showState();
   if (asJson) {
-    console.log(JSON.stringify(state, null, 2));
+    console.log(JSON.stringify(view.raw, null, 2));
     return;
   }
 
-  console.log(`${state.projectName} (${state.projectId})`);
-  console.log(`Summary: ${state.summary}`);
-  console.log(`Milestones: ${Object.keys(state.milestones).length}`);
-  console.log(`Tasks: ${Object.keys(state.backlog.tasks).length}`);
-  console.log(`Failures: ${state.failures.length}`);
+  console.log(`${view.summary.projectName} (${view.summary.projectId})`);
+  console.log(`Summary: ${view.summary.summary}`);
+  console.log(`Milestones: ${view.summary.counts.milestones}`);
+  console.log(`Tasks: ${view.summary.counts.tasks}`);
+  console.log(`Failures: ${view.summary.counts.failures}`);
 }
 
-async function runCycle(
-  store: StateStore,
-  runtimeConfig: ReturnType<typeof loadRuntimeConfig>,
-  logger: ReturnType<typeof createLogger>,
-): Promise<void> {
-  const registry = new RoleRegistry();
-  registry.register(new TaskManagerRole());
-  registry.register(new PromptEngineerRole());
-  registry.register(new CoderRole());
-  registry.register(new ReviewerRole());
-  registry.register(new TesterRole());
-
-  const orchestrator = new Orchestrator(store, registry, runtimeConfig, logger);
+async function runCycle(orchestrator: { runCycle: () => Promise<unknown> }): Promise<void> {
   const result = await orchestrator.runCycle();
   console.log(JSON.stringify(result));
 }
 
-async function exportBacklog(store: StateStore, format: string, out?: string): Promise<void> {
-  const state = await store.load();
-  const outputPath = path.resolve(process.cwd(), out ?? `artifacts/backlog-export.${format}`);
-  mkdirSync(path.dirname(outputPath), { recursive: true });
-
-  const content =
-    format === 'json'
-      ? JSON.stringify(state.backlog, null, 2)
-      : renderBacklogMarkdown(state);
-
-  writeFileSync(outputPath, content, 'utf8');
-  await store.recordArtifact({
-    id: crypto.randomUUID(),
-    type: 'backlog_export',
-    title: 'Backlog export',
-    location: outputPath,
-    metadata: {
-      format,
-    },
-    createdAt: new Date().toISOString(),
-  });
-
+async function exportBacklog(
+  service: ControlPlaneService,
+  format: 'md' | 'json',
+  out?: string,
+): Promise<void> {
+  const outputPath = await service.exportBacklog(format, out);
   console.log(outputPath);
-}
-
-function renderBacklogMarkdown(state: ProjectState): string {
-  const lines = ['# Backlog export', ''];
-
-  for (const epic of Object.values(state.backlog.epics)) {
-    lines.push(`## ${epic.title}`);
-    lines.push(epic.goal);
-    lines.push('');
-
-    for (const featureId of epic.featureIds) {
-      const feature = state.backlog.features[featureId];
-      if (!feature) continue;
-
-      lines.push(`### ${feature.title}`);
-      lines.push(feature.outcome);
-      lines.push('');
-
-      for (const taskId of feature.taskIds) {
-        const task = state.backlog.tasks[taskId];
-        if (!task) continue;
-
-        lines.push(`- [${task.status === 'done' ? 'x' : ' '}] ${task.title} (${task.priority})`);
-      }
-
-      lines.push('');
-    }
-  }
-
-  return `${lines.join('\n').trim()}\n`;
 }
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -191,16 +103,6 @@ function parseArgs(argv: string[]): Record<string, string> {
     index += 1;
   }
   return entries;
-}
-
-function createStore(
-  backend: 'memory' | 'sqlite',
-  sqlitePath: string,
-  initialState: ProjectState,
-): StateStore {
-  return backend === 'memory'
-    ? new InMemoryStateStore(initialState)
-    : new SqliteStateStore(sqlitePath, initialState);
 }
 
 main().catch((error: unknown) => {
