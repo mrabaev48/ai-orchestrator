@@ -1,4 +1,13 @@
-import type { ProjectState } from '../../core/src/index.ts';
+import type {
+  ArtifactRecord,
+  Backlog,
+  DecisionLogItem,
+  DomainEvent,
+  FailureRecord,
+  Milestone,
+  ProjectState,
+} from '../../core/src/index.ts';
+import { redactSecrets } from '../../shared/src/index.ts';
 
 export interface StateSummaryView {
   projectId: string;
@@ -21,6 +30,110 @@ export interface BacklogExportView {
   json: string;
 }
 
+export interface DashboardStateView extends StateSummaryView {
+  activeTaskId?: string;
+}
+
+export interface MilestoneListItemView {
+  id: string;
+  title: string;
+  goal: string;
+  status: Milestone['status'];
+  isCurrent: boolean;
+  epicCount: number;
+  exitCriteriaCount: number;
+}
+
+export interface BacklogTaskView {
+  id: string;
+  featureId: string;
+  title: string;
+  status: string;
+  priority: string;
+  acceptanceCriteria: string[];
+  dependsOn: string[];
+  splitFromTaskId?: string;
+}
+
+export interface BacklogFeatureView {
+  id: string;
+  epicId: string;
+  title: string;
+  outcome: string;
+  taskIds: string[];
+}
+
+export interface BacklogEpicView {
+  id: string;
+  title: string;
+  goal: string;
+  featureIds: string[];
+}
+
+export interface BacklogView {
+  epics: BacklogEpicView[];
+  features: BacklogFeatureView[];
+  tasks: BacklogTaskView[];
+}
+
+export interface PaginatedView<TItem> {
+  total: number;
+  limit: number;
+  offset: number;
+  items: TItem[];
+}
+
+export interface EventHistoryItemView {
+  id: string;
+  type: DomainEvent['eventType'];
+  createdAt: string;
+  runId?: string;
+  summary: string;
+  taskId?: string;
+  milestoneId?: string;
+  role?: string;
+}
+
+export interface FailureHistoryItemView {
+  id: string;
+  taskId: string;
+  role: FailureRecord['role'];
+  reason: string;
+  retrySuggested: boolean;
+  symptoms: string[];
+  badPatterns: string[];
+  createdAt: string;
+}
+
+export interface DecisionHistoryItemView {
+  id: string;
+  title: string;
+  decision: string;
+  rationale: string;
+  affectedAreas: string[];
+  createdAt: string;
+}
+
+export interface ArtifactHistoryItemView {
+  id: string;
+  type: ArtifactRecord['type'];
+  title: string;
+  location?: string;
+  taskId?: string;
+  runId?: string;
+  milestoneId?: string;
+  format?: string;
+  createdAt: string;
+}
+
+export interface LatestRunSummaryView {
+  id: string;
+  title: string;
+  createdAt: string;
+  taskId?: string;
+  summary?: string;
+}
+
 export function toStateSummaryView(state: ProjectState): StateSummaryView {
   return {
     projectId: state.projectId,
@@ -36,6 +149,13 @@ export function toStateSummaryView(state: ProjectState): StateSummaryView {
       completedTasks: state.execution.completedTaskIds.length,
       blockedTasks: state.execution.blockedTaskIds.length,
     },
+  };
+}
+
+export function toDashboardStateView(state: ProjectState): DashboardStateView {
+  return {
+    ...toStateSummaryView(state),
+    ...(state.execution.activeTaskId ? { activeTaskId: state.execution.activeTaskId } : {}),
   };
 }
 
@@ -74,4 +194,152 @@ export function toBacklogExportView(state: ProjectState): BacklogExportView {
     markdown: `${lines.join('\n').trim()}\n`,
     json: JSON.stringify(state.backlog, null, 2),
   };
+}
+
+export function toBacklogView(backlog: Backlog): BacklogView {
+  return {
+    epics: Object.values(backlog.epics).map((epic) => ({
+      id: epic.id,
+      title: epic.title,
+      goal: epic.goal,
+      featureIds: [...epic.featureIds],
+    })),
+    features: Object.values(backlog.features).map((feature) => ({
+      id: feature.id,
+      epicId: feature.epicId,
+      title: feature.title,
+      outcome: feature.outcome,
+      taskIds: [...feature.taskIds],
+    })),
+    tasks: Object.values(backlog.tasks).map((task) => ({
+      id: task.id,
+      featureId: task.featureId,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      acceptanceCriteria: [...task.acceptanceCriteria],
+      dependsOn: [...task.dependsOn],
+      ...(task.splitFromTaskId ? { splitFromTaskId: task.splitFromTaskId } : {}),
+    })),
+  };
+}
+
+export function toMilestoneListView(state: ProjectState): MilestoneListItemView[] {
+  return Object.values(state.milestones)
+    .sort((left, right) => left.title.localeCompare(right.title))
+    .map((milestone) => ({
+      id: milestone.id,
+      title: milestone.title,
+      goal: milestone.goal,
+      status: milestone.status,
+      isCurrent: state.currentMilestoneId === milestone.id,
+      epicCount: milestone.epicIds.length,
+      exitCriteriaCount: milestone.exitCriteria.length,
+    }));
+}
+
+export function toEventHistoryView(
+  events: DomainEvent[],
+  pagination: { total: number; limit: number; offset: number },
+): PaginatedView<EventHistoryItemView> {
+  return {
+    ...pagination,
+    items: events.map((event) => {
+      const payload = redactSecrets(event.payload);
+
+      return {
+        id: event.id,
+        type: event.eventType,
+        createdAt: event.createdAt,
+        ...(event.runId ? { runId: event.runId } : {}),
+        ...(typeof payload.taskId === 'string' ? { taskId: payload.taskId } : {}),
+        ...(typeof payload.milestoneId === 'string' ? { milestoneId: payload.milestoneId } : {}),
+        ...(typeof payload.role === 'string' ? { role: payload.role } : {}),
+        summary: summarizePayload(payload),
+      };
+    }),
+  };
+}
+
+export function toFailureHistoryView(
+  failures: FailureRecord[],
+  pagination: { total: number; limit: number; offset: number },
+): PaginatedView<FailureHistoryItemView> {
+  return {
+    ...pagination,
+    items: failures.map((failure) => ({
+      id: failure.id,
+      taskId: failure.taskId,
+      role: failure.role,
+      reason: failure.reason,
+      retrySuggested: failure.retrySuggested,
+      symptoms: [...failure.symptoms],
+      badPatterns: [...failure.badPatterns],
+      createdAt: failure.createdAt,
+    })),
+  };
+}
+
+export function toDecisionHistoryView(
+  decisions: DecisionLogItem[],
+  pagination: { total: number; limit: number; offset: number },
+): PaginatedView<DecisionHistoryItemView> {
+  return {
+    ...pagination,
+    items: decisions.map((decision) => ({
+      id: decision.id,
+      title: decision.title,
+      decision: decision.decision,
+      rationale: decision.rationale,
+      affectedAreas: [...decision.affectedAreas],
+      createdAt: decision.createdAt,
+    })),
+  };
+}
+
+export function toArtifactHistoryView(
+  artifacts: ArtifactRecord[],
+  pagination: { total: number; limit: number; offset: number },
+): PaginatedView<ArtifactHistoryItemView> {
+  return {
+    ...pagination,
+    items: artifacts.map((artifact) => ({
+      id: artifact.id,
+      type: artifact.type,
+      title: artifact.title,
+      ...(artifact.location ? { location: artifact.location } : {}),
+      ...(artifact.metadata.taskId ? { taskId: artifact.metadata.taskId } : {}),
+      ...(artifact.metadata.runId ? { runId: artifact.metadata.runId } : {}),
+      ...(artifact.metadata.milestoneId ? { milestoneId: artifact.metadata.milestoneId } : {}),
+      ...(artifact.metadata.format ? { format: artifact.metadata.format } : {}),
+      createdAt: artifact.createdAt,
+    })),
+  };
+}
+
+export function toLatestRunSummaryView(state: ProjectState): LatestRunSummaryView | null {
+  const artifact = [...state.artifacts]
+    .filter((entry) => entry.type === 'run_summary')
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+
+  if (!artifact) {
+    return null;
+  }
+
+  return {
+    id: artifact.id,
+    title: artifact.title,
+    createdAt: artifact.createdAt,
+    ...(artifact.metadata.taskId ? { taskId: artifact.metadata.taskId } : {}),
+    ...(artifact.metadata.summary ? { summary: artifact.metadata.summary } : {}),
+  };
+}
+
+function summarizePayload(payload: Record<string, unknown>): string {
+  const parts = Object.entries(payload)
+    .filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value))
+    .slice(0, 4)
+    .map(([key, value]) => `${key}=${String(value)}`);
+
+  return parts.length > 0 ? parts.join(' | ') : 'No summary available';
 }

@@ -12,7 +12,7 @@ import {
   makeEvent,
 } from '../../../core/src/index.ts';
 import { StateStoreError, redactSecrets } from '../../../shared/src/index.ts';
-import type { RecordFailureInput, StateStore } from '../StateStore.ts';
+import type { ListEventsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
 import { sqliteSchemaStatements } from './schema.ts';
 
 export class SqliteStateStore implements StateStore {
@@ -53,6 +53,43 @@ export class SqliteStateStore implements StateStore {
     this.withTransaction(() => {
       this.insertSnapshot(state);
     });
+  }
+
+  async listEvents(query: ListEventsQuery = {}): Promise<DomainEvent[]> {
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (query.eventType) {
+      clauses.push('event_type = ?');
+      params.push(query.eventType);
+    }
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    params.push(limit, offset);
+
+    const rows = this.db.prepare(
+      `SELECT id, event_type, created_at, run_id, payload_json
+       FROM domain_events
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+    ).all(...params) as {
+      id: string;
+      event_type: DomainEvent['eventType'];
+      created_at: string;
+      run_id: string | null;
+      payload_json: string;
+    }[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      eventType: row.event_type,
+      createdAt: row.created_at,
+      payload: JSON.parse(row.payload_json) as DomainEvent['payload'],
+      ...(row.run_id ? { runId: row.run_id } : {}),
+    }));
   }
 
   async recordEvent(event: DomainEvent): Promise<void> {

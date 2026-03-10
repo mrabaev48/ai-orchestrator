@@ -73,6 +73,7 @@ test('StateIntegrityService persists explainable integrity report for invalid st
     save: async (nextState: ProjectState) => {
       void nextState;
     },
+    listEvents: async () => [],
     recordEvent: async (event: DomainEvent) => {
       events.push(event);
     },

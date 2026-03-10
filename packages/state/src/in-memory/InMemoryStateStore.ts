@@ -6,7 +6,7 @@ import {
   type FailureRecord,
   type ProjectState,
 } from '../../../core/src/index.ts';
-import type { StateStore, RecordFailureInput } from '../StateStore.ts';
+import type { ListEventsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
 import { StateStoreError } from '../../../shared/src/index.ts';
 
 export class InMemoryStateStore implements StateStore {
@@ -25,6 +25,21 @@ export class InMemoryStateStore implements StateStore {
   async save(state: ProjectState): Promise<void> {
     assertProjectState(state);
     this.state = structuredClone(state);
+  }
+
+  async listEvents(query: ListEventsQuery = {}): Promise<DomainEvent[]> {
+    const filtered = query.eventType
+      ? this.events.filter((event) => event.eventType === query.eventType)
+      : this.events;
+
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 50;
+
+    return structuredClone(
+      [...filtered]
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .slice(offset, offset + limit),
+    );
   }
 
   async recordEvent(event: DomainEvent): Promise<void> {

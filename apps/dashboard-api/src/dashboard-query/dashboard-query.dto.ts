@@ -1,7 +1,77 @@
-import { IsIn, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+
+import type { DomainEventType } from '../../../../packages/core/src/index.ts';
 
 export class BacklogExportQueryDto {
   @IsOptional()
   @IsIn(['json', 'md'])
   format?: 'json' | 'md';
+}
+
+export class HistoryQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+}
+
+export class EventHistoryQueryDto extends HistoryQueryDto {
+  @IsOptional()
+  @IsString()
+  @IsIn([
+    'BOOTSTRAP_COMPLETED',
+    'DISCOVERY_COMPLETED',
+    'ARCHITECTURE_ANALYZED',
+    'BACKLOG_PLANNED',
+    'TASK_SPLIT',
+    'RELEASE_ASSESSED',
+    'STATE_INTEGRITY_CHECKED',
+    'EXPORT_PREPARED',
+    'TASK_SELECTED',
+    'PROMPT_GENERATED',
+    'ROLE_EXECUTED',
+    'REVIEW_APPROVED',
+    'REVIEW_REJECTED',
+    'TEST_PASSED',
+    'TEST_FAILED',
+    'TASK_COMPLETED',
+    'TASK_BLOCKED',
+    'STATE_COMMITTED',
+  ])
+  eventType?: DomainEventType;
+}
+
+export class FailureHistoryQueryDto extends HistoryQueryDto {
+  @IsOptional()
+  @IsString()
+  taskId?: string;
+}
+
+export class ArtifactHistoryQueryDto extends HistoryQueryDto {
+  @IsOptional()
+  @IsString()
+  @IsIn([
+    'bootstrap_analysis',
+    'architecture_analysis',
+    'documentation',
+    'release_assessment',
+    'state_integrity_report',
+    'integration_export',
+    'optimized_prompt',
+    'run_summary',
+    'backlog_export',
+    'plan',
+    'test_plan',
+    'report',
+  ])
+  type?: string;
 }
