@@ -3,6 +3,11 @@ import type { ArtifactRecord } from './artifacts.ts';
 import type { Backlog } from './backlog.ts';
 import { validateBacklogTask } from './backlog.ts';
 import type { DecisionLogItem } from './decisions.ts';
+import {
+  createEmptyProjectDiscovery,
+  type ProjectDiscovery,
+  validateProjectDiscovery,
+} from './discovery.ts';
 import type { FailureRecord } from './failures.ts';
 import type { Milestone } from './milestones.ts';
 
@@ -35,6 +40,7 @@ export interface ProjectState {
   summary: string;
   currentMilestoneId?: string;
   architecture: ProjectArchitecture;
+  discovery: ProjectDiscovery;
   repoHealth: RepoHealth;
   backlog: Backlog;
   execution: ExecutionState;
@@ -64,6 +70,7 @@ export function createEmptyProjectState(input: {
       unstableAreas: [],
       criticalPaths: [],
     },
+    discovery: createEmptyProjectDiscovery(),
     repoHealth: {
       build: 'unknown',
       tests: 'unknown',
@@ -90,6 +97,8 @@ export function createEmptyProjectState(input: {
 
 export function validateProjectState(state: ProjectState): ValidationResult {
   const issues: string[] = [];
+
+  issues.push(...validateProjectDiscovery(state.discovery));
 
   if (state.currentMilestoneId && !state.milestones[state.currentMilestoneId]) {
     issues.push(`currentMilestoneId references missing milestone: ${state.currentMilestoneId}`);

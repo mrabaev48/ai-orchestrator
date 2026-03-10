@@ -1,5 +1,6 @@
 export type DomainEventType =
   | 'BOOTSTRAP_COMPLETED'
+  | 'DISCOVERY_COMPLETED'
   | 'TASK_SELECTED'
   | 'PROMPT_GENERATED'
   | 'ROLE_EXECUTED'
