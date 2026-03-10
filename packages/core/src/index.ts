@@ -1,6 +1,7 @@
 export * from './artifacts.ts';
 export * from './backlog.ts';
 export * from './decisions.ts';
+export * from './discovery.ts';
 export * from './events.ts';
 export * from './failures.ts';
 export * from './milestones.ts';

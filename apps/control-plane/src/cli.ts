@@ -1,4 +1,5 @@
 import {
+  BootstrapService,
   ControlPlaneService,
   createApplicationContext,
 } from '../../../packages/application/src/index.ts';
@@ -29,11 +30,12 @@ async function main(): Promise<void> {
       summary: args.summary ?? 'MVP runtime state',
     },
   });
+  const bootstrapService = new BootstrapService(application.stateStore, application.roleRegistry, logger);
   const controlPlaneService = new ControlPlaneService(application.stateStore, logger);
 
   switch (command) {
     case 'bootstrap':
-      await controlPlaneService.bootstrap(
+      await bootstrapService.bootstrap(
         application.initialState,
         runtimeConfig.state.snapshotOnBootstrap,
       );

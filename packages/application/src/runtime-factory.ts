@@ -1,4 +1,5 @@
 import {
+  BootstrapAnalystRole,
   CoderRole,
   PromptEngineerRole,
   ReviewerRole,
@@ -51,6 +52,7 @@ export function createApplicationContext(input: {
 
 export function createRoleRegistry(): RoleRegistry {
   const registry = new RoleRegistry();
+  registry.register(new BootstrapAnalystRole());
   registry.register(new TaskManagerRole());
   registry.register(new PromptEngineerRole());
   registry.register(new CoderRole());
