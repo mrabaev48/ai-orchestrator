@@ -4,6 +4,7 @@ export type AgentRoleName =
   | 'bootstrap_analyst'
   | 'architect'
   | 'planner'
+  | 'release_auditor'
   | 'task_manager'
   | 'prompt_engineer'
   | 'coder'

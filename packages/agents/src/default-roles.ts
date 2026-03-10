@@ -7,6 +7,7 @@ import type { FailureRecord } from '../../core/src/failures.ts';
 import type { ProjectDiscovery } from '../../core/src/discovery.ts';
 import type { Backlog, Epic, Feature, Priority } from '../../core/src/backlog.ts';
 import type { Milestone } from '../../core/src/milestones.ts';
+import type { ReleaseAssessment } from '../../core/src/release-assessment.ts';
 import type { ReviewResult } from '../../core/src/review.ts';
 import type {
   AgentRole,
@@ -64,6 +65,12 @@ interface DocumentationOutput {
   designRationale: string[];
   followUpGaps: string[];
   markdown: string;
+}
+
+interface ReleaseAuditorInput {
+  blockers: string[];
+  warnings: string[];
+  evidence: string[];
 }
 
 interface PromptEngineerInput {
@@ -338,6 +345,44 @@ export class DocsWriterRole implements AgentRole<DocsWriterInput, DocumentationO
 
     if (response.output.affectedModules.length === 0) {
       throw new Error('Documentation output must include affected modules');
+    }
+  };
+}
+
+export class ReleaseAuditorRole implements AgentRole<ReleaseAuditorInput, ReleaseAssessment> {
+  readonly name = 'release_auditor' as const;
+
+  execute = async (
+    request: RoleRequest<ReleaseAuditorInput>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<ReleaseAssessment>> => {
+    void context;
+
+    const verdict = request.input.blockers.length > 0
+      ? 'blocked'
+      : request.input.warnings.length > 0
+        ? 'caution'
+        : 'ready';
+    const confidence = verdict === 'blocked' ? 0.25 : verdict === 'caution' ? 0.6 : 0.9;
+    const recommendedNextActions = request.input.blockers.length > 0
+      ? request.input.blockers.map((blocker) => `Resolve blocker: ${blocker}`)
+      : request.input.warnings.length > 0
+        ? request.input.warnings.map((warning) => `Address warning: ${warning}`)
+        : ['Maintain the current validation and documentation baseline.'];
+
+    return makeResponse(this.name, 'Assessed release readiness', {
+      verdict,
+      confidence,
+      blockers: [...request.input.blockers],
+      warnings: [...request.input.warnings],
+      evidence: [...request.input.evidence],
+      recommendedNextActions,
+    });
+  };
+
+  validate = (response: RoleResponse<ReleaseAssessment>): void => {
+    if (response.output.evidence.length === 0) {
+      throw new Error('Release assessment must include evidence');
     }
   };
 }
