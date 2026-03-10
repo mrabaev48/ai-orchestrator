@@ -4,6 +4,7 @@ export type ArtifactType =
   | 'documentation'
   | 'release_assessment'
   | 'state_integrity_report'
+  | 'integration_export'
   | 'optimized_prompt'
   | 'run_summary'
   | 'backlog_export'

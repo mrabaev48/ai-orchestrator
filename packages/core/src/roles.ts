@@ -6,6 +6,7 @@ export type AgentRoleName =
   | 'planner'
   | 'release_auditor'
   | 'state_steward'
+  | 'integration_manager'
   | 'task_manager'
   | 'prompt_engineer'
   | 'coder'

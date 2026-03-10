@@ -17,6 +17,7 @@ The runtime is organized as a layered backend with explicit composition at the e
   - documentation service for bounded generated summaries
   - release readiness service for structured stability assessment
   - state integrity service for explainable validation and repair guidance
+  - integration export service for external payload preparation without side effects
   - read models for CLI and future API consumers
 - `packages/execution`
   - orchestrator runtime and run-cycle coordination

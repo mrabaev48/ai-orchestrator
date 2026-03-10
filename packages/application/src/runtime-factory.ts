@@ -3,6 +3,7 @@ import {
   BootstrapAnalystRole,
   CoderRole,
   DocsWriterRole,
+  IntegrationManagerRole,
   PlannerRole,
   PromptEngineerRole,
   ReleaseAuditorRole,
@@ -63,6 +64,7 @@ export function createRoleRegistry(): RoleRegistry {
   registry.register(new DocsWriterRole());
   registry.register(new ReleaseAuditorRole());
   registry.register(new StateStewardRole());
+  registry.register(new IntegrationManagerRole());
   registry.register(new TaskManagerRole());
   registry.register(new PromptEngineerRole());
   registry.register(new CoderRole());
