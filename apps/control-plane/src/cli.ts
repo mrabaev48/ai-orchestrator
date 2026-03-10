@@ -5,6 +5,7 @@ import {
   DocumentationService,
   PlanningService,
   ReleaseReadinessService,
+  StateIntegrityService,
   createApplicationContext,
 } from '../../../packages/application/src/index.ts';
 import {
@@ -14,7 +15,7 @@ import {
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
 
-type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'run-cycle' | 'show-state' | 'export-backlog';
+type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'run-cycle' | 'show-state' | 'export-backlog';
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -48,6 +49,11 @@ async function main(): Promise<void> {
     application.roleRegistry,
     logger,
   );
+  const stateIntegrityService = new StateIntegrityService(
+    application.stateStore,
+    application.roleRegistry,
+    logger,
+  );
   const controlPlaneService = new ControlPlaneService(application.stateStore, logger);
 
   switch (command) {
@@ -68,6 +74,9 @@ async function main(): Promise<void> {
       return;
     case 'assess-release':
       await assessRelease(releaseReadinessService);
+      return;
+    case 'check-state':
+      await checkStateIntegrity(stateIntegrityService);
       return;
     case 'show-state':
       await showState(controlPlaneService, args.json === 'true');
@@ -133,6 +142,11 @@ async function generateDocs(service: DocumentationService, out?: string): Promis
 async function assessRelease(service: ReleaseReadinessService): Promise<void> {
   const assessment = await service.assess();
   console.log(JSON.stringify(assessment));
+}
+
+async function checkStateIntegrity(service: StateIntegrityService): Promise<void> {
+  const report = await service.inspect();
+  console.log(JSON.stringify(report));
 }
 
 function parseArgs(argv: string[]): Record<string, string> {

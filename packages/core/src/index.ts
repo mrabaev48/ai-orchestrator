@@ -10,4 +10,5 @@ export * from './project-state.ts';
 export * from './review.ts';
 export * from './roles.ts';
 export * from './release-assessment.ts';
+export * from './state-integrity.ts';
 export * from './testing.ts';

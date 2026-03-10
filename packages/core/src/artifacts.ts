@@ -3,6 +3,7 @@ export type ArtifactType =
   | 'architecture_analysis'
   | 'documentation'
   | 'release_assessment'
+  | 'state_integrity_report'
   | 'optimized_prompt'
   | 'run_summary'
   | 'backlog_export'
