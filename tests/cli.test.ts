@@ -53,3 +53,21 @@ test('bootstrap fails fast on invalid config', () => {
   assert.equal(result.status, 2);
   assert.match(result.stderr, /CONFIG_ERROR|Invalid runtime/);
 });
+
+test('run-task fails fast without --task-id', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['--experimental-strip-types', cliPath, 'run-task'],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        TOOL_ALLOWED_WRITE_PATHS: '.',
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Missing --task-id argument for run-task command/);
+});

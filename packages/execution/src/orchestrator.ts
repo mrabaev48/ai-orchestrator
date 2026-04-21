@@ -1,5 +1,5 @@
 import type { ArtifactRecord, BacklogTask, ProjectState } from '../../core/src/index.ts';
-import { assertProjectState, makeEvent } from '../../core/src/index.ts';
+import { assertProjectState, isExecutableTask, makeEvent } from '../../core/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import { SchemaValidationError } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
@@ -28,6 +28,10 @@ export interface RunCycleResult {
   stopReason?: string;
 }
 
+export interface RunCycleOptions {
+  forcedTaskId?: string;
+}
+
 export class Orchestrator {
   private readonly tools: ToolSet;
   private readonly stateStore: StateStore;
@@ -48,7 +52,7 @@ export class Orchestrator {
     this.tools = createLocalToolSet(config.tools.allowedWritePaths);
   }
 
-  async runCycle(): Promise<RunCycleResult> {
+  async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {
     const state = await this.stateStore.load();
     assertProjectState(state);
 
@@ -62,17 +66,15 @@ export class Orchestrator {
     }
 
     const runId = crypto.randomUUID();
-    const taskManager = this.roleRegistry.get<{ state: ProjectState }, BacklogTask | null>('task_manager');
-    const taskSelection = await this.executeRole(taskManager, {
-      role: 'task_manager',
-      objective: 'Select next executable task',
-      input: { state },
-      acceptanceCriteria: ['Return a single executable task or null'],
-    }, this.makeContext('task_manager', runId, state));
-
-    const task = taskSelection.output;
+    const task = options.forcedTaskId
+      ? this.selectForcedTask(state, options.forcedTaskId)
+      : await this.selectNextTask(state, runId);
     if (!task) {
-      return { runId, status: 'idle', stopReason: 'no_executable_task' };
+      return {
+        runId,
+        status: 'idle',
+        stopReason: options.forcedTaskId ? 'forced_task_not_executable' : 'no_executable_task',
+      };
     }
 
     state.execution.activeRunId = runId;
@@ -187,6 +189,42 @@ export class Orchestrator {
       taskId: task.id,
       status: 'completed',
     };
+  }
+
+  private async selectNextTask(state: ProjectState, runId: string): Promise<BacklogTask | null> {
+    const taskManager = this.roleRegistry.get<{ state: ProjectState }, BacklogTask | null>('task_manager');
+    const taskSelection = await this.executeRole(taskManager, {
+      role: 'task_manager',
+      objective: 'Select next executable task',
+      input: { state },
+      acceptanceCriteria: ['Return a single executable task or null'],
+    }, this.makeContext('task_manager', runId, state));
+
+    return taskSelection.output;
+  }
+
+  private selectForcedTask(state: ProjectState, taskId: string): BacklogTask | null {
+    const task = state.backlog.tasks[taskId];
+    if (!task) {
+      this.logger.warn('Forced task does not exist', {
+        event: 'forced_task_not_found',
+        taskId,
+      });
+      return null;
+    }
+
+    const completed = new Set(state.execution.completedTaskIds);
+    const blocked = new Set(state.execution.blockedTaskIds);
+    if (!isExecutableTask(completed, blocked, task)) {
+      this.logger.warn('Forced task is not executable', {
+        event: 'forced_task_not_executable',
+        taskId,
+        status: task.status,
+      });
+      return null;
+    }
+
+    return task;
   }
 
   private async handleFailure(

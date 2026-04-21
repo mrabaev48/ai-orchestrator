@@ -16,7 +16,7 @@ import {
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
 
-type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'show-state' | 'export-backlog';
+type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'run-task' | 'show-state' | 'export-backlog';
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -94,6 +94,9 @@ async function main(): Promise<void> {
     case 'run-cycle':
       await runCycle(application.orchestrator);
       return;
+    case 'run-task':
+      await runTask(application.orchestrator, args['task-id']);
+      return;
     case 'export-backlog':
       await exportBacklog(
         controlPlaneService,
@@ -122,6 +125,18 @@ async function showState(service: ControlPlaneService, asJson: boolean): Promise
 
 async function runCycle(orchestrator: { runCycle: () => Promise<unknown> }): Promise<void> {
   const result = await orchestrator.runCycle();
+  console.log(JSON.stringify(result));
+}
+
+async function runTask(
+  orchestrator: { runCycle: (options?: { forcedTaskId?: string }) => Promise<unknown> },
+  taskId?: string,
+): Promise<void> {
+  if (!taskId) {
+    throw new ConfigError('Missing --task-id argument for run-task command.');
+  }
+
+  const result = await orchestrator.runCycle({ forcedTaskId: taskId });
   console.log(JSON.stringify(result));
 }
 
