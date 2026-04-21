@@ -151,3 +151,59 @@ test('runCycle splits parent task after repeated review failures', async () => {
   assert.equal(loaded.decisions.some((decision) => decision.title.includes('Split task task-1')), true);
   assert.equal(store.events.some((event) => event.eventType === 'TASK_SPLIT'), true);
 });
+
+test('runCycle executes forced task when it is executable', async () => {
+  const state = makeState();
+  state.backlog.tasks['task-2'] = {
+    id: 'task-2',
+    featureId: 'feature-1',
+    title: 'Second executable task',
+    kind: 'implementation',
+    status: 'todo',
+    priority: 'p1',
+    dependsOn: [],
+    acceptanceCriteria: ['done'],
+    affectedModules: ['packages/execution'],
+    estimatedRisk: 'low',
+  };
+  state.backlog.features['feature-1']?.taskIds.push('task-2');
+
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+
+  const result = await orchestrator.runCycle({ forcedTaskId: 'task-2' });
+  const loaded = await store.load();
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.taskId, 'task-2');
+  assert.equal(loaded.backlog.tasks['task-2']?.status, 'done');
+});
+
+test('runCycle returns idle for non-executable forced task', async () => {
+  const state = makeState();
+  state.backlog.tasks['blocked-task'] = {
+    id: 'blocked-task',
+    featureId: 'feature-1',
+    title: 'Blocked task',
+    kind: 'implementation',
+    status: 'todo',
+    priority: 'p1',
+    dependsOn: ['task-1'],
+    acceptanceCriteria: ['done'],
+    affectedModules: ['packages/execution'],
+    estimatedRisk: 'low',
+  };
+  state.backlog.features['feature-1']?.taskIds.push('blocked-task');
+
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+
+  const result = await orchestrator.runCycle({ forcedTaskId: 'blocked-task' });
+  const loaded = await store.load();
+
+  assert.equal(result.status, 'idle');
+  assert.equal(result.stopReason, 'forced_task_not_executable');
+  assert.equal(loaded.backlog.tasks['blocked-task']?.status, 'todo');
+});
