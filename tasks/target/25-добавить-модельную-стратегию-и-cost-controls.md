@@ -1,17 +1,39 @@
-# Task 25 — Добавить модельную стратегию и cost controls
+# Task 25 — Add model strategy and cost controls
 
 **Priority:** P3
 
-## Цель
-Внедрить маршрутизацию model-per-role, бюджеты токенов, fallback model и отчет стоимости.
+Work on the `ai-orchestrator` repository.
 
-## Зона изменений
-- packages/llm/*
-- packages/execution/*
-- apps/dashboard-api/*
+Goal:
+Introduce model-per-role routing, token budgets, fallback models, and cost reporting.
 
-## Основные зависимости
-- Cost efficiency
+Instructions:
+- First inspect the current architecture and identify the exact modules responsible for orchestration flow, tool execution, state transitions, and observability.
+- Summarize the current design before making edits.
+- Keep domain orchestration logic separate from provider-specific code.
+- Preserve backward compatibility unless explicitly told otherwise.
+- Prefer explicit typed contracts over implicit object shapes.
+- Ensure retries, timeout handling, cancellation, and structured error propagation are addressed if the change touches execution flow.
+- Update or add tests for happy path, failure path, and regression coverage.
+- Run typecheck, lint, and relevant tests.
+- At the end, report:
+  - files changed
+  - exact commands run
+  - test results
+  - remaining risks
+  - git status
+  - whether branch upstream / push / PR is configured
 
-## Критерии готовности
-- Стоимость исполнения прогнозируема и управляется политиками.
+Do not:
+- perform unrelated refactors
+- claim validation passed unless it was actually run
+- hide architectural tradeoffs
+
+Response format:
+1. Understanding
+2. Architecture notes
+3. Plan
+4. Implementation
+5. Validation
+6. Risks
+7. Git status
