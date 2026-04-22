@@ -182,4 +182,4 @@ turbo run lint
 turbo run test
 turbo run typecheck
 turbo run build
-```bash
+```
