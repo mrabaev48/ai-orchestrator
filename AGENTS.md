@@ -223,14 +223,14 @@ Use:
 type(scope): brief description
 ```
 
-##Examples:
+## Examples:
 
 * feat(orchestrator): add cancellation-safe retry guard
 * fix(dispatcher): prevent duplicate execution on retry
 * refactor(state): isolate transition validation logic
 * test(workflow): add retry timeout regression coverage
 
-##Publish workflow
+## Publish workflow
 
 If the user asks to publish:
 
@@ -247,7 +247,7 @@ If push or PR creation is blocked, report the exact blocker instead of implying 
 
 ⸻
 
-##Scope control and blockers
+## Scope control and blockers
 
 If you encounter failures or repository issues outside the requested scope:
 
@@ -256,20 +256,20 @@ If you encounter failures or repository issues outside the requested scope:
 * explain why it is outside scope
 * avoid unrelated cleanup unless the user explicitly expands the task
 
-##Examples of out-of-scope blockers:
+## Examples of out-of-scope blockers:
 
 * unrelated package build failures
 * pre-existing repo-wide lint failures in untouched modules
 * missing environment or credentials for publication
 * unrelated adapter breakage during a domain-layer task
 
-##Be precise about what was changed versus what remains blocked.
+## Be precise about what was changed versus what remains blocked.
 
 ⸻
 
-##Code quality expectations
+## Code quality expectations
 
-##Prefer
+## Prefer
 
 * small patches
 * explicit control flow
@@ -280,7 +280,7 @@ If you encounter failures or repository issues outside the requested scope:
 * localized changes
 * additive compatibility
 
-##Avoid
+## Avoid
 
 * broad speculative abstractions
 * hidden side effects
@@ -292,7 +292,7 @@ If you encounter failures or repository issues outside the requested scope:
 
 ⸻
 
-##Review guidance
+## Review guidance
 
 When reviewing or explaining a change, distinguish clearly between:
 
@@ -312,9 +312,9 @@ Do not blur those categories.
 
 ⸻
 
-##Required response format
+## Required response format
 
-##Unless the user explicitly asks for a different format, always respond in this structure:
+## Unless the user explicitly asks for a different format, always respond in this structure:
 
 1. Thinking/Understanding
 2. Plan
@@ -323,7 +323,7 @@ Do not blur those categories.
 5. Risks
 6. Git status
 
-##Format rules
+## Format rules
 
 * Keep it concise but specific.
 * Mention concrete files, modules, or packages where relevant.
@@ -335,7 +335,7 @@ Do not blur those categories.
 
 ⸻
 
-##Truthfulness rules
+## Truthfulness rules
 
 * Do not invent files, modules, packages, commands, tests, or PRs.
 * Do not say a check passed unless it actually passed.
@@ -347,9 +347,9 @@ If something is unknown, blocked, or not verified, state that explicitly.
 
 ⸻
 
-##Task routing guidance
+## Task routing guidance
 
-##Use implementation mode for:
+## Use implementation mode for:
 
 * implementing a feature
 * fixing a bug
@@ -357,7 +357,7 @@ If something is unknown, blocked, or not verified, state that explicitly.
 * adding or updating tests
 * preparing code for commit, push, or PR
 
-##Use execution-safety review mode for:
+## Use execution-safety review mode for:
 
 * retry analysis
 * timeout or cancellation review
@@ -366,7 +366,7 @@ If something is unknown, blocked, or not verified, state that explicitly.
 * idempotency concerns
 * runtime incident analysis
 
-##Use architecture/review mode for:
+## Use architecture/review mode for:
 
 * architecture drift review
 * boundary audits
@@ -374,7 +374,7 @@ If something is unknown, blocked, or not verified, state that explicitly.
 * state transition review
 * reviewer hotspot analysis
 
-##Use PR-writing mode for:
+## Use PR-writing mode for:
 
 * drafting PR descriptions
 * summarizing validation
@@ -382,7 +382,7 @@ If something is unknown, blocked, or not verified, state that explicitly.
 
 ⸻
 
-##Final completion checklist
+## Final completion checklist
 
 Before declaring work complete, verify:
 
@@ -396,5 +396,5 @@ Before declaring work complete, verify:
 * publish status was reported if requested
 * risks and blockers were stated clearly
 
-##If any of the above is missing, do not describe the task as fully complete.
+## If any of the above is missing, do not describe the task as fully complete.
 
