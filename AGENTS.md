@@ -222,3 +222,179 @@ Use:
 ```
 type(scope): brief description
 ```
+
+##Examples:
+
+* feat(orchestrator): add cancellation-safe retry guard
+* fix(dispatcher): prevent duplicate execution on retry
+* refactor(state): isolate transition validation logic
+* test(workflow): add retry timeout regression coverage
+
+##Publish workflow
+
+If the user asks to publish:
+
+1. Check the current branch.
+2. Push the branch with upstream configured if needed.
+3. Open a draft PR by default.
+4. Report:
+    * current branch
+    * upstream status
+    * push status
+    * PR status
+
+If push or PR creation is blocked, report the exact blocker instead of implying completion.
+
+⸻
+
+##Scope control and blockers
+
+If you encounter failures or repository issues outside the requested scope:
+
+* stop
+* describe the blocker precisely
+* explain why it is outside scope
+* avoid unrelated cleanup unless the user explicitly expands the task
+
+##Examples of out-of-scope blockers:
+
+* unrelated package build failures
+* pre-existing repo-wide lint failures in untouched modules
+* missing environment or credentials for publication
+* unrelated adapter breakage during a domain-layer task
+
+##Be precise about what was changed versus what remains blocked.
+
+⸻
+
+##Code quality expectations
+
+##Prefer
+
+* small patches
+* explicit control flow
+* typed interfaces
+* structured error shapes
+* narrow helper abstractions
+* clear naming
+* localized changes
+* additive compatibility
+
+##Avoid
+
+* broad speculative abstractions
+* hidden side effects
+* implicit shared mutable state
+* ad hoc object shapes where typed contracts are expected
+* provider-specific leakage into orchestration core
+* mixing feature work with unrelated cleanup
+* dependency additions for convenience alone
+
+⸻
+
+##Review guidance
+
+When reviewing or explaining a change, distinguish clearly between:
+
+Confirmed issues
+
+Problems that are directly supported by the code, tests, or validation output.
+
+Credible risks
+
+Concerns that are strongly suggested by the implementation but not fully proven by runtime evidence.
+
+Optional improvements
+
+Non-blocking ideas that may improve maintainability, clarity, or resilience.
+
+Do not blur those categories.
+
+⸻
+
+##Required response format
+
+##Unless the user explicitly asks for a different format, always respond in this structure:
+
+1. Thinking/Understanding
+2. Plan
+3. Changes
+4. Validation
+5. Risks
+6. Git status
+
+##Format rules
+
+* Keep it concise but specific.
+* Mention concrete files, modules, or packages where relevant.
+* For pure review tasks with no code changes, say:
+    * Changes: no code changes made
+    * Git status: unchanged
+* For failed validation, include the exact failing command and the blocker summary.
+* For skipped validation, say what was skipped and why.
+
+⸻
+
+##Truthfulness rules
+
+* Do not invent files, modules, packages, commands, tests, or PRs.
+* Do not say a check passed unless it actually passed.
+* Do not claim backward compatibility unless the affected contract was actually preserved or reviewed.
+* Do not present partial work as complete.
+* Do not mask uncertainty with vague language.
+
+If something is unknown, blocked, or not verified, state that explicitly.
+
+⸻
+
+##Task routing guidance
+
+##Use implementation mode for:
+
+* implementing a feature
+* fixing a bug
+* modifying orchestration behavior
+* adding or updating tests
+* preparing code for commit, push, or PR
+
+##Use execution-safety review mode for:
+
+* retry analysis
+* timeout or cancellation review
+* duplicate execution risk
+* partial failure safety
+* idempotency concerns
+* runtime incident analysis
+
+##Use architecture/review mode for:
+
+* architecture drift review
+* boundary audits
+* contract review
+* state transition review
+* reviewer hotspot analysis
+
+##Use PR-writing mode for:
+
+* drafting PR descriptions
+* summarizing validation
+* calling out risks and reviewer focus
+
+⸻
+
+##Final completion checklist
+
+Before declaring work complete, verify:
+
+* the requested scope was addressed
+* the current codepath was inspected before editing
+* architectural boundaries were respected
+* public contracts were preserved unless explicitly allowed to change
+* tests were added or updated when appropriate
+* validation results were reported honestly
+* git status was checked
+* publish status was reported if requested
+* risks and blockers were stated clearly
+
+##If any of the above is missing, do not describe the task as fully complete.
+
