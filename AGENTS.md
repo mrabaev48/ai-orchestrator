@@ -183,3 +183,42 @@ turbo run test
 turbo run typecheck
 turbo run build
 ```
+
+##Validation rules
+
+* Do not claim validation passed unless the commands actually ran.
+* If a command fails, report the exact failing command.
+* If validation is blocked by an existing or out-of-scope issue, stop and report the blocker clearly.
+* Do not silently widen scope to fix unrelated failures.
+* If you run narrower checks first for iteration speed, still report that they were narrower than the standard repo-wide validation.
+
+##Test expectations
+
+For non-trivial changes, prefer to cover:
+
+* success path
+* failure path
+* regression path
+* retry / timeout / cancellation path if execution flow is touched
+
+Avoid redundant tests, but do not leave critical risk areas untested.
+
+⸻
+
+##Git workflow
+
+##General rules
+
+* Inspect git status before finalizing.
+* Do not commit unless the user asked for it or the task explicitly includes commit/publish.
+* Use conventional commits.
+* Keep commit scope specific to the changed package or subsystem.
+* Do not claim a push or PR exists unless it was actually confirmed.
+
+##Conventional commit format
+
+Use:
+
+```
+type(scope): brief description
+```
