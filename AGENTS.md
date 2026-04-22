@@ -67,3 +67,11 @@ Do not:
 - claim tests passed unless they were actually run
 - describe a refactor as complete if only partial migration was done
 - mark work done if build, lint, or core tests are failing without explicitly stating that
+
+If a requested change touches execution flow, you must explicitly review:
+- retry semantics
+- timeout semantics
+- cancellation semantics
+- error taxonomy
+- tracing/logging coverage
+before declaring the task complete.
