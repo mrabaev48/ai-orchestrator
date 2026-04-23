@@ -11,6 +11,7 @@ import {
 } from '../packages/agents/src/index.ts';
 import { createEmptyProjectState } from '../packages/core/src/index.ts';
 import { Orchestrator } from '../packages/execution/src/index.ts';
+import { WorkflowPolicyError } from '../packages/shared/src/errors/index.ts';
 import { InMemoryStateStore } from '../packages/state/src/index.ts';
 import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
 
@@ -206,4 +207,94 @@ test('runCycle returns idle for non-executable forced task', async () => {
   assert.equal(result.status, 'idle');
   assert.equal(result.stopReason, 'forced_task_not_executable');
   assert.equal(loaded.backlog.tasks['blocked-task']?.status, 'todo');
+});
+
+test('runSingleTask executes only requested executable task', async () => {
+  const state = makeState();
+  state.backlog.tasks['task-2'] = {
+    id: 'task-2',
+    featureId: 'feature-1',
+    title: 'Second executable task',
+    kind: 'implementation',
+    status: 'todo',
+    priority: 'p1',
+    dependsOn: [],
+    acceptanceCriteria: ['done'],
+    affectedModules: ['packages/execution'],
+    estimatedRisk: 'low',
+  };
+  state.backlog.features['feature-1']?.taskIds.push('task-2');
+
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+
+  const result = await orchestrator.runSingleTask('task-2');
+  const loaded = await store.load();
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.taskId, 'task-2');
+  assert.equal(loaded.backlog.tasks['task-2']?.status, 'done');
+  assert.equal(loaded.backlog.tasks['task-1']?.status, 'todo');
+});
+
+test('runSingleTask throws deterministic error for invalid task id', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+
+  await assert.rejects(
+    async () => orchestrator.runSingleTask('missing-task'),
+    (error: unknown) =>
+      error instanceof WorkflowPolicyError &&
+      error.details !== undefined &&
+      typeof error.details === 'object' &&
+      (error.details as Record<string, unknown>).reason === 'invalid_task_id',
+  );
+});
+
+test('runSingleTask throws deterministic error for done task', async () => {
+  const state = makeState();
+  state.backlog.tasks['task-1']!.status = 'done';
+  state.execution.completedTaskIds.push('task-1');
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+
+  await assert.rejects(
+    async () => orchestrator.runSingleTask('task-1'),
+    (error: unknown) =>
+      error instanceof WorkflowPolicyError &&
+      error.details !== undefined &&
+      typeof error.details === 'object' &&
+      (error.details as Record<string, unknown>).reason === 'task_done',
+  );
+});
+
+test('runSingleTask throws deterministic error for blocked task', async () => {
+  const state = makeState();
+  state.backlog.tasks['task-1']!.status = 'blocked';
+  state.execution.blockedTaskIds.push('task-1');
+  state.failures.push({
+    id: 'failure-1',
+    taskId: 'task-1',
+    role: 'reviewer',
+    reason: 'blocked_for_test',
+    symptoms: [],
+    badPatterns: [],
+    retrySuggested: false,
+    createdAt: new Date().toISOString(),
+  });
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+
+  await assert.rejects(
+    async () => orchestrator.runSingleTask('task-1'),
+    (error: unknown) =>
+      error instanceof WorkflowPolicyError &&
+      error.details !== undefined &&
+      typeof error.details === 'object' &&
+      (error.details as Record<string, unknown>).reason === 'task_blocked',
+  );
 });
