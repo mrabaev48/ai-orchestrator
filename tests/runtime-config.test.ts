@@ -88,13 +88,13 @@ test('loadRuntimeConfig rejects non-directory write path scopes', () => {
   );
 });
 
-test('loadRuntimeConfig rejects sqlite path when ancestor directory is not writable', () => {
+test('loadRuntimeConfig rejects invalid postgresql dsn scheme', () => {
   assert.throws(
     () =>
       loadRuntimeConfig({
         env: {
-          STATE_BACKEND: 'sqlite',
-          SQLITE_PATH: '/dev/null/state.db',
+          STATE_BACKEND: 'postgresql',
+          POSTGRES_DSN: 'mysql://localhost/db',
           TOOL_ALLOWED_WRITE_PATHS: '.',
         },
       }),

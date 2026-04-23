@@ -25,6 +25,8 @@ function makeRuntimeConfig(allowedWritePath: string): RuntimeConfig {
     },
     state: {
       backend: 'memory',
+      postgresDsn: 'postgresql://localhost:5432/test',
+      postgresSchema: 'public',
       sqlitePath: '/tmp/unused.db',
       snapshotOnBootstrap: true,
       snapshotOnTaskCompletion: true,
