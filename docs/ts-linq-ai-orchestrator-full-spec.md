@@ -184,7 +184,7 @@ flowchart TD
     M --> TOOLS[Tool Adapter Layer]
     M --> OBS[Observability Layer]
 
-    STATE --> DB[(SQLite / PostgreSQL)]
+    STATE --> DB[(PostgreSQL)]
     TOOLS --> FS[Filesystem]
     TOOLS --> GIT[Git]
     TOOLS --> TSC[TypeScript Compiler / TS Server]
@@ -453,7 +453,7 @@ Stores:
 
 Persistence strategy:
 
-- MVP: snapshots + events + SQLite
+- MVP: snapshots + events + PostgreSQL
 - Post-MVP: PostgreSQL backend
 
 ## 9.6 `packages/llm`
@@ -1583,7 +1583,7 @@ State must be internally consistent on each commit:
 - Turbo
 - Zod
 - Pino
-- SQLite via `better-sqlite3` for MVP
+- PostgreSQL via `pg` for MVP
 - PostgreSQL via `pg` post-MVP
 - `tsx`
 - Vitest
@@ -1628,7 +1628,7 @@ Core functionality:
 Persistence:
 
 - in-memory store
-- SQLite store
+- PostgreSQL store
 - domain events
 - snapshots
 
@@ -1706,7 +1706,7 @@ Long-term:
 
 - `StateStore`
 - in-memory store
-- SQLite store
+- PostgreSQL store
 - events
 - snapshots
 - workflow engine

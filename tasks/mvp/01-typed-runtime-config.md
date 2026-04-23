@@ -41,7 +41,7 @@ Initialization (Phase 0) must hard-fail on invalid configuration to prevent part
 ### What must be in the config (MVP minimum)
 
 - **LLM**: provider kind, model, temperature defaults, timeout
-- **State**: backend (`memory` | `sqlite`), path to the sqlite db, snapshot policy flags
+- **State**: backend (`memory` | `postgresql`), path to the postgresql db, snapshot policy flags
 - **Workflow limits**: `maxStepsPerRun`, `maxRetriesPerTask` (or equivalent)
 - **Tools**:
   - allowed write paths (write scopes)

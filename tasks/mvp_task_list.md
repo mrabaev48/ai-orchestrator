@@ -40,7 +40,7 @@
 
 - [ ] **Интерфейс `StateStore` (порт)**: `load/save`, `recordEvent`, `recordFailure`, `markTaskDone` (и нужные расширения под MVP). Док: [Spec v3 §27.2](../docs/ai-orchestrator-spec-v3.md)
 - [ ] **In-memory store** для тестов/локального прогона. Док: [Spec v3 §24.1 (State)](../docs/ai-orchestrator-spec-v3.md)
-- [ ] **SQLite store**: реализация persistence backend для MVP. Док: [Spec v3 §10.1](../docs/ai-orchestrator-spec-v3.md)
+- [ ] **PostgreSQL store**: реализация persistence backend для MVP. Док: [Spec v3 §10.1](../docs/ai-orchestrator-spec-v3.md)
 - [ ] **Схема таблиц (минимум)**: `project_snapshots`, `domain_events`, `decision_log`, `failure_log`, `artifact_log`. Док: [Spec v3 §10.3](../docs/ai-orchestrator-spec-v3.md)
 - [ ] **Snapshot policy**: когда делаем snapshot (bootstrap, task completion, milestone completion, и т.п.). Док: [Spec v3 §10.4](../docs/ai-orchestrator-spec-v3.md)
 - [ ] **Event policy**: что обязано эмититься как event на каждом этапе. Док: [Spec v3 §10.5](../docs/ai-orchestrator-spec-v3.md)
@@ -128,7 +128,7 @@
 - [ ] **Unit: task selection** (deps/blocked/priority/retry influence). Док: [Spec v3 §15.6, §17.2](../docs/ai-orchestrator-spec-v3.md)
 - [ ] **Unit: prompt pipeline** (constraints + failure-aware modifiers + schema injection). Док: [Spec v3 §12.3–§12.4](../docs/ai-orchestrator-spec-v3.md)
 - [ ] **Unit: schema validation** (reject + one repair attempt). Док: [Spec v3 §15.8](../docs/ai-orchestrator-spec-v3.md)
-- [ ] **Integration: StateStore SQLite** (events + snapshots + failures). Док: [Spec v3 §10.3–§10.5](../docs/ai-orchestrator-spec-v3.md)
+- [ ] **Integration: StateStore PostgreSQL** (events + snapshots + failures). Док: [Spec v3 §10.3–§10.5](../docs/ai-orchestrator-spec-v3.md)
 - [ ] **Integration: runCycle happy path** (mock LLM, review/test pass → commit). Док: [Spec v3 §18.1, §24.2](../docs/ai-orchestrator-spec-v3.md)
 - [ ] **Integration: reviewer rejection / tester failure** (failure recorded, retry counters). Док: [Spec v3 §18.2–§18.3, §9.5](../docs/ai-orchestrator-spec-v3.md)
 

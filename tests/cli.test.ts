@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 
 const cliPath = path.resolve('apps/control-plane/src/cli.ts');
 
-test('bootstrap writes initial sqlite state', () => {
+test('bootstrap writes initial postgresql state', () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'ai-orchestrator-cli-'));
 
   try {

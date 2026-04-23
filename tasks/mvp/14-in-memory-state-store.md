@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build an in-memory implementation of `StateStore` for tests, local debugging, and deterministic runs without SQLite.
+Build an in-memory implementation of `StateStore` for tests, local debugging, and deterministic runs without PostgreSQL.
 
 ## Context and business logic
 
@@ -32,7 +32,7 @@ The MVP must include an in-memory store as a safe way to test workflow and agent
 - `packages/state/inMemory/InMemoryStateStore.ts`
 - Important:
   - do not replace business rules: the store must not decide transitions; it only persists/returns data
-  - when recording failures/events, follow the same structures as the SQLite store
+  - when recording failures/events, follow the same structures as the PostgreSQL store
 
 ## Definition of Done (DoD)
 

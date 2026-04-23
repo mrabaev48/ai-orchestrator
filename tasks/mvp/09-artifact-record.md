@@ -20,7 +20,7 @@ Artifacts provide traceability and recoverability: planning outputs, run summari
   - backlog export
 - Persistence:
   - `ProjectState.artifacts`
-  - SQLite `artifact_log`
+  - PostgreSQL `artifact_log`
 
 ### Non-functional
 
@@ -30,7 +30,7 @@ Artifacts provide traceability and recoverability: planning outputs, run summari
 ## Stack
 
 - TypeScript
-- SQLite (table `artifact_log`)
+- PostgreSQL (table `artifact_log`)
 
 ## Implementation details
 

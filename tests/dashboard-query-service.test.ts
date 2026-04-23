@@ -47,8 +47,8 @@ test('DashboardQueryService returns paginated history views and latest run summa
   });
   state.decisions.push({
     id: 'decision-1',
-    title: 'Use SQLite',
-    decision: 'Keep SQLite for now',
+    title: 'Use PostgreSQL',
+    decision: 'Keep PostgreSQL for now',
     rationale: 'Enough for local MVP',
     affectedAreas: ['state'],
     createdAt: '2026-03-10T00:00:00.000Z',
@@ -91,7 +91,7 @@ test('DashboardQueryService returns paginated history views and latest run summa
 
   assert.equal(events.items[0]?.type, 'TASK_COMPLETED');
   assert.equal(failures.items[0]?.taskId, 'task-1');
-  assert.equal(decisions.items[0]?.title, 'Use SQLite');
+  assert.equal(decisions.items[0]?.title, 'Use PostgreSQL');
   assert.equal(artifacts.items[0]?.type, 'run_summary');
   assert.equal(latestRun?.taskId, 'task-1');
 });

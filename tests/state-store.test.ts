@@ -142,12 +142,12 @@ test('SqliteStateStore rejects snapshot writes when deep state validation fails'
         store.recordDecision({
           id: 'decision-1',
           title: '',
-          decision: 'Use SQLite',
+          decision: 'Use PostgreSQL',
           rationale: 'Need persistence',
           affectedAreas: ['state'],
           createdAt: new Date().toISOString(),
         }),
-      /SQLite state transaction failed/,
+      /PostgreSQL state transaction failed/,
     );
 
     const loaded = await store.load();

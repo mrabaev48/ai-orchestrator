@@ -186,7 +186,7 @@ flowchart TD
     M --> TOOLS[Tool Adapter Layer]
     M --> OBS[Observability Layer]
 
-    SS --> DB[(SQLite / PostgreSQL)]
+    SS --> DB[(PostgreSQL)]
     TOOLS --> FS[Filesystem]
     TOOLS --> GIT[Git]
     TOOLS --> TSC[TypeScript]
@@ -682,7 +682,7 @@ The system uses:
 - structured tables for operational reporting
 
 MVP persistence backend:
-- SQLite
+- PostgreSQL
 
 Post-MVP backend:
 - PostgreSQL
@@ -2069,7 +2069,7 @@ Allowed write scope in implementation environments should be configurable and li
 
 ### State
 - in-memory store
-- SQLite store
+- PostgreSQL store
 - snapshots
 - events
 
@@ -2153,7 +2153,7 @@ Implement:
 ## Step 2 — State and persistence
 Implement:
 - in-memory store
-- SQLite store
+- PostgreSQL store
 - events
 - snapshots
 - serializers
@@ -2379,7 +2379,7 @@ export class Orchestrator {
 These are not unresolved spec gaps; they are conscious implementation choices that must be confirmed by the implementation team:
 
 - which LLM provider(s) are first-class for MVP
-- whether SQLite snapshot frequency is every cycle or only on accepted progress
+- whether PostgreSQL snapshot frequency is every cycle or only on accepted progress
 - whether provisional test pass exists in MVP
 - whether `dashboard-api` is MVP or post-MVP
 - whether `worker-cli` ships in MVP or post-MVP

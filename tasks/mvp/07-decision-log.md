@@ -18,7 +18,7 @@ The system must be explainable: “why we did it” matters more than “what we
   - records are immutable: corrections must be new entries
   - record decisions when the architectural/policy direction changes
 - Persistence:
-  - store in state (`ProjectState.decisions`) and in SQLite (`decision_log`)
+  - store in state (`ProjectState.decisions`) and in PostgreSQL (`decision_log`)
 
 ### Non-functional
 
@@ -27,7 +27,7 @@ The system must be explainable: “why we did it” matters more than “what we
 ## Stack
 
 - TypeScript
-- SQLite (table `decision_log`)
+- PostgreSQL (table `decision_log`)
 
 ## Implementation details
 

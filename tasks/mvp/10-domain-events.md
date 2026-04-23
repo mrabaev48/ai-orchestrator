@@ -33,7 +33,7 @@ The event log is a required part of the persistence strategy alongside snapshots
 ## Stack
 
 - TypeScript
-- SQLite (table `domain_events`)
+- PostgreSQL (table `domain_events`)
 
 ## Implementation details
 

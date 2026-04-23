@@ -29,7 +29,7 @@ The runtime is organized as a layered backend with explicit composition at the e
   - prompt pipeline and optimized prompt construction
 - `packages/state`
   - persistence ports and adapters
-  - in-memory and SQLite implementations
+  - in-memory and PostgreSQL implementations
 - `packages/core`
   - domain state, entities, invariants, and domain events
 - `packages/shared`

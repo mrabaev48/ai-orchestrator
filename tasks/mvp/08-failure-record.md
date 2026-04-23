@@ -19,7 +19,7 @@ Failures are a source of adaptation: a rerun must differ from the previous attem
   - repeated failures influence task selection and escalation
 - Persistence:
   - stored in `ProjectState.failures`
-  - written to SQLite `failure_log` and reflected in snapshots/events
+  - written to PostgreSQL `failure_log` and reflected in snapshots/events
 
 ### Non-functional
 
@@ -28,7 +28,7 @@ Failures are a source of adaptation: a rerun must differ from the previous attem
 ## Stack
 
 - TypeScript
-- SQLite (table `failure_log`)
+- PostgreSQL (table `failure_log`)
 
 ## Implementation details
 
