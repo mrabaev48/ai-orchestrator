@@ -18,7 +18,7 @@ import { Orchestrator } from '../../execution/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import {
   InMemoryStateStore,
-  SqliteStateStore,
+  PostgresStateStore,
   type StateStore,
 } from '../../state/src/index.ts';
 
@@ -76,5 +76,5 @@ export function createRoleRegistry(): RoleRegistry {
 export function createStateStore(config: RuntimeConfig, initialState: ProjectState): StateStore {
   return config.state.backend === 'memory'
     ? new InMemoryStateStore(initialState)
-    : new SqliteStateStore(config.state.sqlitePath, initialState);
+    : new PostgresStateStore(config.state.postgresDsn, initialState, config.state.postgresSchema);
 }

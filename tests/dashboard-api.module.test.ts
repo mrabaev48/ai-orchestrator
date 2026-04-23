@@ -21,7 +21,9 @@ test('DashboardApiModule wires DashboardQueryService provider', async () => {
         },
         state: {
           backend: 'memory',
-          sqlitePath: '/tmp/unused.db',
+          postgresDsn: 'postgresql://localhost:5432/test',
+      postgresSchema: 'public',
+      sqlitePath: '/tmp/unused.db',
           snapshotOnBootstrap: true,
           snapshotOnTaskCompletion: true,
           snapshotOnMilestoneCompletion: true,

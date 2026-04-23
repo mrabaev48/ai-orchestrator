@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { accessSync, existsSync, readFileSync, statSync, constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 
@@ -9,7 +9,7 @@ export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 const logFormatSchema = z.enum(['json']);
 const llmProviderSchema = z.enum(['openai', 'anthropic', 'mock']);
-const stateBackendSchema = z.enum(['memory', 'sqlite']);
+const stateBackendSchema = z.enum(['memory', 'postgresql']);
 
 const runtimeConfigSchema = z.strictObject({
   llm: z.strictObject({
@@ -21,7 +21,9 @@ const runtimeConfigSchema = z.strictObject({
   }),
   state: z.strictObject({
     backend: stateBackendSchema,
-    sqlitePath: z.string().trim().min(1),
+    postgresDsn: z.string().trim().min(1),
+    postgresSchema: z.string().trim().min(1),
+    sqlitePath: z.string().trim().min(1).optional(),
     snapshotOnBootstrap: z.boolean(),
     snapshotOnTaskCompletion: z.boolean(),
     snapshotOnMilestoneCompletion: z.boolean(),
@@ -46,8 +48,10 @@ const envSchema = z.object({
   LLM_API_KEY: z.string().trim().min(1).optional(),
   LLM_TEMPERATURE: z.coerce.number().default(0.2),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
-  STATE_BACKEND: stateBackendSchema.default('sqlite'),
-  SQLITE_PATH: z.string().trim().min(1).default('.ai-orchestrator/state.db'),
+  STATE_BACKEND: stateBackendSchema.default('postgresql'),
+  POSTGRES_DSN: z.string().trim().min(1).default('postgresql://localhost:5432/ai_orchestrator'),
+  POSTGRES_SCHEMA: z.string().trim().min(1).default('public'),
+  SQLITE_PATH: z.string().trim().min(1).optional(),
   SNAPSHOT_ON_BOOTSTRAP: z.stringbool().default(true),
   SNAPSHOT_ON_TASK_COMPLETION: z.stringbool().default(true),
   SNAPSHOT_ON_MILESTONE_COMPLETION: z.stringbool().default(true),
@@ -66,6 +70,10 @@ export interface LoadRuntimeConfigOptions {
 }
 
 const runtimeSecretRegistry = new Set<string>();
+const WORKFLOW_POLICY_LIMITS = {
+  maxStepsPerRun: 200,
+  maxRetriesPerTask: 10,
+} as const;
 
 export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): RuntimeConfig {
   const cwd = options.cwd ?? process.cwd();
@@ -78,7 +86,9 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
   }
 
   const fileConfig = loadConfigFile(cwd, env.data.RUNTIME_CONFIG_FILE);
-  const resolvedSqlitePath = path.resolve(cwd, fileConfig.state?.sqlitePath ?? env.data.SQLITE_PATH);
+  const resolvedLegacySqlitePath = env.data.SQLITE_PATH
+    ? path.resolve(cwd, fileConfig.state?.sqlitePath ?? env.data.SQLITE_PATH)
+    : undefined;
   const merged = {
     llm: {
       provider: env.data.LLM_PROVIDER,
@@ -91,7 +101,9 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
     state: {
       ...fileConfig.state,
       backend: env.data.STATE_BACKEND,
-      sqlitePath: resolvedSqlitePath,
+      postgresDsn: env.data.POSTGRES_DSN,
+      postgresSchema: env.data.POSTGRES_SCHEMA,
+      ...(resolvedLegacySqlitePath ? { sqlitePath: resolvedLegacySqlitePath } : {}),
       snapshotOnBootstrap: env.data.SNAPSHOT_ON_BOOTSTRAP,
       snapshotOnTaskCompletion: env.data.SNAPSHOT_ON_TASK_COMPLETION,
       snapshotOnMilestoneCompletion: env.data.SNAPSHOT_ON_MILESTONE_COMPLETION,
@@ -123,6 +135,9 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
     });
   }
 
+  validateRuntimePolicy(parsed.data);
+  validatePostgresPolicy(parsed.data);
+  validateRuntimeFilesystemGuards(parsed.data);
   registerRuntimeSecrets(collectSecretValues(parsed.data));
 
   return parsed.data;
@@ -192,6 +207,125 @@ function loadConfigFile(cwd: string, configFile?: string): Partial<RuntimeConfig
       cause: error,
     });
   }
+}
+
+function validateRuntimePolicy(config: RuntimeConfig): void {
+  const policyIssues: string[] = [];
+
+  if (config.workflow.maxStepsPerRun > WORKFLOW_POLICY_LIMITS.maxStepsPerRun) {
+    policyIssues.push(
+      `workflow.maxStepsPerRun must be <= ${WORKFLOW_POLICY_LIMITS.maxStepsPerRun} (received ${config.workflow.maxStepsPerRun})`,
+    );
+  }
+
+  if (config.workflow.maxRetriesPerTask > WORKFLOW_POLICY_LIMITS.maxRetriesPerTask) {
+    policyIssues.push(
+      `workflow.maxRetriesPerTask must be <= ${WORKFLOW_POLICY_LIMITS.maxRetriesPerTask} (received ${config.workflow.maxRetriesPerTask})`,
+    );
+  }
+
+  if (config.workflow.maxRetriesPerTask > config.workflow.maxStepsPerRun) {
+    policyIssues.push(
+      `workflow.maxRetriesPerTask must be <= workflow.maxStepsPerRun (received retries=${config.workflow.maxRetriesPerTask}, steps=${config.workflow.maxStepsPerRun})`,
+    );
+  }
+
+  if (policyIssues.length > 0) {
+    throw new ConfigError('Invalid runtime workflow policy', {
+      details: policyIssues,
+    });
+  }
+}
+
+function validateRuntimeFilesystemGuards(config: RuntimeConfig): void {
+  const writePathIssues = config.tools.allowedWritePaths.flatMap((writePath) =>
+    validateWritableDirectory(writePath, 'tools.allowedWritePaths'),
+  );
+  const issues = [...writePathIssues];
+  if (issues.length > 0) {
+    throw new ConfigError('Invalid runtime writable path policy', {
+      details: issues,
+    });
+  }
+}
+
+function validatePostgresPolicy(config: RuntimeConfig): void {
+  if (config.state.backend !== 'postgresql') {
+    return;
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(config.state.postgresDsn);
+  } catch (error) {
+    throw new ConfigError('Invalid PostgreSQL configuration', {
+      details: [`state.postgresDsn must be a valid URL (${formatPathValidationError(error)})`],
+    });
+  }
+
+  if (!['postgres:', 'postgresql:'].includes(parsedUrl.protocol)) {
+    throw new ConfigError('Invalid PostgreSQL configuration', {
+      details: [`state.postgresDsn must use postgres:// or postgresql:// scheme (received ${parsedUrl.protocol})`],
+    });
+  }
+
+  const databaseName = parsedUrl.pathname.replace(/^\//, '').trim();
+  if (!databaseName) {
+    throw new ConfigError('Invalid PostgreSQL configuration', {
+      details: ['state.postgresDsn must include a database name in URL path'],
+    });
+  }
+}
+
+function validateWritableDirectory(directoryPath: string, scope: string): string[] {
+  if (existsSync(directoryPath)) {
+    try {
+      const stat = statSync(directoryPath);
+      if (!stat.isDirectory()) {
+        return [`${scope} path must be a directory: ${directoryPath}`];
+      }
+      accessSync(directoryPath, fsConstants.W_OK);
+      return [];
+    } catch (error) {
+      return [`${scope} directory must be writable: ${directoryPath} (${formatPathValidationError(error)})`];
+    }
+  }
+
+  const nearestExistingAncestor = findNearestExistingAncestor(directoryPath);
+  if (!nearestExistingAncestor) {
+    return [`${scope} path has no existing writable ancestor: ${directoryPath}`];
+  }
+
+  try {
+    accessSync(nearestExistingAncestor, fsConstants.W_OK);
+    return [];
+  } catch (error) {
+    return [
+      `${scope} path must be writable via ancestor ${nearestExistingAncestor}: ${directoryPath} (${formatPathValidationError(error)})`,
+    ];
+  }
+}
+
+function formatPathValidationError(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return 'unknown filesystem access error';
+}
+
+function findNearestExistingAncestor(directoryPath: string): string | null {
+  let currentPath = path.resolve(directoryPath);
+
+  while (!existsSync(currentPath)) {
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      return null;
+    }
+    currentPath = parentPath;
+  }
+
+  return currentPath;
 }
 
 function isSecretKey(key: string): boolean {

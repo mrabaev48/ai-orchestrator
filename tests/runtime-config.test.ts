@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import {
   clearRuntimeSecrets,
@@ -34,6 +37,64 @@ test('loadRuntimeConfig rejects invalid numeric values', () => {
       loadRuntimeConfig({
         env: {
           MAX_STEPS_PER_RUN: '0',
+          TOOL_ALLOWED_WRITE_PATHS: '.',
+        },
+      }),
+    ConfigError,
+  );
+});
+
+test('loadRuntimeConfig rejects workflow values outside policy bounds', () => {
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        env: {
+          MAX_STEPS_PER_RUN: '201',
+          TOOL_ALLOWED_WRITE_PATHS: '.',
+        },
+      }),
+    ConfigError,
+  );
+});
+
+test('loadRuntimeConfig rejects retry cap larger than step cap', () => {
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        env: {
+          MAX_STEPS_PER_RUN: '2',
+          MAX_RETRIES_PER_TASK: '3',
+          TOOL_ALLOWED_WRITE_PATHS: '.',
+        },
+      }),
+    ConfigError,
+  );
+});
+
+test('loadRuntimeConfig rejects non-directory write path scopes', () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'ai-orchestrator-runtime-config-file-path-'));
+  const filePath = path.join(tempDir, 'not-a-directory.txt');
+  writeFileSync(filePath, 'x', 'utf8');
+
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        cwd: tempDir,
+        env: {
+          TOOL_ALLOWED_WRITE_PATHS: filePath,
+        },
+      }),
+    ConfigError,
+  );
+});
+
+test('loadRuntimeConfig rejects invalid postgresql dsn scheme', () => {
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        env: {
+          STATE_BACKEND: 'postgresql',
+          POSTGRES_DSN: 'mysql://localhost/db',
           TOOL_ALLOWED_WRITE_PATHS: '.',
         },
       }),
