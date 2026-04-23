@@ -77,7 +77,7 @@ test('selectNextTask prefers valid split child tasks over equivalent unsplit wor
     featureId: 'f1',
     title: 'Parent task',
     kind: 'implementation',
-    status: 'blocked',
+    status: 'superseded',
     priority: 'p1',
     dependsOn: [],
     acceptanceCriteria: ['done'],

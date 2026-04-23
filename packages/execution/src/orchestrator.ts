@@ -280,10 +280,10 @@ export class Orchestrator {
 
     if (action === 'split') {
       const splitPlan = splitTaskForRetry(task, reason);
-      task.status = 'blocked';
-      if (!state.execution.blockedTaskIds.includes(task.id)) {
-        state.execution.blockedTaskIds.push(task.id);
-      }
+      task.status = 'superseded';
+      state.execution.blockedTaskIds = state.execution.blockedTaskIds.filter(
+        (taskId) => taskId !== task.id,
+      );
 
       const feature = state.backlog.features[task.featureId];
       for (const childTask of splitPlan.childTasks) {
@@ -292,6 +292,7 @@ export class Orchestrator {
           feature.taskIds.push(childTask.id);
         }
       }
+      rewriteSupersededDependencies(state, task.id, splitPlan.completionTaskId, splitPlan.childTasks);
 
       const artifact = makeArtifact('report', `Task split for ${task.id}`, {
         taskId: task.id,
@@ -408,6 +409,29 @@ export class Orchestrator {
       retrySuggested: false,
       needsHumanDecision: reason === 'task_blocked' || reason === 'task_not_executable',
     });
+  }
+}
+
+function rewriteSupersededDependencies(
+  state: ProjectState,
+  supersededTaskId: string,
+  completionTaskId: string,
+  childTasks: readonly BacklogTask[],
+): void {
+  const childTaskIds = new Set(childTasks.map((task) => task.id));
+  for (const candidate of Object.values(state.backlog.tasks)) {
+    if (candidate.id === supersededTaskId || childTaskIds.has(candidate.id)) {
+      continue;
+    }
+
+    if (!candidate.dependsOn.includes(supersededTaskId)) {
+      continue;
+    }
+
+    const nextDependsOn = candidate.dependsOn.map((dependency) =>
+      dependency === supersededTaskId ? completionTaskId : dependency,
+    );
+    candidate.dependsOn = [...new Set(nextDependsOn)];
   }
 }
 
