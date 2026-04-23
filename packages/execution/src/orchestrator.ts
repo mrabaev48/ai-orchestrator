@@ -1,7 +1,7 @@
 import type { ArtifactRecord, BacklogTask, ProjectState } from '../../core/src/index.ts';
 import { assertProjectState, isExecutableTask, makeEvent } from '../../core/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
-import { SchemaValidationError } from '../../shared/src/index.ts';
+import { SchemaValidationError, WorkflowPolicyError } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
 import type { ToolSet } from '../../tools/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
@@ -31,6 +31,12 @@ export interface RunCycleResult {
 export interface RunCycleOptions {
   forcedTaskId?: string;
 }
+
+export type RunSingleTaskErrorReason =
+  | 'invalid_task_id'
+  | 'task_blocked'
+  | 'task_done'
+  | 'task_not_executable';
 
 export class Orchestrator {
   private readonly tools: ToolSet;
@@ -191,6 +197,32 @@ export class Orchestrator {
     };
   }
 
+  async runSingleTask(taskId: string): Promise<RunCycleResult> {
+    const state = await this.stateStore.load();
+    assertProjectState(state);
+
+    const task = state.backlog.tasks[taskId];
+    if (!task) {
+      throw this.makeRunSingleTaskError(taskId, 'invalid_task_id', 'Requested task does not exist');
+    }
+
+    if (task.status === 'done' || state.execution.completedTaskIds.includes(taskId)) {
+      throw this.makeRunSingleTaskError(taskId, 'task_done', 'Requested task is already completed');
+    }
+
+    if (task.status === 'blocked' || state.execution.blockedTaskIds.includes(taskId)) {
+      throw this.makeRunSingleTaskError(taskId, 'task_blocked', 'Requested task is blocked');
+    }
+
+    const completed = new Set(state.execution.completedTaskIds);
+    const blocked = new Set(state.execution.blockedTaskIds);
+    if (!isExecutableTask(completed, blocked, task)) {
+      throw this.makeRunSingleTaskError(taskId, 'task_not_executable', 'Requested task is not executable');
+    }
+
+    return this.runCycle({ forcedTaskId: taskId });
+  }
+
   private async selectNextTask(state: ProjectState, runId: string): Promise<BacklogTask | null> {
     const taskManager = this.roleRegistry.get<{ state: ProjectState }, BacklogTask | null>('task_manager');
     const taskSelection = await this.executeRole(taskManager, {
@@ -219,7 +251,7 @@ export class Orchestrator {
       this.logger.warn('Forced task is not executable', {
         event: 'forced_task_not_executable',
         taskId,
-        status: task.status,
+        reason: task.status,
       });
       return null;
     }
@@ -360,6 +392,22 @@ export class Orchestrator {
       }
       return secondAttempt;
     }
+  }
+
+  private makeRunSingleTaskError(
+    taskId: string,
+    reason: RunSingleTaskErrorReason,
+    message: string,
+  ): WorkflowPolicyError {
+    return new WorkflowPolicyError(message, {
+      details: {
+        operation: 'runSingleTask',
+        taskId,
+        reason,
+      },
+      retrySuggested: false,
+      needsHumanDecision: reason === 'task_blocked' || reason === 'task_not_executable',
+    });
   }
 }
 

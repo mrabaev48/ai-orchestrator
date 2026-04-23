@@ -71,3 +71,22 @@ test('run-task fails fast without --task-id', () => {
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Missing --task-id argument for run-task command/);
 });
+
+test('run-task fails with deterministic error for missing task in state', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['--experimental-strip-types', cliPath, 'run-task', '--task-id', 'missing-task'],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        TOOL_ALLOWED_WRITE_PATHS: '.',
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 4);
+  assert.match(result.stderr, /WORKFLOW_POLICY_ERROR/);
+  assert.match(result.stderr, /invalid_task_id/);
+});

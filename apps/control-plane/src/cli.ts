@@ -129,14 +129,14 @@ async function runCycle(orchestrator: { runCycle: () => Promise<unknown> }): Pro
 }
 
 async function runTask(
-  orchestrator: { runCycle: (options?: { forcedTaskId?: string }) => Promise<unknown> },
+  orchestrator: { runSingleTask: (taskId: string) => Promise<unknown> },
   taskId?: string,
 ): Promise<void> {
   if (!taskId) {
     throw new ConfigError('Missing --task-id argument for run-task command.');
   }
 
-  const result = await orchestrator.runCycle({ forcedTaskId: taskId });
+  const result = await orchestrator.runSingleTask(taskId);
   console.log(JSON.stringify(result));
 }
 
