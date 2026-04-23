@@ -4,6 +4,7 @@ import type { RoleRegistry } from '../../agents/src/index.ts';
 import type { Logger } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
 import type { RoleRequest } from '../../core/src/roles.ts';
+import { assertRoleOutput } from './role-output-validation.ts';
 
 export class ReleaseReadinessService {
   private readonly stateStore: StateStore;
@@ -46,6 +47,7 @@ export class ReleaseReadinessService {
       },
     );
     await releaseAuditor.validate?.(response);
+    assertRoleOutput('release_auditor', response);
 
     await this.stateStore.recordArtifact({
       id: crypto.randomUUID(),

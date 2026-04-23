@@ -1,3 +1,5 @@
+import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+
 export interface BootstrapAnalysisPrompt {
   id: string;
   role: 'bootstrap_analyst';
@@ -41,32 +43,6 @@ export function buildBootstrapAnalysisPrompt(
       `configFiles=${snapshot.configFiles.length}`,
       `packages=${snapshot.packageDirectories.length}`,
     ].join(' '),
-    outputSchema: {
-      type: 'object',
-      required: [
-        'generatedAt',
-        'packageMap',
-        'subsystemMap',
-        'packageInventory',
-        'entryPoints',
-        'testInfrastructure',
-        'healthObservations',
-        'unstableAreaCandidates',
-        'criticalPaths',
-        'recommendedNextStep',
-      ],
-      properties: {
-        generatedAt: { type: 'string' },
-        packageMap: { type: 'object' },
-        subsystemMap: { type: 'object' },
-        packageInventory: { type: 'array', items: { type: 'string' } },
-        entryPoints: { type: 'array', items: { type: 'string' } },
-        testInfrastructure: { type: 'array', items: { type: 'string' } },
-        healthObservations: { type: 'array', items: { type: 'string' } },
-        unstableAreaCandidates: { type: 'array', items: { type: 'string' } },
-        criticalPaths: { type: 'array', items: { type: 'string' } },
-        recommendedNextStep: { type: 'string' },
-      },
-    },
+    outputSchema: defaultRoleOutputSchemaRegistry.getSchema('bootstrap_analyst'),
   };
 }

@@ -1,3 +1,5 @@
+import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+
 export interface ReleaseAssessmentPrompt {
   id: string;
   role: 'release_auditor';
@@ -26,24 +28,6 @@ export function buildReleaseAssessmentPrompt(input: {
       `Evidence: ${input.evidence.join(', ') || 'none'}`,
     ].join('\n'),
     contextSummary: `blockers=${input.blockers.length} warnings=${input.warnings.length} evidence=${input.evidence.length}`,
-    outputSchema: {
-      type: 'object',
-      required: [
-        'verdict',
-        'confidence',
-        'blockers',
-        'warnings',
-        'evidence',
-        'recommendedNextActions',
-      ],
-      properties: {
-        verdict: { type: 'string', enum: ['ready', 'caution', 'blocked'] },
-        confidence: { type: 'number' },
-        blockers: { type: 'array', items: { type: 'string' } },
-        warnings: { type: 'array', items: { type: 'string' } },
-        evidence: { type: 'array', items: { type: 'string' } },
-        recommendedNextActions: { type: 'array', items: { type: 'string' } },
-      },
-    },
+    outputSchema: defaultRoleOutputSchemaRegistry.getSchema('release_auditor'),
   };
 }

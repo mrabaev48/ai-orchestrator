@@ -1,3 +1,5 @@
+import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+
 export interface StateIntegrityPrompt {
   id: string;
   role: 'state_steward';
@@ -24,14 +26,6 @@ export function buildStateIntegrityPrompt(input: {
       ...input.issues.map((issue) => `- ${issue}`),
     ].join('\n'),
     contextSummary: `issues=${input.issueCount}`,
-    outputSchema: {
-      type: 'object',
-      required: ['ok', 'findings', 'summary'],
-      properties: {
-        ok: { type: 'boolean' },
-        findings: { type: 'array', items: { type: 'object' } },
-        summary: { type: 'string' },
-      },
-    },
+    outputSchema: defaultRoleOutputSchemaRegistry.getSchema('state_steward'),
   };
 }

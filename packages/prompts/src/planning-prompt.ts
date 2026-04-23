@@ -2,6 +2,7 @@ import type {
   ArchitectureFinding,
   ProjectDiscovery,
 } from '../../core/src/index.ts';
+import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
 
 export interface PlanningPrompt {
   id: string;
@@ -32,14 +33,6 @@ export function buildPlanningPrompt(
       `packages=${discovery.packageInventory.length}`,
       `findings=${findings.length}`,
     ].join(' '),
-    outputSchema: {
-      type: 'object',
-      required: ['milestone', 'backlog', 'summary'],
-      properties: {
-        milestone: { type: 'object' },
-        backlog: { type: 'object' },
-        summary: { type: 'string' },
-      },
-    },
+    outputSchema: defaultRoleOutputSchemaRegistry.getSchema('planner'),
   };
 }

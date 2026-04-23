@@ -1,4 +1,5 @@
 import type { ProjectDiscovery } from '../../core/src/index.ts';
+import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
 
 export interface ArchitectureAnalysisPrompt {
   id: string;
@@ -32,27 +33,6 @@ export function buildArchitectureAnalysisPrompt(
       `criticalPaths=${discovery.criticalPaths.length}`,
       `unstableAreas=${discovery.unstableAreaCandidates.length}`,
     ].join(' '),
-    outputSchema: {
-      type: 'object',
-      required: ['findings', 'riskSummary'],
-      properties: {
-        findings: {
-          type: 'array',
-          items: {
-            type: 'object',
-            required: [
-              'subsystem',
-              'issueType',
-              'description',
-              'impact',
-              'recommendation',
-              'affectedModules',
-              'severity',
-            ],
-          },
-        },
-        riskSummary: { type: 'string' },
-      },
-    },
+    outputSchema: defaultRoleOutputSchemaRegistry.getSchema('architect'),
   };
 }

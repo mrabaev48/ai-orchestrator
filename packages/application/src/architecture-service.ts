@@ -12,6 +12,7 @@ import { buildArchitectureAnalysisPrompt } from '../../prompts/src/index.ts';
 import type { Logger } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
 import type { RoleRequest } from '../../core/src/roles.ts';
+import { assertRoleOutput } from './role-output-validation.ts';
 
 export class ArchitectureService {
   private readonly stateStore: StateStore;
@@ -58,6 +59,7 @@ export class ArchitectureService {
       },
     );
     await architect.validate?.(response);
+    assertRoleOutput('architect', response);
 
     currentState.architecture.findings = [...response.output.findings];
     currentState.architecture.analysisSummary = response.output.riskSummary;

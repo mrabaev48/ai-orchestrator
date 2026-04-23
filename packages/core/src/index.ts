@@ -1,4 +1,5 @@
 export * from './artifacts.ts';
+export * from './artifact-schema-registry.ts';
 export * from './architecture-findings.ts';
 export * from './backlog.ts';
 export * from './decisions.ts';
@@ -11,5 +12,6 @@ export * from './project-state.ts';
 export * from './review.ts';
 export * from './roles.ts';
 export * from './release-assessment.ts';
+export * from './role-output-schema-registry.ts';
 export * from './state-integrity.ts';
 export * from './testing.ts';

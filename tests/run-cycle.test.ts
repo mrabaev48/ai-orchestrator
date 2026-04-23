@@ -11,9 +11,10 @@ import {
 } from '../packages/agents/src/index.ts';
 import { createEmptyProjectState } from '../packages/core/src/index.ts';
 import { Orchestrator } from '../packages/execution/src/index.ts';
-import { WorkflowPolicyError } from '../packages/shared/src/errors/index.ts';
+import { SchemaValidationError, WorkflowPolicyError } from '../packages/shared/src/errors/index.ts';
 import { InMemoryStateStore } from '../packages/state/src/index.ts';
 import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
+import type { AgentRole, RoleExecutionContext, RoleRequest, RoleResponse } from '../packages/core/src/index.ts';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -311,5 +312,44 @@ test('runSingleTask throws deterministic error for blocked task', async () => {
       error.details !== undefined &&
       typeof error.details === 'object' &&
       (error.details as Record<string, unknown>).reason === 'task_blocked',
+  );
+});
+
+test('runCycle rejects invalid coder output via role output schema registry', async () => {
+  class InvalidCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(
+      request: RoleRequest<{ task: unknown; prompt: unknown }>,
+      context: RoleExecutionContext,
+    ): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      void request;
+      void context;
+      return {
+        role: 'coder',
+        summary: 'invalid-output',
+        output: { changed: true, summary: '' },
+        warnings: [],
+        risks: [],
+        needsHumanDecision: false,
+        confidence: 0.8,
+      };
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new InvalidCoderRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, makeRuntimeConfig(), logger);
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) => error instanceof SchemaValidationError,
   );
 });

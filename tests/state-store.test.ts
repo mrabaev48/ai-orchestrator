@@ -92,3 +92,41 @@ test('SqliteStateStore persists snapshots and domain events', async () => {
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('InMemoryStateStore rejects artifacts that violate schema registry', async () => {
+  const store = new InMemoryStateStore(makeState());
+
+  await assert.rejects(
+    async () =>
+      store.recordArtifact({
+        id: 'artifact-1',
+        type: 'release_assessment',
+        title: 'Release assessment',
+        metadata: {},
+        createdAt: new Date().toISOString(),
+      }),
+    /Artifact schema validation failed/,
+  );
+});
+
+test('SqliteStateStore rejects artifacts that violate schema registry', async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'ai-orchestrator-'));
+  const dbPath = path.join(tempDir, 'state.db');
+
+  try {
+    const store = new SqliteStateStore(dbPath, makeState());
+    await assert.rejects(
+      async () =>
+        store.recordArtifact({
+          id: 'artifact-1',
+          type: 'release_assessment',
+          title: 'Release assessment',
+          metadata: {},
+          createdAt: new Date().toISOString(),
+        }),
+      /Artifact schema validation failed/,
+    );
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
