@@ -65,6 +65,8 @@ export interface LoadRuntimeConfigOptions {
   env?: Record<string, string | undefined>;
 }
 
+const runtimeSecretRegistry = new Set<string>();
+
 export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): RuntimeConfig {
   const cwd = options.cwd ?? process.cwd();
   const env = envSchema.safeParse(options.env ?? process.env);
@@ -121,6 +123,8 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
     });
   }
 
+  registerRuntimeSecrets(collectSecretValues(parsed.data));
+
   return parsed.data;
 }
 
@@ -128,9 +132,28 @@ export function redactSecrets<T>(value: T): T {
   return redactSecretsInternal(value) as T;
 }
 
+export function registerRuntimeSecrets(secrets: readonly string[]): void {
+  for (const secret of secrets) {
+    const normalized = secret.trim();
+    if (!normalized) {
+      continue;
+    }
+
+    runtimeSecretRegistry.add(normalized);
+  }
+}
+
+export function clearRuntimeSecrets(): void {
+  runtimeSecretRegistry.clear();
+}
+
 function redactSecretsInternal(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => redactSecretsInternal(item));
+  }
+
+  if (typeof value === 'string') {
+    return redactSecretStrings(value);
   }
 
   if (value && typeof value === 'object') {
@@ -173,4 +196,64 @@ function loadConfigFile(cwd: string, configFile?: string): Partial<RuntimeConfig
 
 function isSecretKey(key: string): boolean {
   return /(key|token|secret|password|dsn)/i.test(key);
+}
+
+function redactSecretStrings(value: string): string {
+  let sanitized = redactRegisteredSecrets(value);
+
+  sanitized = sanitized.replace(/(?<![a-zA-Z0-9_-])sk-(?:proj-)?[a-zA-Z0-9_-]{20,}(?![a-zA-Z0-9_-])/g, '<redacted>');
+  sanitized = sanitized.replace(/(bearer\s+)[a-zA-Z0-9._-]{16,}/gi, '$1<redacted>');
+  sanitized = sanitized.replace(
+    /\b(api[_-]?key|token|secret|password)\b(\s*[:=]\s*)(['"]?)([^'",\s]+)\3/gi,
+    (match, key: string, separator: string, quote: string, assignedValue: string) => {
+      if (!shouldRedactAssignedValue(assignedValue)) {
+        return match;
+      }
+
+      return `${key}${separator}${quote}<redacted>${quote}`;
+    },
+  );
+
+  return sanitized;
+}
+
+function shouldRedactAssignedValue(value: string): boolean {
+  return value.length >= 8 || value.includes('-') || value.includes('_');
+}
+
+function collectSecretValues(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectSecretValues(item));
+  }
+
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  const secrets: string[] = [];
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (isSecretKey(key) && typeof entry === 'string' && entry.trim()) {
+      secrets.push(entry);
+      continue;
+    }
+
+    secrets.push(...collectSecretValues(entry));
+  }
+
+  return secrets;
+}
+
+function redactRegisteredSecrets(value: string): string {
+  const secrets = [...runtimeSecretRegistry].sort((left, right) => right.length - left.length);
+  let sanitized = value;
+
+  for (const secret of secrets) {
+    sanitized = sanitized.replace(new RegExp(escapeRegExp(secret), 'g'), '<redacted>');
+  }
+
+  return sanitized;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

@@ -1,6 +1,7 @@
 import type { BacklogTask } from '../../core/src/backlog.ts';
 import type { FailureRecord } from '../../core/src/failures.ts';
 import type { AgentRoleName } from '../../core/src/roles.ts';
+import { redactSecrets } from '../../shared/src/index.ts';
 
 export interface OptimizedPrompt {
   id: string;
@@ -39,7 +40,7 @@ export class PromptPipeline {
       (failure) => `Avoid repeating failure: ${failure.reason}`,
     );
 
-    return {
+    return redactSecrets({
       id: crypto.randomUUID(),
       role: input.role,
       systemPrompt: defaultTemplates[input.role],
@@ -50,6 +51,6 @@ export class PromptPipeline {
         ...failureConstraints,
       ],
       outputSchema: input.outputSchema,
-    };
+    });
   }
 }
