@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { accessSync, existsSync, readFileSync, statSync, constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 
@@ -66,6 +66,10 @@ export interface LoadRuntimeConfigOptions {
 }
 
 const runtimeSecretRegistry = new Set<string>();
+const WORKFLOW_POLICY_LIMITS = {
+  maxStepsPerRun: 200,
+  maxRetriesPerTask: 10,
+} as const;
 
 export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): RuntimeConfig {
   const cwd = options.cwd ?? process.cwd();
@@ -123,6 +127,8 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
     });
   }
 
+  validateRuntimePolicy(parsed.data);
+  validateRuntimeFilesystemGuards(parsed.data);
   registerRuntimeSecrets(collectSecretValues(parsed.data));
 
   return parsed.data;
@@ -192,6 +198,103 @@ function loadConfigFile(cwd: string, configFile?: string): Partial<RuntimeConfig
       cause: error,
     });
   }
+}
+
+function validateRuntimePolicy(config: RuntimeConfig): void {
+  const policyIssues: string[] = [];
+
+  if (config.workflow.maxStepsPerRun > WORKFLOW_POLICY_LIMITS.maxStepsPerRun) {
+    policyIssues.push(
+      `workflow.maxStepsPerRun must be <= ${WORKFLOW_POLICY_LIMITS.maxStepsPerRun} (received ${config.workflow.maxStepsPerRun})`,
+    );
+  }
+
+  if (config.workflow.maxRetriesPerTask > WORKFLOW_POLICY_LIMITS.maxRetriesPerTask) {
+    policyIssues.push(
+      `workflow.maxRetriesPerTask must be <= ${WORKFLOW_POLICY_LIMITS.maxRetriesPerTask} (received ${config.workflow.maxRetriesPerTask})`,
+    );
+  }
+
+  if (config.workflow.maxRetriesPerTask > config.workflow.maxStepsPerRun) {
+    policyIssues.push(
+      `workflow.maxRetriesPerTask must be <= workflow.maxStepsPerRun (received retries=${config.workflow.maxRetriesPerTask}, steps=${config.workflow.maxStepsPerRun})`,
+    );
+  }
+
+  if (policyIssues.length > 0) {
+    throw new ConfigError('Invalid runtime workflow policy', {
+      details: policyIssues,
+    });
+  }
+}
+
+function validateRuntimeFilesystemGuards(config: RuntimeConfig): void {
+  const writePathIssues = config.tools.allowedWritePaths.flatMap((writePath) =>
+    validateWritableDirectory(writePath, 'tools.allowedWritePaths'),
+  );
+
+  const sqlitePathIssues =
+    config.state.backend === 'sqlite'
+      ? validateWritableDirectory(path.dirname(config.state.sqlitePath), 'state.sqlitePath')
+      : [];
+
+  const issues = [...writePathIssues, ...sqlitePathIssues];
+  if (issues.length > 0) {
+    throw new ConfigError('Invalid runtime writable path policy', {
+      details: issues,
+    });
+  }
+}
+
+function validateWritableDirectory(directoryPath: string, scope: string): string[] {
+  if (existsSync(directoryPath)) {
+    try {
+      const stat = statSync(directoryPath);
+      if (!stat.isDirectory()) {
+        return [`${scope} path must be a directory: ${directoryPath}`];
+      }
+      accessSync(directoryPath, fsConstants.W_OK);
+      return [];
+    } catch (error) {
+      return [`${scope} directory must be writable: ${directoryPath} (${formatPathValidationError(error)})`];
+    }
+  }
+
+  const nearestExistingAncestor = findNearestExistingAncestor(directoryPath);
+  if (!nearestExistingAncestor) {
+    return [`${scope} path has no existing writable ancestor: ${directoryPath}`];
+  }
+
+  try {
+    accessSync(nearestExistingAncestor, fsConstants.W_OK);
+    return [];
+  } catch (error) {
+    return [
+      `${scope} path must be writable via ancestor ${nearestExistingAncestor}: ${directoryPath} (${formatPathValidationError(error)})`,
+    ];
+  }
+}
+
+function formatPathValidationError(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return 'unknown filesystem access error';
+}
+
+function findNearestExistingAncestor(directoryPath: string): string | null {
+  let currentPath = path.resolve(directoryPath);
+
+  while (!existsSync(currentPath)) {
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      return null;
+    }
+    currentPath = parentPath;
+  }
+
+  return currentPath;
 }
 
 function isSecretKey(key: string): boolean {
