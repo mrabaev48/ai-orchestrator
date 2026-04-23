@@ -48,3 +48,27 @@ test('redactSecrets removes secret-like keys recursively', () => {
     },
   });
 });
+
+test('redactSecrets masks common provider secret string formats', () => {
+  const redacted = redactSecrets({
+    authorization: 'Bearer abcdefghijklmnopqrstuvwxyz123456',
+    prompt: 'Use key sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ123456 and continue',
+    inline: 'api_key: super-secret-value',
+  });
+
+  assert.deepEqual(redacted, {
+    authorization: 'Bearer <redacted>',
+    prompt: 'Use key <redacted> and continue',
+    inline: 'api_key: <redacted>',
+  });
+});
+
+test('redactSecrets avoids replacing likely non-secret short assignments', () => {
+  const redacted = redactSecrets({
+    text: 'Please create a token=done marker and keep going',
+  });
+
+  assert.deepEqual(redacted, {
+    text: 'Please create a token=done marker and keep going',
+  });
+});

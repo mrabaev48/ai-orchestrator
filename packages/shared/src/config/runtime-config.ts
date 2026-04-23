@@ -133,6 +133,10 @@ function redactSecretsInternal(value: unknown): unknown {
     return value.map((item) => redactSecretsInternal(item));
   }
 
+  if (typeof value === 'string') {
+    return redactSecretStrings(value);
+  }
+
   if (value && typeof value === 'object') {
     const output: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
@@ -173,4 +177,27 @@ function loadConfigFile(cwd: string, configFile?: string): Partial<RuntimeConfig
 
 function isSecretKey(key: string): boolean {
   return /(key|token|secret|password|dsn)/i.test(key);
+}
+
+function redactSecretStrings(value: string): string {
+  let sanitized = value;
+
+  sanitized = sanitized.replace(/(?<![a-zA-Z0-9_-])sk-(?:proj-)?[a-zA-Z0-9_-]{20,}(?![a-zA-Z0-9_-])/g, '<redacted>');
+  sanitized = sanitized.replace(/(bearer\s+)[a-zA-Z0-9._-]{16,}/gi, '$1<redacted>');
+  sanitized = sanitized.replace(
+    /\b(api[_-]?key|token|secret|password)\b(\s*[:=]\s*)(['"]?)([^'",\s]+)\3/gi,
+    (match, key: string, separator: string, quote: string, assignedValue: string) => {
+      if (!shouldRedactAssignedValue(assignedValue)) {
+        return match;
+      }
+
+      return `${key}${separator}${quote}<redacted>${quote}`;
+    },
+  );
+
+  return sanitized;
+}
+
+function shouldRedactAssignedValue(value: string): boolean {
+  return value.length >= 8 || value.includes('-') || value.includes('_');
 }
