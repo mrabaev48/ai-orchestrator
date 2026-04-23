@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ConfigError, loadRuntimeConfig, redactSecrets } from '../packages/shared/src/index.ts';
+import {
+  clearRuntimeSecrets,
+  ConfigError,
+  loadRuntimeConfig,
+  redactSecrets,
+  registerRuntimeSecrets,
+} from '../packages/shared/src/index.ts';
+
+test.afterEach(() => {
+  clearRuntimeSecrets();
+});
 
 test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   const config = loadRuntimeConfig({
@@ -71,4 +81,30 @@ test('redactSecrets avoids replacing likely non-secret short assignments', () =>
   assert.deepEqual(redacted, {
     text: 'Please create a token=done marker and keep going',
   });
+});
+
+test('redactSecrets masks explicitly registered runtime secrets', () => {
+  registerRuntimeSecrets(['provider-credential-not-matching-fallback']);
+
+  const redacted = redactSecrets({
+    prompt: 'Credential: provider-credential-not-matching-fallback',
+  });
+
+  assert.deepEqual(redacted, {
+    prompt: 'Credential: <redacted>',
+  });
+});
+
+test('loadRuntimeConfig auto-registers configured secret fields for string redaction', () => {
+  loadRuntimeConfig({
+    env: {
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-4.1',
+      LLM_API_KEY: 'provider-runtime-secret-001',
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+    },
+  });
+
+  const redacted = redactSecrets('LLM secret provider-runtime-secret-001');
+  assert.equal(redacted, 'LLM secret <redacted>');
 });
