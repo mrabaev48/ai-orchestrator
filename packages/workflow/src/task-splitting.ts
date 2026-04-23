@@ -2,6 +2,7 @@ import type { BacklogTask, Priority } from '../../core/src/backlog.ts';
 
 export interface SplitTaskPlan {
   parentTaskId: string;
+  completionTaskId: string;
   childTasks: [BacklogTask, BacklogTask];
   rationale: string;
 }
@@ -34,6 +35,7 @@ export function splitTaskForRetry(task: BacklogTask, reason: string): SplitTaskP
 
   return {
     parentTaskId: task.id,
+    completionTaskId: secondChildId,
     childTasks: [firstChild, secondChild],
     rationale: `Task ${task.id} was split after repeated failure: ${reason}`,
   };

@@ -21,6 +21,7 @@ test('splitTaskForRetry creates traceable child tasks with narrowed dependencies
   );
 
   assert.equal(result.parentTaskId, 'task-1');
+  assert.equal(result.completionTaskId, 'task-1--part-2');
   assert.equal(result.childTasks[0].splitFromTaskId, 'task-1');
   assert.deepEqual(result.childTasks[0].dependsOn, ['task-0']);
   assert.deepEqual(result.childTasks[1].dependsOn, ['task-1--part-1']);

@@ -9,7 +9,14 @@ export type BacklogTaskKind =
   | 'documentation'
   | 'release';
 
-export type BacklogTaskStatus = 'todo' | 'in_progress' | 'review' | 'testing' | 'done' | 'blocked';
+export type BacklogTaskStatus =
+  | 'todo'
+  | 'in_progress'
+  | 'review'
+  | 'testing'
+  | 'done'
+  | 'blocked'
+  | 'superseded';
 export type Priority = 'p0' | 'p1' | 'p2' | 'p3';
 export type EstimatedRisk = 'low' | 'medium' | 'high';
 
