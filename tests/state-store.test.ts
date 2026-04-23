@@ -130,3 +130,29 @@ test('SqliteStateStore rejects artifacts that violate schema registry', async ()
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('SqliteStateStore rejects snapshot writes when deep state validation fails', async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'ai-orchestrator-'));
+  const dbPath = path.join(tempDir, 'state.db');
+
+  try {
+    const store = new SqliteStateStore(dbPath, makeState());
+    await assert.rejects(
+      async () =>
+        store.recordDecision({
+          id: 'decision-1',
+          title: '',
+          decision: 'Use SQLite',
+          rationale: 'Need persistence',
+          affectedAreas: ['state'],
+          createdAt: new Date().toISOString(),
+        }),
+      /SQLite state transaction failed/,
+    );
+
+    const loaded = await store.load();
+    assert.equal(loaded.decisions.length, 0);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});

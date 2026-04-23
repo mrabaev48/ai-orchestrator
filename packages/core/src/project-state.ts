@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { StateIntegrityError } from '../../shared/src/index.ts';
 import type { ArchitectureFinding } from './architecture-findings.ts';
 import { validateArchitectureFinding } from './architecture-findings.ts';
@@ -59,6 +61,142 @@ export interface ValidationResult {
   issues: string[];
 }
 
+const backlogTaskSchema = z.object({
+  id: z.string().min(1),
+  featureId: z.string().min(1),
+  splitFromTaskId: z.string().min(1).optional(),
+  title: z.string().min(1),
+  kind: z.enum([
+    'bootstrap',
+    'analysis',
+    'architecture',
+    'planning',
+    'implementation',
+    'review',
+    'testing',
+    'documentation',
+    'release',
+  ]),
+  status: z.enum(['todo', 'in_progress', 'review', 'testing', 'done', 'blocked', 'superseded']),
+  priority: z.enum(['p0', 'p1', 'p2', 'p3']),
+  dependsOn: z.array(z.string().min(1)),
+  acceptanceCriteria: z.array(z.string().min(1)),
+  affectedModules: z.array(z.string().min(1)),
+  estimatedRisk: z.enum(['low', 'medium', 'high']),
+});
+
+const epicSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  goal: z.string().min(1),
+  status: z.enum(['todo', 'in_progress', 'done', 'blocked', 'superseded']),
+  featureIds: z.array(z.string().min(1)),
+});
+
+const featureSchema = z.object({
+  id: z.string().min(1),
+  epicId: z.string().min(1),
+  title: z.string().min(1),
+  outcome: z.string().min(1),
+  risks: z.array(z.string().min(1)),
+  taskIds: z.array(z.string().min(1)),
+});
+
+const milestoneSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  goal: z.string().min(1),
+  status: z.enum(['todo', 'in_progress', 'done', 'blocked']),
+  epicIds: z.array(z.string().min(1)),
+  entryCriteria: z.array(z.string()),
+  exitCriteria: z.array(z.string()),
+});
+
+const decisionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  decision: z.string().min(1),
+  rationale: z.string().min(1),
+  affectedAreas: z.array(z.string().min(1)),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+
+const failureSchema = z.object({
+  id: z.string().min(1),
+  taskId: z.string().min(1),
+  role: z.enum([
+    'bootstrap_analyst',
+    'architect',
+    'planner',
+    'release_auditor',
+    'state_steward',
+    'integration_manager',
+    'task_manager',
+    'prompt_engineer',
+    'coder',
+    'reviewer',
+    'tester',
+    'docs_writer',
+  ]),
+  reason: z.string().min(1),
+  symptoms: z.array(z.string().min(1)),
+  badPatterns: z.array(z.string().min(1)),
+  retrySuggested: z.boolean(),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+
+const artifactSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum([
+    'bootstrap_analysis',
+    'architecture_analysis',
+    'documentation',
+    'release_assessment',
+    'state_integrity_report',
+    'integration_export',
+    'optimized_prompt',
+    'run_summary',
+    'backlog_export',
+    'plan',
+    'test_plan',
+    'report',
+  ]),
+  title: z.string().min(1),
+  location: z.string().min(1).optional(),
+  metadata: z.record(z.string(), z.string().min(1)),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+
+const projectStateDeepSchema = z.object({
+  backlog: z.object({
+    epics: z.record(z.string(), epicSchema),
+    features: z.record(z.string(), featureSchema),
+    tasks: z.record(z.string(), backlogTaskSchema),
+  }),
+  milestones: z.record(z.string(), milestoneSchema),
+  decisions: z.array(decisionSchema),
+  failures: z.array(failureSchema),
+  artifacts: z.array(artifactSchema),
+});
+
+function toPath(path: PropertyKey[]): string {
+  if (path.length === 0) {
+    return 'projectState';
+  }
+
+  return path
+    .map((segment) => {
+      if (typeof segment === 'number') {
+        return `[${segment}]`;
+      }
+      if (typeof segment === 'symbol') {
+        return segment.toString();
+      }
+      return segment;
+    })
+    .join('.');
+}
+
 export function createEmptyProjectState(input: {
   projectId: string;
   projectName: string;
@@ -102,6 +240,16 @@ export function createEmptyProjectState(input: {
 
 export function validateProjectState(state: ProjectState): ValidationResult {
   const issues: string[] = [];
+  const deepValidation = projectStateDeepSchema.safeParse(state);
+
+  if (!deepValidation.success) {
+    issues.push(
+      ...deepValidation.error.issues.map((issue) => {
+        const issuePath = toPath(issue.path);
+        return `${issuePath}: ${issue.message}`;
+      }),
+    );
+  }
 
   issues.push(...validateProjectDiscovery(state.discovery));
   issues.push(...state.architecture.findings.flatMap((finding) => validateArchitectureFinding(finding)));
