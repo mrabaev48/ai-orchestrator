@@ -11,6 +11,7 @@ import { buildPlanningPrompt } from '../../prompts/src/index.ts';
 import type { Logger } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
 import type { RoleRequest } from '../../core/src/roles.ts';
+import { assertRoleOutput } from './role-output-validation.ts';
 
 interface PlanningOutput {
   milestone: Milestone;
@@ -59,6 +60,7 @@ export class PlanningService {
       },
     );
     await planner.validate?.(response);
+    assertRoleOutput('planner', response);
 
     currentState.backlog = response.output.backlog;
     currentState.milestones[response.output.milestone.id] = response.output.milestone;

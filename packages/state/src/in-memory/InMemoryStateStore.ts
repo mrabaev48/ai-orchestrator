@@ -1,5 +1,6 @@
 import {
   assertProjectState,
+  defaultArtifactSchemaRegistry,
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
@@ -70,6 +71,12 @@ export class InMemoryStateStore implements StateStore {
   }
 
   async recordArtifact(artifact: ArtifactRecord): Promise<void> {
+    const issues = defaultArtifactSchemaRegistry.validate(artifact);
+    if (issues.length > 0) {
+      throw new StateStoreError('Artifact schema validation failed', {
+        details: { artifactType: artifact.type, issues },
+      });
+    }
     const current = await this.load();
     current.artifacts.push(structuredClone(artifact));
     await this.save(current);
@@ -93,7 +100,7 @@ export class InMemoryStateStore implements StateStore {
       current.execution.completedTaskIds.push(taskId);
     }
     delete current.execution.activeTaskId;
-    current.artifacts.push({
+    const summaryArtifact: ArtifactRecord = {
       id: crypto.randomUUID(),
       type: 'run_summary',
       title: `Task ${taskId} completion summary`,
@@ -102,7 +109,14 @@ export class InMemoryStateStore implements StateStore {
         summary,
       },
       createdAt: new Date().toISOString(),
-    });
+    };
+    const issues = defaultArtifactSchemaRegistry.validate(summaryArtifact);
+    if (issues.length > 0) {
+      throw new StateStoreError('Artifact schema validation failed', {
+        details: { artifactType: summaryArtifact.type, issues },
+      });
+    }
+    current.artifacts.push(summaryArtifact);
     await this.save(current);
   }
 }

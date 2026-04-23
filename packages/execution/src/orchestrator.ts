@@ -1,5 +1,6 @@
 import type { ArtifactRecord, BacklogTask, ProjectState } from '../../core/src/index.ts';
 import { assertProjectState, isExecutableTask, makeEvent } from '../../core/src/index.ts';
+import { defaultRoleOutputSchemaRegistry, validateRoleResponse } from '../../core/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import { SchemaValidationError, WorkflowPolicyError } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
@@ -100,7 +101,7 @@ export class Orchestrator {
         task,
         stateSummary: summarizeState(state),
         failures,
-        outputSchema: { type: 'object', title: 'CodeExecutionOutput' },
+        outputSchema: defaultRoleOutputSchemaRegistry.getSchema(routeTaskToRole(task)),
       },
       acceptanceCriteria: ['Prompt includes acceptance criteria and failure constraints'],
     }, this.makeContext('prompt_engineer', runId, state, task.id));
@@ -377,6 +378,7 @@ export class Orchestrator {
     const firstAttempt = await role.execute(request, context);
     try {
       await role.validate?.(firstAttempt);
+      this.validateRoleResult(request.role, firstAttempt);
       return firstAttempt;
     } catch {
       context.logger.warn('Role validation failed, retrying once', {
@@ -385,6 +387,7 @@ export class Orchestrator {
       const secondAttempt = await role.execute(request, context);
       try {
         await role.validate?.(secondAttempt);
+        this.validateRoleResult(request.role, secondAttempt);
       } catch (validationError) {
         throw new SchemaValidationError('Role response schema validation failed', {
           cause: validationError,
@@ -392,6 +395,24 @@ export class Orchestrator {
         });
       }
       return secondAttempt;
+    }
+  }
+
+  private validateRoleResult(
+    role: RoleExecutionContext['role'],
+    response: RoleResponse<unknown>,
+  ): void {
+    const responseIssues = validateRoleResponse(role, response);
+    const outputIssues = defaultRoleOutputSchemaRegistry.validate(role, response.output);
+    const issues = [...responseIssues, ...outputIssues];
+    if (issues.length > 0) {
+      throw new SchemaValidationError('Role response registry validation failed', {
+        details: {
+          role,
+          issues,
+        },
+        retrySuggested: false,
+      });
     }
   }
 

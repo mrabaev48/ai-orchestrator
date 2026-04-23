@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import {
   assertProjectState,
+  defaultArtifactSchemaRegistry,
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
@@ -142,6 +143,12 @@ export class SqliteStateStore implements StateStore {
   }
 
   async recordArtifact(artifact: ArtifactRecord): Promise<void> {
+    const issues = defaultArtifactSchemaRegistry.validate(artifact);
+    if (issues.length > 0) {
+      throw new StateStoreError('Artifact schema validation failed', {
+        details: { artifactType: artifact.type, issues },
+      });
+    }
     const current = await this.load();
     current.artifacts.push(structuredClone(artifact));
     this.withTransaction(() => {

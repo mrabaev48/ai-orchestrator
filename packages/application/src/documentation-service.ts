@@ -6,6 +6,7 @@ import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
 import type { RoleRequest } from '../../core/src/roles.ts';
+import { assertRoleOutput } from './role-output-validation.ts';
 
 interface DocumentationOutput {
   summary: string;
@@ -75,6 +76,7 @@ export class DocumentationService {
       },
     );
     await docsWriter.validate?.(response);
+    assertRoleOutput('docs_writer', response);
 
     const outputPath = path.resolve(process.cwd(), out ?? 'artifacts/generated-docs.md');
     await this.toolSet.fileSystem.writeFile(outputPath, response.output.markdown);

@@ -1,3 +1,5 @@
+import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+
 export interface IntegrationExportPrompt {
   id: string;
   role: 'integration_manager';
@@ -26,22 +28,6 @@ export function buildIntegrationExportPrompt(input: {
       `Blocked tasks: ${String(input.blockedTaskCount)}`,
     ].join('\n'),
     contextSummary: `tasks=${input.taskCount} artifacts=${input.artifactCount} blocked=${input.blockedTaskCount}`,
-    outputSchema: {
-      type: 'object',
-      required: [
-        'integrationTarget',
-        'mappedEntities',
-        'missingRequiredFields',
-        'exportBlockers',
-        'recommendedFixes',
-      ],
-      properties: {
-        integrationTarget: { type: 'string' },
-        mappedEntities: { type: 'array', items: { type: 'object' } },
-        missingRequiredFields: { type: 'array', items: { type: 'string' } },
-        exportBlockers: { type: 'array', items: { type: 'string' } },
-        recommendedFixes: { type: 'array', items: { type: 'string' } },
-      },
-    },
+    outputSchema: defaultRoleOutputSchemaRegistry.getSchema('integration_manager'),
   };
 }

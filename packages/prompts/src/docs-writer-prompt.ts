@@ -1,3 +1,5 @@
+import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+
 export interface DocsWriterPrompt {
   id: string;
   role: 'docs_writer';
@@ -30,24 +32,6 @@ export function buildDocsWriterPrompt(input: {
       `Behavior changes: ${input.behaviorChanges.join(', ') || 'none'}`,
     ].join('\n'),
     contextSummary: `affectedModules=${input.affectedModules.length} behaviorChanges=${input.behaviorChanges.length}`,
-    outputSchema: {
-      type: 'object',
-      required: [
-        'summary',
-        'affectedModules',
-        'behaviorChanges',
-        'designRationale',
-        'followUpGaps',
-        'markdown',
-      ],
-      properties: {
-        summary: { type: 'string' },
-        affectedModules: { type: 'array', items: { type: 'string' } },
-        behaviorChanges: { type: 'array', items: { type: 'string' } },
-        designRationale: { type: 'array', items: { type: 'string' } },
-        followUpGaps: { type: 'array', items: { type: 'string' } },
-        markdown: { type: 'string' },
-      },
-    },
+    outputSchema: defaultRoleOutputSchemaRegistry.getSchema('docs_writer'),
   };
 }

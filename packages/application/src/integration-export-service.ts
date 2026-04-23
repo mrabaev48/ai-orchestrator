@@ -13,6 +13,7 @@ import type { StateStore } from '../../state/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
 import type { RuntimeConfig } from '../../shared/src/index.ts';
 import type { RoleRequest } from '../../core/src/roles.ts';
+import { assertRoleOutput } from './role-output-validation.ts';
 
 export class IntegrationExportService {
   private readonly stateStore: StateStore;
@@ -66,6 +67,7 @@ export class IntegrationExportService {
       },
     );
     await integrationManager.validate?.(response);
+    assertRoleOutput('integration_manager', response);
 
     const outputPath = path.resolve(process.cwd(), out ?? 'artifacts/integration-export.json');
     await this.toolSet.fileSystem.writeFile(outputPath, JSON.stringify(response.output, null, 2));
