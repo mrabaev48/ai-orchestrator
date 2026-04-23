@@ -156,7 +156,7 @@ flowchart TD
     Orchestrator --> Obs[Logs / Metrics / Events]
 
     Tools --> Target[Target system / repository / runtime]
-    Persistence --> DB[(SQLite / PostgreSQL)]
+    Persistence --> DB[(PostgreSQL)]
 ```
 
 ## 5.2 External dependencies
@@ -627,7 +627,7 @@ Persistence must support:
 - replay/debug analysis
 
 MVP uses:
-- SQLite
+- PostgreSQL
 
 Post-MVP supports:
 - PostgreSQL
@@ -1856,7 +1856,7 @@ At minimum:
 
 ### Persistence
 - in-memory store
-- SQLite store
+- PostgreSQL store
 - events
 - snapshots
 
@@ -1926,7 +1926,7 @@ Implement:
 Implement:
 - state store interface
 - in-memory store
-- SQLite store
+- PostgreSQL store
 - snapshot and event persistence
 
 ## Step 3 — Workflow

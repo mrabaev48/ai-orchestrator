@@ -240,7 +240,7 @@ export class SqliteStateStore implements StateStore {
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
-      throw new StateStoreError('SQLite state transaction failed', { cause: error });
+      throw new StateStoreError('PostgreSQL state transaction failed', { cause: error });
     }
   }
 }

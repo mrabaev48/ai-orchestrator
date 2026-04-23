@@ -8,7 +8,7 @@ _Date: 2026-04-21_
 
 ### Уже есть
 - Модульная runtime-архитектура с разделением `core/application/execution/workflow/state/agents/tools`.
-- Durable state + SQLite/InMemory adapters.
+- Durable state + PostgreSQL/InMemory adapters.
 - Базовый orchestration cycle (выбор задачи → prompt → execution → review/test → commit state).
 - API read model слой (`dashboard-api`) и CLI control-plane.
 - Базовые политики workflow: retry/split/block.

@@ -40,11 +40,11 @@ State persistence is separate from orchestration policy. `StateStore` provides:
 - `packages/state/StateStore.ts` — port interface
 - Implementations:
   - `InMemoryStateStore`
-  - `SqliteStateStore`
+  - `PostgresqlStateStore`
 
 ## Definition of Done (DoD)
 
-- The Orchestrator uses only `StateStore` (no direct SQLite access).
+- The Orchestrator uses only `StateStore` (no direct PostgreSQL access).
 - The store can be swapped for in-memory in tests.
 
 ## Test plan

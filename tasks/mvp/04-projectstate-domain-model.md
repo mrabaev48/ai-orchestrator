@@ -28,7 +28,7 @@ State is a first-class concern: the system must not “live” only inside promp
 ### Non-functional
 
 - Strict typing without `any`.
-- State is serializable (SQLite snapshot JSON).
+- State is serializable (PostgreSQL snapshot JSON).
 
 ## Stack
 
@@ -53,7 +53,7 @@ State is a first-class concern: the system must not “live” only inside promp
 - Unit:
   - invariant validation (valid/invalid state)
 - Integration:
-  - snapshot load/save via SQLite store (JSON roundtrip)
+  - snapshot load/save via PostgreSQL store (JSON roundtrip)
 
 ## Documentation links
 

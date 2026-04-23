@@ -93,7 +93,7 @@ Rules:
 
 # 3. Database Schema (State Store)
 
-Initial storage uses SQLite.
+Initial storage uses PostgreSQL.
 
 ```mermaid
 erDiagram
