@@ -213,6 +213,7 @@ export class SqliteStateStore implements StateStore {
   }
 
   private insertSnapshot(state: ProjectState): void {
+    assertProjectState(state);
     this.db
       .prepare('INSERT INTO project_snapshots (id, created_at, snapshot_json) VALUES (?, ?, ?)')
       .run(crypto.randomUUID(), new Date().toISOString(), JSON.stringify(redactSecrets(state)));
