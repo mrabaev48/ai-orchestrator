@@ -48,6 +48,12 @@ test('dashboard api health endpoints expose liveness and readiness', async () =>
       host: '127.0.0.1',
       port: 0,
       runtime: runtimeConfig,
+      security: {
+        apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }],
+      },
+      cors: {
+        allowedOrigins: [],
+      },
     },
     logger: createLogger(runtimeConfig, { sink: () => {} }),
   };
@@ -80,6 +86,12 @@ test('dashboard api query endpoints expose read-only dashboard views', async () 
       host: '127.0.0.1',
       port: 0,
       runtime: runtimeConfig,
+      security: {
+        apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }],
+      },
+      cors: {
+        allowedOrigins: [],
+      },
     },
     logger: createLogger(runtimeConfig, { sink: () => {} }),
   };

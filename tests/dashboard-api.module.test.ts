@@ -39,6 +39,12 @@ test('DashboardApiModule wires DashboardQueryService provider', async () => {
           format: 'json',
         },
       },
+      security: {
+        apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }],
+      },
+      cors: {
+        allowedOrigins: [],
+      },
     } satisfies DashboardApiConfig)],
   }).compile();
 
