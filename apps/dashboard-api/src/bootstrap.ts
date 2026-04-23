@@ -7,6 +7,7 @@ import { createDashboardApiRootModule } from './dashboard-api.module.ts';
 import { HttpExceptionFilter } from './common/http-exception.filter.ts';
 import { NestStructuredLogger } from './common/nest-logger.ts';
 import type { DashboardRuntimeContext } from './config/dashboard-config.ts';
+import { createDashboardAuthMiddleware } from './security/dashboard-auth.middleware.ts';
 
 export async function createDashboardApiApp(runtimeContext: DashboardRuntimeContext) {
   const app = await NestFactory.create(createDashboardApiRootModule(runtimeContext.config), {
@@ -14,12 +15,22 @@ export async function createDashboardApiApp(runtimeContext: DashboardRuntimeCont
   });
 
   app.useLogger(new NestStructuredLogger(runtimeContext.logger));
+  app.use('/api', createDashboardAuthMiddleware(runtimeContext.config));
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,
     transform: true,
   }));
   app.useGlobalFilters(new HttpExceptionFilter(runtimeContext.logger));
+
+  if (runtimeContext.config.cors.allowedOrigins.length > 0) {
+    app.enableCors({
+      origin: runtimeContext.config.cors.allowedOrigins,
+      methods: ['GET'],
+      credentials: false,
+      maxAge: 600,
+    });
+  }
 
   return app;
 }
