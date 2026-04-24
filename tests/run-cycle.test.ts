@@ -544,7 +544,8 @@ test('runCycle fails when role action loop exceeds max step limit', async () => 
   registry.register(new TesterRole());
 
   const config = makeRuntimeConfig();
-  config.workflow.maxStepsPerRun = 2;
+  config.workflow.maxStepsPerRun = 10;
+  config.workflow.maxRoleStepsPerTask = 2;
 
   const store = new InMemoryStateStore(makeState());
   const logger = createLogger(config, { sink: () => {} });
@@ -603,4 +604,56 @@ test('runCycle fails when role step exceeds timeout budget', async () => {
       error instanceof WorkflowPolicyError &&
       error.message.includes('timed out'),
   );
+});
+
+test('runCycle propagates abort signal into role step for cooperative cancellation', async () => {
+  let isAbortObserved = false;
+
+  class AbortAwareCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      throw new Error('execute should not be called when executeStep is available');
+    }
+
+    async executeStep(
+      request: RoleRequest<{ task: unknown; prompt: unknown }>,
+      context: RoleExecutionContext,
+    ): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+      void request;
+      await new Promise<never>((_, reject) => {
+        context.abortSignal?.addEventListener(
+          'abort',
+          () => {
+            isAbortObserved = true;
+            const abortError = new Error('aborted');
+            abortError.name = 'AbortError';
+            reject(abortError);
+          },
+          { once: true },
+        );
+      });
+
+      throw new Error('unreachable');
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new AbortAwareCoderRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const config = makeRuntimeConfig();
+  config.llm.timeoutMs = 10;
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(config, { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, config, logger);
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) => error instanceof WorkflowPolicyError,
+  );
+  assert.equal(isAbortObserved, true);
 });

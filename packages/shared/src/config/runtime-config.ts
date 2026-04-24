@@ -30,6 +30,7 @@ const runtimeConfigSchema = z.strictObject({
   }),
   workflow: z.strictObject({
     maxStepsPerRun: z.number().int().positive(),
+    maxRoleStepsPerTask: z.number().int().positive().optional(),
     maxRetriesPerTask: z.number().int().nonnegative(),
   }),
   tools: z.strictObject({
@@ -56,6 +57,7 @@ const envSchema = z.object({
   SNAPSHOT_ON_TASK_COMPLETION: z.stringbool().default(true),
   SNAPSHOT_ON_MILESTONE_COMPLETION: z.stringbool().default(true),
   MAX_STEPS_PER_RUN: z.coerce.number().int().positive().default(8),
+  MAX_ROLE_STEPS_PER_TASK: z.coerce.number().int().positive().optional(),
   MAX_RETRIES_PER_TASK: z.coerce.number().int().nonnegative().default(3),
   TOOL_ALLOWED_WRITE_PATHS: z.string().trim().min(1).default('.'),
   TOOL_TYPESCRIPT_DIAGNOSTICS: z.stringbool().default(true),
@@ -72,6 +74,7 @@ export interface LoadRuntimeConfigOptions {
 const runtimeSecretRegistry = new Set<string>();
 const WORKFLOW_POLICY_LIMITS = {
   maxStepsPerRun: 200,
+  maxRoleStepsPerTask: 200,
   maxRetriesPerTask: 10,
 } as const;
 
@@ -110,6 +113,9 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
     },
     workflow: {
       maxStepsPerRun: env.data.MAX_STEPS_PER_RUN,
+      ...(typeof env.data.MAX_ROLE_STEPS_PER_TASK === 'number'
+        ? { maxRoleStepsPerTask: env.data.MAX_ROLE_STEPS_PER_TASK }
+        : {}),
       maxRetriesPerTask: env.data.MAX_RETRIES_PER_TASK,
       ...fileConfig.workflow,
     },
@@ -211,6 +217,7 @@ function loadConfigFile(cwd: string, configFile?: string): Partial<RuntimeConfig
 
 function validateRuntimePolicy(config: RuntimeConfig): void {
   const policyIssues: string[] = [];
+  const maxRoleStepsPerTask = config.workflow.maxRoleStepsPerTask;
 
   if (config.workflow.maxStepsPerRun > WORKFLOW_POLICY_LIMITS.maxStepsPerRun) {
     policyIssues.push(
@@ -227,6 +234,24 @@ function validateRuntimePolicy(config: RuntimeConfig): void {
   if (config.workflow.maxRetriesPerTask > config.workflow.maxStepsPerRun) {
     policyIssues.push(
       `workflow.maxRetriesPerTask must be <= workflow.maxStepsPerRun (received retries=${config.workflow.maxRetriesPerTask}, steps=${config.workflow.maxStepsPerRun})`,
+    );
+  }
+
+  if (
+    typeof maxRoleStepsPerTask === 'number' &&
+    maxRoleStepsPerTask > WORKFLOW_POLICY_LIMITS.maxRoleStepsPerTask
+  ) {
+    policyIssues.push(
+      `workflow.maxRoleStepsPerTask must be <= ${WORKFLOW_POLICY_LIMITS.maxRoleStepsPerTask} (received ${maxRoleStepsPerTask})`,
+    );
+  }
+
+  if (
+    typeof maxRoleStepsPerTask === 'number' &&
+    maxRoleStepsPerTask > config.workflow.maxStepsPerRun
+  ) {
+    policyIssues.push(
+      `workflow.maxRoleStepsPerTask must be <= workflow.maxStepsPerRun (received roleSteps=${maxRoleStepsPerTask}, steps=${config.workflow.maxStepsPerRun})`,
     );
   }
 

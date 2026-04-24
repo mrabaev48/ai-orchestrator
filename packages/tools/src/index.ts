@@ -8,21 +8,25 @@ import { SafetyViolationError } from '../../shared/src/index.ts';
 const execFileAsync = promisify(execFile);
 
 export interface FileSystemTool {
-  readFile: (filePath: string) => Promise<string>;
-  writeFile: (filePath: string, content: string) => Promise<void>;
-  listFiles: (dirPath: string) => Promise<string[]>;
-  exists: (filePath: string) => Promise<boolean>;
+  readFile: (filePath: string, options?: { signal?: AbortSignal }) => Promise<string>;
+  writeFile: (
+    filePath: string,
+    content: string,
+    options?: { signal?: AbortSignal },
+  ) => Promise<void>;
+  listFiles: (dirPath: string, options?: { signal?: AbortSignal }) => Promise<string[]>;
+  exists: (filePath: string, options?: { signal?: AbortSignal }) => Promise<boolean>;
 }
 
 export interface GitTool {
-  status: () => Promise<string>;
-  diff: (args?: { staged?: boolean }) => Promise<string>;
-  currentBranch: () => Promise<string>;
+  status: (options?: { signal?: AbortSignal }) => Promise<string>;
+  diff: (args?: { staged?: boolean; signal?: AbortSignal }) => Promise<string>;
+  currentBranch: (options?: { signal?: AbortSignal }) => Promise<string>;
 }
 
 export interface TypeScriptTool {
-  check: () => Promise<{ ok: boolean; diagnostics: string[] }>;
-  diagnostics: () => Promise<string[]>;
+  check: (options?: { signal?: AbortSignal }) => Promise<{ ok: boolean; diagnostics: string[] }>;
+  diagnostics: (options?: { signal?: AbortSignal }) => Promise<string[]>;
 }
 
 export interface ToolSet {
@@ -57,9 +61,18 @@ export function createLocalToolSet(allowedWritePaths: string[]): ToolSet {
     return resolved;
   };
 
-  const typeScriptCheck = async (): Promise<{ ok: boolean; diagnostics: string[] }> => {
+  const assertNotAborted = (signal?: AbortSignal): void => {
+    if (signal?.aborted) {
+      throw signal.reason instanceof Error ? signal.reason : new Error('Operation aborted');
+    }
+  };
+
+  const typeScriptCheck = async (
+    options?: { signal?: AbortSignal },
+  ): Promise<{ ok: boolean; diagnostics: string[] }> => {
+    assertNotAborted(options?.signal);
     try {
-      await execFileAsync('npm', ['run', 'typecheck']);
+      await execFileAsync('npm', ['run', 'typecheck'], { signal: options?.signal });
       return { ok: true, diagnostics: [] };
     } catch (error) {
       const stderr = error instanceof Error && 'stderr' in error ? String(error.stderr) : String(error);
@@ -69,37 +82,51 @@ export function createLocalToolSet(allowedWritePaths: string[]): ToolSet {
 
   return {
     fileSystem: {
-      readFile: async (filePath) => fs.readFile(path.resolve(filePath), 'utf8'),
-      writeFile: async (filePath, content) => {
+      readFile: async (filePath, options) =>
+        fs.readFile(path.resolve(filePath), { encoding: 'utf8', signal: options?.signal }),
+      writeFile: async (filePath, content, options) => {
+        assertNotAborted(options?.signal);
         const guardedPath = guardPath(filePath);
         await fs.mkdir(path.dirname(guardedPath), { recursive: true });
-        await fs.writeFile(guardedPath, content, 'utf8');
+        await fs.writeFile(guardedPath, content, { encoding: 'utf8', signal: options?.signal });
       },
-      listFiles: async (dirPath) => {
+      listFiles: async (dirPath, options) => {
+        assertNotAborted(options?.signal);
         const entries = await fs.readdir(path.resolve(dirPath));
+        assertNotAborted(options?.signal);
         return entries.sort();
       },
-      exists: async (filePath) => existsSync(path.resolve(filePath)),
+      exists: async (filePath, options) => {
+        assertNotAborted(options?.signal);
+        return existsSync(path.resolve(filePath));
+      },
     },
     git: {
-      status: async () => {
-        const { stdout } = await execFileAsync('git', ['status', '--short']);
+      status: async (options) => {
+        assertNotAborted(options?.signal);
+        const { stdout } = await execFileAsync('git', ['status', '--short'], {
+          signal: options?.signal,
+        });
         return stdout.trim();
       },
       diff: async (args) => {
+        assertNotAborted(args?.signal);
         const commandArgs = args?.staged ? ['diff', '--staged'] : ['diff'];
-        const { stdout } = await execFileAsync('git', commandArgs);
+        const { stdout } = await execFileAsync('git', commandArgs, { signal: args?.signal });
         return stdout;
       },
-      currentBranch: async () => {
-        const { stdout } = await execFileAsync('git', ['branch', '--show-current']);
+      currentBranch: async (options) => {
+        assertNotAborted(options?.signal);
+        const { stdout } = await execFileAsync('git', ['branch', '--show-current'], {
+          signal: options?.signal,
+        });
         return stdout.trim();
       },
     },
     typeScript: {
       check: typeScriptCheck,
-      diagnostics: async () => {
-        const result = await typeScriptCheck();
+      diagnostics: async (options) => {
+        const result = await typeScriptCheck(options);
         return result.diagnostics;
       },
     },
