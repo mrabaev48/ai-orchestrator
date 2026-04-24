@@ -14,7 +14,14 @@ import { Orchestrator } from '../packages/execution/src/index.ts';
 import { SchemaValidationError, WorkflowPolicyError } from '../packages/shared/src/errors/index.ts';
 import { InMemoryStateStore } from '../packages/state/src/index.ts';
 import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
-import type { AgentRole, RoleExecutionContext, RoleRequest, RoleResponse } from '../packages/core/src/index.ts';
+import type {
+  AgentRole,
+  RoleExecutionContext,
+  RoleObservation,
+  RoleRequest,
+  RoleResponse,
+  RoleStepResult,
+} from '../packages/core/src/index.ts';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -448,4 +455,205 @@ test('runCycle provides tool execution context with policy, permission scope, wo
   const result = await orchestrator.runCycle();
 
   assert.equal(result.status, 'completed');
+});
+
+test('runCycle supports think-act-observe loop with tool_request and final_output', async () => {
+  class LoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      throw new Error('execute should not be called when executeStep is available');
+    }
+
+    async executeStep(
+      request: RoleRequest<{ task: unknown; prompt: unknown }>,
+      context: RoleExecutionContext,
+      observations: readonly RoleObservation[],
+    ): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+      void request;
+      void context;
+      if (observations.length === 0) {
+        return {
+          type: 'tool_request',
+          request: {
+            toolName: 'git_status',
+            input: {},
+            rationale: 'Inspect workspace changes before finalizing.',
+          },
+        };
+      }
+
+      return {
+        type: 'final_output',
+        response: {
+          role: 'coder',
+          summary: 'completed with observations',
+          output: { changed: true, summary: 'Observed git status before finishing' },
+          warnings: [],
+          risks: [],
+          needsHumanDecision: false,
+          confidence: 0.9,
+        },
+      };
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new LoopingCoderRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, makeRuntimeConfig(), logger);
+
+  const result = await orchestrator.runCycle();
+
+  assert.equal(result.status, 'completed');
+  assert.equal(store.events.some((event) => event.eventType === 'ROLE_TOOL_REQUESTED'), true);
+  assert.equal(store.events.some((event) => event.eventType === 'ROLE_OBSERVATION_RECORDED'), true);
+});
+
+test('runCycle fails when role action loop exceeds max step limit', async () => {
+  class EndlessToolRequesterRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      throw new Error('execute should not be called when executeStep is available');
+    }
+
+    async executeStep(): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+      return {
+        type: 'tool_request',
+        request: {
+          toolName: 'git_status',
+          input: {},
+          rationale: 'Continue collecting status forever',
+        },
+      };
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new EndlessToolRequesterRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const config = makeRuntimeConfig();
+  config.workflow.maxStepsPerRun = 10;
+  config.workflow.maxRoleStepsPerTask = 2;
+
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(config, { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, config, logger);
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) =>
+      error instanceof WorkflowPolicyError &&
+      error.message.includes('exceeded action loop step limit'),
+  );
+});
+
+test('runCycle fails when role step exceeds timeout budget', async () => {
+  class SlowLoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      throw new Error('execute should not be called when executeStep is available');
+    }
+
+    async executeStep(): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return {
+        type: 'final_output',
+        response: {
+          role: 'coder',
+          summary: 'too slow',
+          output: { changed: true, summary: 'slow' },
+          warnings: [],
+          risks: [],
+          needsHumanDecision: false,
+          confidence: 0.9,
+        },
+      };
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new SlowLoopingCoderRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const config = makeRuntimeConfig();
+  config.llm.timeoutMs = 10;
+
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(config, { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, config, logger);
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) =>
+      error instanceof WorkflowPolicyError &&
+      error.message.includes('timed out'),
+  );
+});
+
+test('runCycle propagates abort signal into role step for cooperative cancellation', async () => {
+  let isAbortObserved = false;
+
+  class AbortAwareCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      throw new Error('execute should not be called when executeStep is available');
+    }
+
+    async executeStep(
+      request: RoleRequest<{ task: unknown; prompt: unknown }>,
+      context: RoleExecutionContext,
+    ): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+      void request;
+      await new Promise<never>((_, reject) => {
+        context.abortSignal?.addEventListener(
+          'abort',
+          () => {
+            isAbortObserved = true;
+            const abortError = new Error('aborted');
+            abortError.name = 'AbortError';
+            reject(abortError);
+          },
+          { once: true },
+        );
+      });
+
+      throw new Error('unreachable');
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new AbortAwareCoderRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const config = makeRuntimeConfig();
+  config.llm.timeoutMs = 10;
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(config, { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, config, logger);
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) => error instanceof WorkflowPolicyError,
+  );
+  assert.equal(isAbortObserved, true);
 });

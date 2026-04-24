@@ -27,6 +27,7 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   });
 
   assert.equal(config.workflow.maxStepsPerRun, 8);
+  assert.equal(config.workflow.maxRoleStepsPerTask, undefined);
   assert.equal(config.tools.allowedWritePaths[0], '/tmp/workspace/src');
   assert.equal(config.tools.allowedWritePaths[1], '/tmp/workspace/tests');
 });
@@ -64,6 +65,32 @@ test('loadRuntimeConfig rejects retry cap larger than step cap', () => {
         env: {
           MAX_STEPS_PER_RUN: '2',
           MAX_RETRIES_PER_TASK: '3',
+          TOOL_ALLOWED_WRITE_PATHS: '.',
+        },
+      }),
+    ConfigError,
+  );
+});
+
+test('loadRuntimeConfig accepts explicit role-step budget', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      MAX_STEPS_PER_RUN: '12',
+      MAX_ROLE_STEPS_PER_TASK: '4',
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+    },
+  });
+
+  assert.equal(config.workflow.maxRoleStepsPerTask, 4);
+});
+
+test('loadRuntimeConfig rejects role-step budget larger than run-step budget', () => {
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        env: {
+          MAX_STEPS_PER_RUN: '4',
+          MAX_ROLE_STEPS_PER_TASK: '5',
           TOOL_ALLOWED_WRITE_PATHS: '.',
         },
       }),

@@ -18,9 +18,12 @@ import {
 import type { RoleRegistry } from '../../agents/src/index.ts';
 import type {
   AgentRole,
+  RoleObservation,
   RoleExecutionContext,
   RoleRequest,
   RoleResponse,
+  RoleStepResult,
+  ToolCallRequest,
 } from '../../core/src/roles.ts';
 
 export interface RunCycleResult {
@@ -32,6 +35,7 @@ export interface RunCycleResult {
 
 export interface RunCycleOptions {
   forcedTaskId?: string;
+  abortSignal?: AbortSignal;
 }
 
 export type RunSingleTaskErrorReason =
@@ -105,7 +109,7 @@ export class Orchestrator {
         outputSchema: defaultRoleOutputSchemaRegistry.getSchema(routeTaskToRole(task)),
       },
       acceptanceCriteria: ['Prompt includes acceptance criteria and failure constraints'],
-    }, this.makeContext('prompt_engineer', runId, state, task.id));
+    }, this.makeContext('prompt_engineer', runId, state, task.id, options.abortSignal));
 
     await this.stateStore.recordEvent(makeEvent('PROMPT_GENERATED', { taskId: task.id, promptId: promptResponse.output.id }, { runId }));
     const optimizedPromptArtifact = makeArtifact('optimized_prompt', `Prompt for ${task.id}`, {
@@ -126,7 +130,7 @@ export class Orchestrator {
       objective: `Execute ${task.id}`,
       input: { task, prompt: promptResponse.output },
       acceptanceCriteria: task.acceptanceCriteria,
-    }, this.makeContext(roleName, runId, state, task.id));
+    }, this.makeContext(roleName, runId, state, task.id, options.abortSignal));
 
     await this.stateStore.recordEvent(makeEvent('ROLE_EXECUTED', { taskId: task.id, role: roleName }, { runId }));
 
@@ -141,7 +145,7 @@ export class Orchestrator {
         objective: `Review ${task.id}`,
         input: { task, result: executionResponse.output },
         acceptanceCriteria: ['Approve or return blocking issues'],
-      }, this.makeContext('reviewer', runId, state, task.id));
+      }, this.makeContext('reviewer', runId, state, task.id, options.abortSignal));
 
       if (!review.output.approved || review.output.blockingIssues.length > 0) {
         await this.stateStore.recordEvent(makeEvent('REVIEW_REJECTED', { taskId: task.id }, { runId }));
@@ -162,7 +166,7 @@ export class Orchestrator {
         objective: `Test ${task.id}`,
         input: { task, result: executionResponse.output },
         acceptanceCriteria: ['Return explicit evidence'],
-      }, this.makeContext('tester', runId, state, task.id));
+      }, this.makeContext('tester', runId, state, task.id, options.abortSignal));
 
       if (!testing.output.passed || testing.output.failures.length > 0) {
         await this.stateStore.recordEvent(makeEvent('TEST_FAILED', { taskId: task.id }, { runId }));
@@ -361,6 +365,7 @@ export class Orchestrator {
     runId: string,
     state: ProjectState,
     taskId?: string,
+    abortSignal?: AbortSignal,
   ): RoleExecutionContext {
     return {
       role,
@@ -383,6 +388,7 @@ export class Orchestrator {
         workspaceRoot: path.resolve(this.config.tools.allowedWritePaths[0] ?? process.cwd()),
         evidenceSource: taskId ? 'runtime_events' : 'state_snapshot',
       },
+      ...(abortSignal ? { abortSignal } : {}),
       logger: this.logger.withContext({
         runId,
         role,
@@ -396,7 +402,7 @@ export class Orchestrator {
     request: RoleRequest<TInput>,
     context: RoleExecutionContext,
   ): Promise<RoleResponse<TOutput>> {
-    const firstAttempt = await role.execute(request, context);
+    const firstAttempt = await this.executeRoleWithLoop(role, request, context);
     try {
       await role.validate?.(firstAttempt);
       this.validateRoleResult(request.role, firstAttempt);
@@ -405,7 +411,7 @@ export class Orchestrator {
       context.logger.warn('Role validation failed, retrying once', {
         event: 'schema_validation_retry',
       });
-      const secondAttempt = await role.execute(request, context);
+      const secondAttempt = await this.executeRoleWithLoop(role, request, context);
       try {
         await role.validate?.(secondAttempt);
         this.validateRoleResult(request.role, secondAttempt);
@@ -416,6 +422,226 @@ export class Orchestrator {
         });
       }
       return secondAttempt;
+    }
+  }
+
+  private async executeRoleWithLoop<TInput, TOutput>(
+    role: AgentRole<TInput, TOutput>,
+    request: RoleRequest<TInput>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<TOutput>> {
+    if (!role.executeStep) {
+      return this.runWithTimeout(
+        async (signal) => role.execute(request, { ...context, abortSignal: signal }),
+        this.config.llm.timeoutMs,
+        `Role ${role.name} timed out while generating output`,
+        withParentSignal(context.abortSignal),
+      );
+    }
+    const executeStep = role.executeStep;
+
+    const observations: RoleObservation[] = [];
+    const stepLimit = Math.max(
+      1,
+      this.config.workflow.maxRoleStepsPerTask ?? this.config.workflow.maxStepsPerRun,
+    );
+
+    for (let step = 1; step <= stepLimit; step += 1) {
+      if (context.abortSignal?.aborted) {
+        throw new WorkflowPolicyError(`Role ${role.name} cancelled before step ${step}`, {
+          details: {
+            role: role.name,
+            step,
+            reason: 'cancelled',
+          },
+          retrySuggested: true,
+        });
+      }
+
+      const stepResult: RoleStepResult<TOutput> = await this.runWithTimeout(
+        async (signal) => executeStep(request, { ...context, abortSignal: signal }, observations),
+        this.config.llm.timeoutMs,
+        `Role ${role.name} timed out at step ${step}`,
+        withParentSignal(context.abortSignal),
+      );
+
+      if (stepResult.type === 'final_output') {
+        return stepResult.response;
+      }
+
+      await this.stateStore.recordEvent(
+        makeEvent(
+          'ROLE_TOOL_REQUESTED',
+          {
+            role: role.name,
+            taskId: context.taskId ?? null,
+            step,
+            toolName: stepResult.request.toolName,
+            rationale: stepResult.request.rationale,
+          },
+          { runId: context.runId },
+        ),
+      );
+
+      const observation = await this.invokeToolRequest(stepResult.request, step, context.abortSignal);
+      observations.push(observation);
+
+      await this.stateStore.recordEvent(
+        makeEvent(
+          'ROLE_OBSERVATION_RECORDED',
+          {
+            role: role.name,
+            taskId: context.taskId ?? null,
+            step,
+            toolName: observation.toolName,
+            ok: observation.ok,
+          },
+          { runId: context.runId },
+        ),
+      );
+    }
+
+    throw new WorkflowPolicyError(`Role ${role.name} exceeded action loop step limit`, {
+      details: {
+        role: role.name,
+        maxSteps: stepLimit,
+      },
+      retrySuggested: true,
+    });
+  }
+
+  private async invokeToolRequest(
+    request: ToolCallRequest,
+    step: number,
+    parentSignal?: AbortSignal,
+  ): Promise<RoleObservation> {
+    const createdAt = new Date().toISOString();
+    try {
+      const output = await this.runWithTimeout(
+        async (signal) => this.executeTool(request, signal),
+        this.config.llm.timeoutMs,
+        `Tool ${request.toolName} timed out at step ${step}`,
+        withParentSignal(parentSignal),
+      );
+      return {
+        step,
+        toolName: request.toolName,
+        ok: true,
+        output,
+        createdAt,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        step,
+        toolName: request.toolName,
+        ok: false,
+        error: message,
+        createdAt,
+      };
+    }
+  }
+
+  private async executeTool(request: ToolCallRequest, signal?: AbortSignal): Promise<unknown> {
+    switch (request.toolName) {
+      case 'file_read':
+        return this.tools.fileSystem.readFile(
+          asString(request.input.filePath, 'filePath'),
+          withSignal(signal),
+        );
+      case 'file_write':
+        return this.tools.fileSystem.writeFile(
+          asString(request.input.filePath, 'filePath'),
+          asString(request.input.content, 'content'),
+          withSignal(signal),
+        );
+      case 'file_list':
+        return this.tools.fileSystem.listFiles(
+          asString(request.input.dirPath, 'dirPath'),
+          withSignal(signal),
+        );
+      case 'file_exists':
+        return this.tools.fileSystem.exists(
+          asString(request.input.filePath, 'filePath'),
+          withSignal(signal),
+        );
+      case 'git_status':
+        return this.tools.git.status(withSignal(signal));
+      case 'git_diff':
+        return this.tools.git.diff({
+          staged: asBoolean(request.input.staged, 'staged', false),
+          ...withSignal(signal),
+        });
+      case 'git_current_branch':
+        return this.tools.git.currentBranch(withSignal(signal));
+      case 'typescript_check':
+        return this.tools.typeScript.check(withSignal(signal));
+      case 'typescript_diagnostics':
+        return this.tools.typeScript.diagnostics(withSignal(signal));
+      default: {
+        const unsupportedTool: never = request.toolName;
+        throw new WorkflowPolicyError(`Unsupported tool request: ${String(unsupportedTool)}`, {
+          retrySuggested: false,
+        });
+      }
+    }
+  }
+
+  private async runWithTimeout<T>(
+    execute: (signal: AbortSignal) => Promise<T>,
+    timeoutMs: number,
+    timeoutMessage: string,
+    options: { parentSignal?: AbortSignal } = {},
+  ): Promise<T> {
+    const timeoutController = new AbortController();
+    let timeoutId: NodeJS.Timeout | undefined;
+    let onParentAbort: (() => void) | undefined;
+    try {
+      if (options.parentSignal?.aborted) {
+        throw new WorkflowPolicyError('Operation cancelled by parent signal', {
+          details: { reason: 'parent_cancelled' },
+          retrySuggested: true,
+        });
+      }
+
+      if (options.parentSignal) {
+        onParentAbort = () => {
+          timeoutController.abort(options.parentSignal?.reason);
+        };
+        options.parentSignal.addEventListener('abort', onParentAbort, { once: true });
+      }
+
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          timeoutController.abort(new WorkflowPolicyError(timeoutMessage, {
+            details: { timeoutMs },
+            retrySuggested: true,
+          }));
+          reject(
+            new WorkflowPolicyError(timeoutMessage, {
+              details: { timeoutMs },
+              retrySuggested: true,
+            }),
+          );
+        }, timeoutMs);
+      });
+
+      return await Promise.race([execute(timeoutController.signal), timeout]);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new WorkflowPolicyError('Operation aborted', {
+          cause: error,
+          retrySuggested: true,
+        });
+      }
+      throw error;
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (options.parentSignal && onParentAbort) {
+        options.parentSignal.removeEventListener('abort', onParentAbort);
+      }
     }
   }
 
@@ -498,4 +724,41 @@ function makeArtifact(
     metadata,
     createdAt: new Date().toISOString(),
   };
+}
+
+function asString(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new WorkflowPolicyError(`Tool request field ${fieldName} must be a non-empty string`, {
+      details: {
+        fieldName,
+        actualType: typeof value,
+      },
+      retrySuggested: false,
+    });
+  }
+  return value;
+}
+
+function asBoolean(value: unknown, fieldName: string, fallback: boolean): boolean {
+  if (typeof value === 'undefined') {
+    return fallback;
+  }
+  if (typeof value !== 'boolean') {
+    throw new WorkflowPolicyError(`Tool request field ${fieldName} must be a boolean`, {
+      details: {
+        fieldName,
+        actualType: typeof value,
+      },
+      retrySuggested: false,
+    });
+  }
+  return value;
+}
+
+function withSignal(signal?: AbortSignal): { signal?: AbortSignal } {
+  return signal ? { signal } : {};
+}
+
+function withParentSignal(parentSignal?: AbortSignal): { parentSignal?: AbortSignal } {
+  return parentSignal ? { parentSignal } : {};
 }

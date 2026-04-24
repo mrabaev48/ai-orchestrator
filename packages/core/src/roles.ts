@@ -50,6 +50,7 @@ export interface RoleExecutionContext {
   stateSummary: string;
   toolProfile: ToolProfile;
   toolExecution: ToolExecutionContext;
+  abortSignal?: AbortSignal;
   logger: Logger;
 }
 
@@ -71,11 +72,46 @@ export interface RoleResponse<TOutput> {
   confidence: number;
 }
 
+export type ToolCallName =
+  | 'file_read'
+  | 'file_write'
+  | 'file_list'
+  | 'file_exists'
+  | 'git_status'
+  | 'git_diff'
+  | 'git_current_branch'
+  | 'typescript_check'
+  | 'typescript_diagnostics';
+
+export interface ToolCallRequest {
+  toolName: ToolCallName;
+  input: Record<string, unknown>;
+  rationale: string;
+}
+
+export interface RoleObservation {
+  step: number;
+  toolName: ToolCallName;
+  ok: boolean;
+  output?: unknown;
+  error?: string;
+  createdAt: string;
+}
+
+export type RoleStepResult<TOutput> =
+  | { type: 'tool_request'; request: ToolCallRequest }
+  | { type: 'final_output'; response: RoleResponse<TOutput> };
+
 export interface AgentRole<TInput, TOutput> {
   readonly name: AgentRoleName;
   execute: (
     request: RoleRequest<TInput>,
     context: RoleExecutionContext,
   ) => Promise<RoleResponse<TOutput>>;
+  executeStep?: (
+    request: RoleRequest<TInput>,
+    context: RoleExecutionContext,
+    observations: readonly RoleObservation[],
+  ) => Promise<RoleStepResult<TOutput>>;
   validate?: (response: RoleResponse<TOutput>) => void | Promise<void>;
 }
