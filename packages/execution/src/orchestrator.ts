@@ -192,8 +192,8 @@ export class Orchestrator {
     await this.stateStore.recordArtifact(runSummaryArtifact);
     state.artifacts.push(taskSummaryArtifact, runSummaryArtifact);
 
-    await this.stateStore.save(state);
-    await this.stateStore.recordEvent(makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId }));
+    const stateCommittedEvent = makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId });
+    await this.stateStore.saveWithEvents(state, [stateCommittedEvent]);
 
     this.logger.info('Run cycle completed', {
       event: 'cycle_end',
@@ -322,18 +322,16 @@ export class Orchestrator {
       };
       state.artifacts.push(artifact);
       state.decisions.push(decision);
-      await this.stateStore.save(state);
-      await this.stateStore.recordEvent(
-        makeEvent(
-          'TASK_SPLIT',
-          {
-            taskId: task.id,
-            childTaskIds: splitPlan.childTasks.map((childTask) => childTask.id),
-            reason,
-          },
-          { runId },
-        ),
+      const taskSplitEvent = makeEvent(
+        'TASK_SPLIT',
+        {
+          taskId: task.id,
+          childTaskIds: splitPlan.childTasks.map((childTask) => childTask.id),
+          reason,
+        },
+        { runId },
       );
+      await this.stateStore.saveWithEvents(state, [taskSplitEvent]);
       return { runId, taskId: task.id, status: 'idle', stopReason: 'task_split' };
     }
 
@@ -348,8 +346,8 @@ export class Orchestrator {
       });
       state.artifacts.push(artifact);
       await this.stateStore.recordArtifact(artifact);
-      await this.stateStore.save(state);
-      await this.stateStore.recordEvent(makeEvent('TASK_BLOCKED', { taskId: task.id, reason }, { runId }));
+      const taskBlockedEvent = makeEvent('TASK_BLOCKED', { taskId: task.id, reason }, { runId });
+      await this.stateStore.saveWithEvents(state, [taskBlockedEvent]);
       return { runId, taskId: task.id, status: 'blocked', stopReason: reason };
     }
 

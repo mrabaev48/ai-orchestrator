@@ -28,6 +28,14 @@ export class InMemoryStateStore implements StateStore {
     this.state = structuredClone(state);
   }
 
+  async saveWithEvents(state: ProjectState, events: readonly DomainEvent[]): Promise<void> {
+    assertProjectState(state);
+    this.state = structuredClone(state);
+    for (const event of events) {
+      this.events.push(structuredClone(event));
+    }
+  }
+
   async listEvents(query: ListEventsQuery = {}): Promise<DomainEvent[]> {
     const filtered = query.eventType
       ? this.events.filter((event) => event.eventType === query.eventType)

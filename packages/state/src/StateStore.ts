@@ -26,6 +26,7 @@ export interface ListEventsQuery {
 export interface StateStore {
   load: () => Promise<ProjectState>;
   save: (state: ProjectState) => Promise<void>;
+  saveWithEvents: (state: ProjectState, events: readonly DomainEvent[]) => Promise<void>;
   listEvents: (query?: ListEventsQuery) => Promise<DomainEvent[]>;
   recordEvent: (event: DomainEvent) => Promise<void>;
   recordFailure: (input: RecordFailureInput) => Promise<FailureRecord>;
