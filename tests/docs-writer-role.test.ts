@@ -30,6 +30,12 @@ test('DocsWriterRole produces bounded markdown documentation output', async () =
         canApproveChanges: false,
         canRunTests: false,
       },
+      toolExecution: {
+        policy: 'orchestrator_default',
+        permissionScope: 'repo_write',
+        workspaceRoot: process.cwd(),
+        evidenceSource: 'artifacts',
+      },
       logger: {
         debug: () => {},
         info: () => {},

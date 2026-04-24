@@ -38,6 +38,12 @@ test('IntegrationManagerRole produces export-ready payloads with blockers and tr
         canApproveChanges: false,
         canRunTests: false,
       },
+      toolExecution: {
+        policy: 'orchestrator_default',
+        permissionScope: 'repo_write',
+        workspaceRoot: process.cwd(),
+        evidenceSource: 'artifacts',
+      },
       logger: {
         debug: () => {},
         info: () => {},

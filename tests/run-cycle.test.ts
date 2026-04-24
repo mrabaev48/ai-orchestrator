@@ -355,3 +355,97 @@ test('runCycle rejects invalid coder output via role output schema registry', as
     (error: unknown) => error instanceof SchemaValidationError,
   );
 });
+
+test('runCycle provides tool execution context with policy, permission scope, workspace, and evidence source', async () => {
+  class ContextAwareCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      return {
+        role: 'coder',
+        summary: 'context checked',
+        output: { changed: true, summary: 'implemented' },
+        warnings: [],
+        risks: [],
+        needsHumanDecision: false,
+        confidence: 0.9,
+      };
+    }
+  }
+
+  class ContextAwareTesterRole implements AgentRole<{ task: unknown; result: unknown }, { passed: boolean; testPlan: string[]; evidence: string[]; failures: string[]; missingCoverage: string[] }> {
+    readonly name = 'tester' as const;
+
+    async execute(
+      request: RoleRequest<{ task: unknown; result: unknown }>,
+      context: RoleExecutionContext,
+    ): Promise<RoleResponse<{ passed: boolean; testPlan: string[]; evidence: string[]; failures: string[]; missingCoverage: string[] }>> {
+      void request;
+      assert.equal(context.toolExecution.policy, 'quality_gate');
+      assert.equal(context.toolExecution.permissionScope, 'test_execution');
+      assert.equal(context.toolExecution.evidenceSource, 'runtime_events');
+
+      return {
+        role: 'tester',
+        summary: 'tests passed',
+        output: {
+          passed: true,
+          testPlan: ['run tests'],
+          evidence: ['tests green'],
+          failures: [],
+          missingCoverage: [],
+        },
+        warnings: [],
+        risks: [],
+        needsHumanDecision: false,
+        confidence: 0.9,
+      };
+    }
+  }
+
+  class ContextAwareReviewerRole implements AgentRole<{ task: unknown; result: unknown }, { approved: boolean; blockingIssues: string[]; nonBlockingSuggestions: string[]; missingTests: string[]; notes: string[] }> {
+    readonly name = 'reviewer' as const;
+
+    async execute(
+      request: RoleRequest<{ task: unknown; result: unknown }>,
+      context: RoleExecutionContext,
+    ): Promise<RoleResponse<{ approved: boolean; blockingIssues: string[]; nonBlockingSuggestions: string[]; missingTests: string[]; notes: string[] }>> {
+      void request;
+      assert.equal(context.toolExecution.policy, 'read_only_analysis');
+      assert.equal(context.toolExecution.permissionScope, 'read_only');
+      assert.equal(context.toolExecution.evidenceSource, 'runtime_events');
+
+      return {
+        role: 'reviewer',
+        summary: 'review approved',
+        output: {
+          approved: true,
+          blockingIssues: [],
+          nonBlockingSuggestions: [],
+          missingTests: [],
+          notes: [],
+        },
+        warnings: [],
+        risks: [],
+        needsHumanDecision: false,
+        confidence: 0.9,
+      };
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new ContextAwareCoderRole());
+  registry.register(new ContextAwareReviewerRole());
+  registry.register(new ContextAwareTesterRole());
+
+  const state = makeState();
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, makeRuntimeConfig(), logger);
+
+  const result = await orchestrator.runCycle();
+
+  assert.equal(result.status, 'completed');
+});

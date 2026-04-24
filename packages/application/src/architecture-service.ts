@@ -55,6 +55,12 @@ export class ArchitectureService {
           canApproveChanges: false,
           canRunTests: false,
         },
+        toolExecution: {
+          policy: 'read_only_analysis',
+          permissionScope: 'read_only',
+          workspaceRoot: this.rootPath,
+          evidenceSource: 'state_snapshot',
+        },
         logger: this.logger.withContext({ role: 'architect' }),
       },
     );

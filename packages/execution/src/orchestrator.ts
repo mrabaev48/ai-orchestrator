@@ -3,6 +3,7 @@ import { assertProjectState, isExecutableTask, makeEvent } from '../../core/src/
 import { defaultRoleOutputSchemaRegistry, validateRoleResponse } from '../../core/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import { SchemaValidationError, WorkflowPolicyError } from '../../shared/src/index.ts';
+import path from 'node:path';
 import type { StateStore } from '../../state/src/index.ts';
 import type { ToolSet } from '../../tools/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
@@ -371,6 +372,16 @@ export class Orchestrator {
         canWriteRepo: role === 'coder' || role === 'docs_writer',
         canApproveChanges: false,
         canRunTests: role === 'tester',
+      },
+      toolExecution: {
+        policy: role === 'tester' ? 'quality_gate' : role === 'coder' || role === 'docs_writer'
+          ? 'orchestrator_default'
+          : 'read_only_analysis',
+        permissionScope: role === 'tester' ? 'test_execution' : role === 'coder' || role === 'docs_writer'
+          ? 'repo_write'
+          : 'read_only',
+        workspaceRoot: path.resolve(this.config.tools.allowedWritePaths[0] ?? process.cwd()),
+        evidenceSource: taskId ? 'runtime_events' : 'state_snapshot',
       },
       logger: this.logger.withContext({
         runId,

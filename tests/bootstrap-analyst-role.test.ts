@@ -38,6 +38,12 @@ test('BootstrapAnalystRole maps repository snapshot into reusable discovery outp
         canApproveChanges: false,
         canRunTests: false,
       },
+      toolExecution: {
+        policy: 'read_only_analysis',
+        permissionScope: 'read_only',
+        workspaceRoot: '/repo',
+        evidenceSource: 'state_snapshot',
+      },
       logger: {
         debug: () => {},
         info: () => {},

@@ -56,6 +56,12 @@ export class PlanningService {
           canApproveChanges: false,
           canRunTests: false,
         },
+        toolExecution: {
+          policy: 'read_only_analysis',
+          permissionScope: 'read_only',
+          workspaceRoot: process.cwd(),
+          evidenceSource: 'state_snapshot',
+        },
         logger: this.logger.withContext({ role: 'planner' }),
       },
     );
