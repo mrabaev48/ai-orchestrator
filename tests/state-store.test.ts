@@ -93,6 +93,35 @@ test('SqliteStateStore persists snapshots and domain events', async () => {
   }
 });
 
+test('saveWithEvents persists snapshot and events together', async () => {
+  const event = makeEvent('STATE_COMMITTED', { taskId: 'task-1' }, { runId: crypto.randomUUID() });
+  const memoryStore = new InMemoryStateStore(makeState());
+  const memoryState = await memoryStore.load();
+  memoryState.execution.stepCount = 1;
+
+  await memoryStore.saveWithEvents(memoryState, [event]);
+  const loadedMemory = await memoryStore.load();
+  const memoryEvents = await memoryStore.listEvents({ eventType: 'STATE_COMMITTED' });
+  assert.equal(loadedMemory.execution.stepCount, 1);
+  assert.equal(memoryEvents.length, 1);
+
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'ai-orchestrator-'));
+  const dbPath = path.join(tempDir, 'state.db');
+  try {
+    const sqliteStore = new SqliteStateStore(dbPath, makeState());
+    const sqliteState = await sqliteStore.load();
+    sqliteState.execution.stepCount = 2;
+
+    await sqliteStore.saveWithEvents(sqliteState, [event]);
+    const loadedSqlite = await sqliteStore.load();
+    const sqliteEvents = await sqliteStore.listEvents({ eventType: 'STATE_COMMITTED' });
+    assert.equal(loadedSqlite.execution.stepCount, 2);
+    assert.equal(sqliteEvents.length, 1);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('InMemoryStateStore rejects artifacts that violate schema registry', async () => {
   const store = new InMemoryStateStore(makeState());
 

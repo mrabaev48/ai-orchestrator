@@ -56,6 +56,16 @@ export class SqliteStateStore implements StateStore {
     });
   }
 
+  async saveWithEvents(state: ProjectState, events: readonly DomainEvent[]): Promise<void> {
+    assertProjectState(state);
+    this.withTransaction(() => {
+      this.insertSnapshot(state);
+      for (const event of events) {
+        this.insertEvent(event);
+      }
+    });
+  }
+
   async listEvents(query: ListEventsQuery = {}): Promise<DomainEvent[]> {
     const clauses: string[] = [];
     const params: (string | number)[] = [];

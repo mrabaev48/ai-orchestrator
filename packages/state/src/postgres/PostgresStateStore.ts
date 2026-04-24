@@ -70,6 +70,17 @@ export class PostgresStateStore implements StateStore {
     });
   }
 
+  async saveWithEvents(state: ProjectState, events: readonly DomainEvent[]): Promise<void> {
+    assertProjectState(state);
+    await this.ensureInitialized();
+    await this.withTransaction(async (client) => {
+      await this.insertSnapshot(client, state);
+      for (const event of events) {
+        await this.insertEvent(client, event);
+      }
+    });
+  }
+
   async listEvents(query: ListEventsQuery = {}): Promise<DomainEvent[]> {
     await this.ensureInitialized();
     const pool = await this.poolPromise;
