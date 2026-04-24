@@ -72,6 +72,12 @@ export class DocumentationService {
           canApproveChanges: false,
           canRunTests: false,
         },
+        toolExecution: {
+          policy: 'orchestrator_default',
+          permissionScope: 'repo_write',
+          workspaceRoot: process.cwd(),
+          evidenceSource: 'artifacts',
+        },
         logger: this.logger.withContext({ role: 'docs_writer' }),
       },
     );

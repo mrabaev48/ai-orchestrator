@@ -47,6 +47,12 @@ export class StateIntegrityService {
           canApproveChanges: false,
           canRunTests: false,
         },
+        toolExecution: {
+          policy: 'quality_gate',
+          permissionScope: 'read_only',
+          workspaceRoot: process.cwd(),
+          evidenceSource: 'state_snapshot',
+        },
         logger: this.logger.withContext({ role: 'state_steward' }),
       },
     );

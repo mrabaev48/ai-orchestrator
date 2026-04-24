@@ -43,6 +43,12 @@ export class ReleaseReadinessService {
           canApproveChanges: false,
           canRunTests: false,
         },
+        toolExecution: {
+          policy: 'quality_gate',
+          permissionScope: 'read_only',
+          workspaceRoot: process.cwd(),
+          evidenceSource: 'artifacts',
+        },
         logger: this.logger.withContext({ role: 'release_auditor' }),
       },
     );

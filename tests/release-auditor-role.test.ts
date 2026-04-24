@@ -27,6 +27,12 @@ test('ReleaseAuditorRole classifies blockers and warnings into a structured verd
         canApproveChanges: false,
         canRunTests: false,
       },
+      toolExecution: {
+        policy: 'quality_gate',
+        permissionScope: 'read_only',
+        workspaceRoot: process.cwd(),
+        evidenceSource: 'artifacts',
+      },
       logger: {
         debug: () => {},
         info: () => {},

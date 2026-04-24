@@ -44,6 +44,12 @@ test('ArchitectRole produces structured findings from discovery and source impor
         canApproveChanges: false,
         canRunTests: false,
       },
+      toolExecution: {
+        policy: 'read_only_analysis',
+        permissionScope: 'read_only',
+        workspaceRoot: '/repo',
+        evidenceSource: 'state_snapshot',
+      },
       logger: {
         debug: () => {},
         info: () => {},

@@ -21,12 +21,35 @@ export interface ToolProfile {
   canRunTests: boolean;
 }
 
+export type ToolExecutionPolicy =
+  | 'orchestrator_default'
+  | 'read_only_analysis'
+  | 'quality_gate';
+
+export type ToolPermissionScope =
+  | 'read_only'
+  | 'repo_write'
+  | 'test_execution';
+
+export type EvidenceSource =
+  | 'state_snapshot'
+  | 'runtime_events'
+  | 'artifacts';
+
+export interface ToolExecutionContext {
+  policy: ToolExecutionPolicy;
+  permissionScope: ToolPermissionScope;
+  workspaceRoot: string;
+  evidenceSource: EvidenceSource;
+}
+
 export interface RoleExecutionContext {
   runId: string;
   taskId?: string;
   role: AgentRoleName;
   stateSummary: string;
   toolProfile: ToolProfile;
+  toolExecution: ToolExecutionContext;
   logger: Logger;
 }
 

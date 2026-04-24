@@ -28,6 +28,12 @@ test('StateStewardRole maps validation issues into repair guidance', async () =>
         canApproveChanges: false,
         canRunTests: false,
       },
+      toolExecution: {
+        policy: 'quality_gate',
+        permissionScope: 'read_only',
+        workspaceRoot: process.cwd(),
+        evidenceSource: 'state_snapshot',
+      },
       logger: {
         debug: () => {},
         info: () => {},
