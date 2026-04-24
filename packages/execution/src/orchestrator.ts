@@ -107,10 +107,12 @@ export class Orchestrator {
     }, this.makeContext('prompt_engineer', runId, state, task.id));
 
     await this.stateStore.recordEvent(makeEvent('PROMPT_GENERATED', { taskId: task.id, promptId: promptResponse.output.id }, { runId }));
-    await this.stateStore.recordArtifact(makeArtifact('optimized_prompt', `Prompt for ${task.id}`, {
+    const optimizedPromptArtifact = makeArtifact('optimized_prompt', `Prompt for ${task.id}`, {
       taskId: task.id,
       promptId: promptResponse.output.id,
-    }));
+    });
+    await this.stateStore.recordArtifact(optimizedPromptArtifact);
+    state.artifacts.push(optimizedPromptArtifact);
 
     const roleName = routeTaskToRole(task);
     const executor = this.roleRegistry.get<
@@ -169,19 +171,28 @@ export class Orchestrator {
       await this.stateStore.recordEvent(makeEvent('TEST_PASSED', { taskId: task.id }, { runId }));
     }
 
-    await this.stateStore.markTaskDone(task.id, executionResponse.output.summary);
     task.status = 'done';
     if (!state.execution.completedTaskIds.includes(task.id)) {
       state.execution.completedTaskIds.push(task.id);
     }
     delete state.execution.activeTaskId;
     state.execution.stepCount += 1;
-    await this.stateStore.save(state);
-    await this.stateStore.recordArtifact(makeArtifact('run_summary', `Run summary for ${task.id}`, {
+
+    const taskSummaryArtifact = makeArtifact('run_summary', `Task ${task.id} completion summary`, {
+      taskId: task.id,
+      summary: executionResponse.output.summary,
+    });
+    const runSummaryArtifact = makeArtifact('run_summary', `Run summary for ${task.id}`, {
       runId,
       taskId: task.id,
       status: 'completed',
-    }));
+    });
+
+    await this.stateStore.recordArtifact(taskSummaryArtifact);
+    await this.stateStore.recordArtifact(runSummaryArtifact);
+    state.artifacts.push(taskSummaryArtifact, runSummaryArtifact);
+
+    await this.stateStore.save(state);
     await this.stateStore.recordEvent(makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId }));
 
     this.logger.info('Run cycle completed', {
@@ -278,6 +289,7 @@ export class Orchestrator {
     });
     state.failures.push(failure);
     state.execution.retryCounts[task.id] = (state.execution.retryCounts[task.id] ?? 0) + 1;
+    delete state.execution.activeTaskId;
 
     if (action === 'split') {
       const splitPlan = splitTaskForRetry(task, reason);
