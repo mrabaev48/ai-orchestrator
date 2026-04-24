@@ -7,6 +7,9 @@ Work on the `ai-orchestrator` repository.
 Goal:
 Implement a configurable rule engine for change limits, forbidden directories, required checks, and role model constraints.
 
+Additional task:
+- Replace the current centralized static role-to-policy profile mapping with the policy engine as the source of truth to eliminate the remaining architectural risk of configuration drift.
+
 Instructions:
 - First inspect the current architecture and identify the exact modules responsible for orchestration flow, tool execution, state transitions, and observability.
 - Summarize the current design before making edits.
