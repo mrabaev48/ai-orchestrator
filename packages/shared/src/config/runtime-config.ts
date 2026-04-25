@@ -35,7 +35,9 @@ const runtimeConfigSchema = z.strictObject({
   }),
   tools: z.strictObject({
     allowedWritePaths: z.array(z.string().trim().min(1)).min(1),
+    allowedShellCommands: z.array(z.string().trim().min(1)).min(1),
     typescriptDiagnosticsEnabled: z.boolean(),
+    persistToolEvidence: z.boolean(),
   }),
   logging: z.strictObject({
     level: logLevelSchema,
@@ -60,7 +62,9 @@ const envSchema = z.object({
   MAX_ROLE_STEPS_PER_TASK: z.coerce.number().int().positive().optional(),
   MAX_RETRIES_PER_TASK: z.coerce.number().int().nonnegative().default(3),
   TOOL_ALLOWED_WRITE_PATHS: z.string().trim().min(1).default('.'),
+  TOOL_ALLOWED_SHELL_COMMANDS: z.string().trim().min(1).default('node,npm,pnpm,git,rg,tsx,tsc'),
   TOOL_TYPESCRIPT_DIAGNOSTICS: z.stringbool().default(true),
+  TOOL_PERSIST_EVIDENCE: z.stringbool().default(true),
   LOG_LEVEL: logLevelSchema.default('info'),
   LOG_FORMAT: logFormatSchema.default('json'),
   RUNTIME_CONFIG_FILE: z.string().trim().min(1).optional(),
@@ -124,8 +128,12 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
         fileConfig.tools?.allowedWritePaths ?? env.data.TOOL_ALLOWED_WRITE_PATHS,
         cwd,
       ),
+      allowedShellCommands: normalizeCommaSeparatedValues(
+        fileConfig.tools?.allowedShellCommands ?? env.data.TOOL_ALLOWED_SHELL_COMMANDS,
+      ),
       typescriptDiagnosticsEnabled:
         fileConfig.tools?.typescriptDiagnosticsEnabled ?? env.data.TOOL_TYPESCRIPT_DIAGNOSTICS,
+      persistToolEvidence: fileConfig.tools?.persistToolEvidence ?? env.data.TOOL_PERSIST_EVIDENCE,
     },
     logging: {
       level: env.data.LOG_LEVEL,
@@ -194,6 +202,13 @@ function normalizeWritePaths(input: string[] | string, cwd: string): string[] {
     .map((item) => item.trim())
     .filter(Boolean)
     .map((item) => path.resolve(cwd, item));
+}
+
+function normalizeCommaSeparatedValues(input: string[] | string): string[] {
+  const values = Array.isArray(input) ? input : input.split(',');
+  return values
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function loadConfigFile(cwd: string, configFile?: string): Partial<RuntimeConfig> {

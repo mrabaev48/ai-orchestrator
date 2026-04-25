@@ -39,6 +39,8 @@ function makeRuntimeConfig(allowedWritePath: string): RuntimeConfig {
     tools: {
       allowedWritePaths: [allowedWritePath],
       typescriptDiagnosticsEnabled: true,
+      allowedShellCommands: ['node', 'npm', 'pnpm', 'git', 'rg', 'tsx', 'tsc'],
+      persistToolEvidence: true,
     },
     logging: {
       level: 'error',

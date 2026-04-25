@@ -30,7 +30,10 @@ export class IntegrationExportService {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
     this.logger = logger;
-    this.toolSet = createLocalToolSet(config.tools.allowedWritePaths);
+    this.toolSet = createLocalToolSet({
+      allowedWritePaths: config.tools.allowedWritePaths,
+      allowedShellCommands: config.tools.allowedShellCommands,
+    });
   }
 
   async prepare(out?: string): Promise<string> {

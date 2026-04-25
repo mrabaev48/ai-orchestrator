@@ -1,134 +1,103 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { existsSync, promises as fs, realpathSync } from 'node:fs';
-import path from 'node:path';
+import type { ToolEvidenceStore, UnifiedToolAdapter, UnifiedToolRequest } from './contracts.ts';
+import { createEvidenceToolAdapter } from './evidence/adapter.ts';
+import {
+  createFileSystemToolAdapter,
+  type FileSystemTool,
+} from './filesystem/adapter.ts';
+import { createGitToolAdapter, type GitTool } from './git/adapter.ts';
+import { createToolPolicyAdapter, type ToolPolicyConfig } from './policy/adapter.ts';
+import { createTypeScriptToolAdapter, type TypeScriptTool } from './typescript/adapter.ts';
+import { createShellToolAdapter } from './shell/adapter.ts';
+import { createTestingToolAdapter } from './testing/adapter.ts';
+import { createDiffToolAdapter } from './diff/adapter.ts';
+import { createSearchToolAdapter } from './search/adapter.ts';
 
-import { SafetyViolationError } from '../../shared/src/index.ts';
-
-const execFileAsync = promisify(execFile);
-
-export interface FileSystemTool {
-  readFile: (filePath: string, options?: { signal?: AbortSignal }) => Promise<string>;
-  writeFile: (
-    filePath: string,
-    content: string,
-    options?: { signal?: AbortSignal },
-  ) => Promise<void>;
-  listFiles: (dirPath: string, options?: { signal?: AbortSignal }) => Promise<string[]>;
-  exists: (filePath: string, options?: { signal?: AbortSignal }) => Promise<boolean>;
-}
-
-export interface GitTool {
-  status: (options?: { signal?: AbortSignal }) => Promise<string>;
-  diff: (args?: { staged?: boolean; signal?: AbortSignal }) => Promise<string>;
-  currentBranch: (options?: { signal?: AbortSignal }) => Promise<string>;
-}
-
-export interface TypeScriptTool {
-  check: (options?: { signal?: AbortSignal }) => Promise<{ ok: boolean; diagnostics: string[] }>;
-  diagnostics: (options?: { signal?: AbortSignal }) => Promise<string[]>;
-}
+export type { ToolExecutionRecord, ToolAdapterName } from './contracts.ts';
+export type { FileSystemTool, GitTool, TypeScriptTool };
 
 export interface ToolSet {
   fileSystem: FileSystemTool;
   git: GitTool;
   typeScript: TypeScriptTool;
+  execute: (request: UnifiedToolRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
+  evidence: ToolEvidenceStore;
 }
 
-export function createLocalToolSet(allowedWritePaths: string[]): ToolSet {
-  const normalizePath = (targetPath: string): string => {
-    const resolved = path.resolve(targetPath);
-    const existingPath = existsSync(resolved) ? resolved : path.dirname(resolved);
+const DEFAULT_ALLOWED_SHELL_COMMANDS = ['node', 'npm', 'pnpm', 'git', 'rg', 'tsx', 'tsc'] as const;
 
-    try {
-      const realBase = realpathSync(existingPath);
-      const relativeSuffix = path.relative(existingPath, resolved);
-      return relativeSuffix ? path.join(realBase, relativeSuffix) : realBase;
-    } catch {
-      return resolved;
-    }
-  };
+type CreateLocalToolSetInput = string[] | ToolPolicyConfig;
 
-  const guardPath = (targetPath: string): string => {
-    const resolved = normalizePath(targetPath);
-    const hasAllowedWritePath = allowedWritePaths.some((basePath) =>
-      resolved.startsWith(normalizePath(basePath)),
-    );
-    if (!hasAllowedWritePath) {
-      throw new SafetyViolationError(`Write outside allowed scope is forbidden: ${resolved}`);
-    }
+function resolveToolPolicyConfig(input: CreateLocalToolSetInput): ToolPolicyConfig {
+  if (Array.isArray(input)) {
+    return {
+      allowedWritePaths: input,
+      allowedShellCommands: [...DEFAULT_ALLOWED_SHELL_COMMANDS],
+    };
+  }
 
-    return resolved;
-  };
+  return input;
+}
 
-  const assertNotAborted = (signal?: AbortSignal): void => {
-    if (signal?.aborted) {
-      throw signal.reason instanceof Error ? signal.reason : new Error('Operation aborted');
-    }
-  };
+export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
+  const policyConfig = resolveToolPolicyConfig(input);
+  const policyAdapter = createToolPolicyAdapter(policyConfig);
+  const fileSystemAdapter = createFileSystemToolAdapter(policyAdapter);
+  const gitAdapter = createGitToolAdapter();
+  const typeScriptAdapter = createTypeScriptToolAdapter();
+  const shellAdapter = createShellToolAdapter(policyAdapter);
+  const testingAdapter = createTestingToolAdapter(policyAdapter);
+  const diffAdapter = createDiffToolAdapter(gitAdapter.tool);
+  const searchAdapter = createSearchToolAdapter(policyAdapter);
+  const evidenceAdapter = createEvidenceToolAdapter();
 
-  const typeScriptCheck = async (
+  const adapters: UnifiedToolAdapter[] = [
+    fileSystemAdapter,
+    gitAdapter,
+    typeScriptAdapter,
+    shellAdapter,
+    testingAdapter,
+    diffAdapter,
+    searchAdapter,
+  ];
+
+  const execute = async (
+    request: UnifiedToolRequest,
     options?: { signal?: AbortSignal },
-  ): Promise<{ ok: boolean; diagnostics: string[] }> => {
-    assertNotAborted(options?.signal);
+  ): Promise<unknown> => {
+    const adapter = adapters.find((candidate) => candidate.canHandle(request.toolName));
+    if (!adapter) {
+      throw new Error(`Unsupported tool request: ${request.toolName}`);
+    }
+
+    const start = Date.now();
     try {
-      await execFileAsync('npm', ['run', 'typecheck'], { signal: options?.signal });
-      return { ok: true, diagnostics: [] };
+      const result = await adapter.execute(request, options);
+      evidenceAdapter.store.add({
+        adapter: adapter.name,
+        toolName: request.toolName,
+        success: true,
+        durationMs: Date.now() - start,
+        createdAt: new Date().toISOString(),
+      });
+      return result;
     } catch (error) {
-      const stderr = error instanceof Error && 'stderr' in error ? String(error.stderr) : String(error);
-      return { ok: false, diagnostics: stderr.split('\n').filter(Boolean) };
+      evidenceAdapter.store.add({
+        adapter: adapter.name,
+        toolName: request.toolName,
+        success: false,
+        durationMs: Date.now() - start,
+        createdAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
   };
 
   return {
-    fileSystem: {
-      readFile: async (filePath, options) =>
-        fs.readFile(path.resolve(filePath), { encoding: 'utf8', signal: options?.signal }),
-      writeFile: async (filePath, content, options) => {
-        assertNotAborted(options?.signal);
-        const guardedPath = guardPath(filePath);
-        await fs.mkdir(path.dirname(guardedPath), { recursive: true });
-        await fs.writeFile(guardedPath, content, { encoding: 'utf8', signal: options?.signal });
-      },
-      listFiles: async (dirPath, options) => {
-        assertNotAborted(options?.signal);
-        const entries = await fs.readdir(path.resolve(dirPath));
-        assertNotAborted(options?.signal);
-        return entries.sort();
-      },
-      exists: async (filePath, options) => {
-        assertNotAborted(options?.signal);
-        return existsSync(path.resolve(filePath));
-      },
-    },
-    git: {
-      status: async (options) => {
-        assertNotAborted(options?.signal);
-        const { stdout } = await execFileAsync('git', ['status', '--short'], {
-          signal: options?.signal,
-        });
-        return stdout.trim();
-      },
-      diff: async (args) => {
-        assertNotAborted(args?.signal);
-        const commandArgs = args?.staged ? ['diff', '--staged'] : ['diff'];
-        const { stdout } = await execFileAsync('git', commandArgs, { signal: args?.signal });
-        return stdout;
-      },
-      currentBranch: async (options) => {
-        assertNotAborted(options?.signal);
-        const { stdout } = await execFileAsync('git', ['branch', '--show-current'], {
-          signal: options?.signal,
-        });
-        return stdout.trim();
-      },
-    },
-    typeScript: {
-      check: typeScriptCheck,
-      diagnostics: async (options) => {
-        const result = await typeScriptCheck(options);
-        return result.diagnostics;
-      },
-    },
+    fileSystem: fileSystemAdapter.tool,
+    git: gitAdapter.tool,
+    typeScript: typeScriptAdapter.tool,
+    execute,
+    evidence: evidenceAdapter.store,
   };
 }

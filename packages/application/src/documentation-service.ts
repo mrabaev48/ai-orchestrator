@@ -32,7 +32,10 @@ export class DocumentationService {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
     this.logger = logger;
-    this.toolSet = createLocalToolSet(config.tools.allowedWritePaths);
+    this.toolSet = createLocalToolSet({
+      allowedWritePaths: config.tools.allowedWritePaths,
+      allowedShellCommands: config.tools.allowedShellCommands,
+    });
   }
 
   async generate(out?: string): Promise<string> {

@@ -61,7 +61,10 @@ export class Orchestrator {
     this.roleRegistry = roleRegistry;
     this.config = config;
     this.logger = logger;
-    this.tools = createLocalToolSet(config.tools.allowedWritePaths);
+    this.tools = createLocalToolSet({
+      allowedWritePaths: config.tools.allowedWritePaths,
+      allowedShellCommands: config.tools.allowedShellCommands,
+    });
   }
 
   async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {
@@ -499,6 +502,23 @@ export class Orchestrator {
           { runId: context.runId },
         ),
       );
+
+      if (this.config.tools.persistToolEvidence) {
+        await this.stateStore.recordEvent(
+          makeEvent(
+            'TOOL_EVIDENCE_RECORDED',
+            {
+              role: role.name,
+              taskId: context.taskId ?? null,
+              step,
+              toolName: observation.toolName,
+              ok: observation.ok,
+              details: summarizeObservation(observation),
+            },
+            { runId: context.runId },
+          ),
+        );
+      }
     }
 
     throw new WorkflowPolicyError(`Role ${role.name} exceeded action loop step limit`, {
@@ -543,47 +563,22 @@ export class Orchestrator {
   }
 
   private async executeTool(request: ToolCallRequest, signal?: AbortSignal): Promise<unknown> {
-    switch (request.toolName) {
-      case 'file_read':
-        return this.tools.fileSystem.readFile(
-          asString(request.input.filePath, 'filePath'),
-          withSignal(signal),
-        );
-      case 'file_write':
-        return this.tools.fileSystem.writeFile(
-          asString(request.input.filePath, 'filePath'),
-          asString(request.input.content, 'content'),
-          withSignal(signal),
-        );
-      case 'file_list':
-        return this.tools.fileSystem.listFiles(
-          asString(request.input.dirPath, 'dirPath'),
-          withSignal(signal),
-        );
-      case 'file_exists':
-        return this.tools.fileSystem.exists(
-          asString(request.input.filePath, 'filePath'),
-          withSignal(signal),
-        );
-      case 'git_status':
-        return this.tools.git.status(withSignal(signal));
-      case 'git_diff':
-        return this.tools.git.diff({
-          staged: asBoolean(request.input.staged, 'staged', false),
-          ...withSignal(signal),
-        });
-      case 'git_current_branch':
-        return this.tools.git.currentBranch(withSignal(signal));
-      case 'typescript_check':
-        return this.tools.typeScript.check(withSignal(signal));
-      case 'typescript_diagnostics':
-        return this.tools.typeScript.diagnostics(withSignal(signal));
-      default: {
-        const unsupportedTool: never = request.toolName;
-        throw new WorkflowPolicyError(`Unsupported tool request: ${String(unsupportedTool)}`, {
+    try {
+      return await this.tools.execute(
+        {
+          toolName: request.toolName,
+          input: request.input,
+        },
+        withSignal(signal),
+      );
+    } catch (error) {
+      throw new WorkflowPolicyError(
+        `Unsupported tool request: ${request.toolName}`,
+        {
+          cause: error,
           retrySuggested: false,
-        });
-      }
+        },
+      );
     }
   }
 
@@ -726,33 +721,31 @@ function makeArtifact(
   };
 }
 
-function asString(value: unknown, fieldName: string): string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new WorkflowPolicyError(`Tool request field ${fieldName} must be a non-empty string`, {
-      details: {
-        fieldName,
-        actualType: typeof value,
-      },
-      retrySuggested: false,
-    });
+function summarizeObservation(observation: RoleObservation): string {
+  if (!observation.ok) {
+    return truncateText(observation.error ?? 'unknown tool error');
   }
-  return value;
+
+  if (typeof observation.output === 'string') {
+    return truncateText(observation.output);
+  }
+
+  if (typeof observation.output === 'undefined') {
+    return 'no output';
+  }
+
+  try {
+    return truncateText(JSON.stringify(observation.output));
+  } catch {
+    return 'unserializable output';
+  }
 }
 
-function asBoolean(value: unknown, fieldName: string, fallback: boolean): boolean {
-  if (typeof value === 'undefined') {
-    return fallback;
+function truncateText(value: string, maxLength = 500): string {
+  if (value.length <= maxLength) {
+    return value;
   }
-  if (typeof value !== 'boolean') {
-    throw new WorkflowPolicyError(`Tool request field ${fieldName} must be a boolean`, {
-      details: {
-        fieldName,
-        actualType: typeof value,
-      },
-      retrySuggested: false,
-    });
-  }
-  return value;
+  return `${value.slice(0, maxLength)}...(truncated)`;
 }
 
 function withSignal(signal?: AbortSignal): { signal?: AbortSignal } {
