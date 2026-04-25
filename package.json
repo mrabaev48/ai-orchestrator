@@ -19,8 +19,14 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm test",
-    "test": "node --import tsx --test tests/**/*.test.ts"
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "turbo": "node scripts/turbo-runner.mjs",
+    "turbo:lint": "node scripts/turbo-runner.mjs run lint",
+    "turbo:test": "node scripts/turbo-runner.mjs run test",
+    "turbo:typecheck": "node scripts/turbo-runner.mjs run typecheck",
+    "turbo:build": "node scripts/turbo-runner.mjs run build"
   },
   "keywords": [],
   "author": "",

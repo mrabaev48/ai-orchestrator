@@ -81,7 +81,11 @@ export type ToolCallName =
   | 'git_diff'
   | 'git_current_branch'
   | 'typescript_check'
-  | 'typescript_diagnostics';
+  | 'typescript_diagnostics'
+  | 'shell_exec'
+  | 'testing_run'
+  | 'diff_workspace'
+  | 'search_repo';
 
 export interface ToolCallRequest {
   toolName: ToolCallName;

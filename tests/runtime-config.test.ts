@@ -30,6 +30,19 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   assert.equal(config.workflow.maxRoleStepsPerTask, undefined);
   assert.equal(config.tools.allowedWritePaths[0], '/tmp/workspace/src');
   assert.equal(config.tools.allowedWritePaths[1], '/tmp/workspace/tests');
+  assert.equal(config.tools.allowedShellCommands.includes('node'), true);
+  assert.equal(config.tools.persistToolEvidence, true);
+});
+
+test('loadRuntimeConfig normalizes allowlisted shell commands', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      TOOL_ALLOWED_SHELL_COMMANDS: 'git, pnpm , node',
+    },
+  });
+
+  assert.deepEqual(config.tools.allowedShellCommands, ['git', 'pnpm', 'node']);
 });
 
 test('loadRuntimeConfig rejects invalid numeric values', () => {

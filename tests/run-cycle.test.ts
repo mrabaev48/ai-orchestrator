@@ -47,6 +47,8 @@ function makeRuntimeConfig(): RuntimeConfig {
     tools: {
       allowedWritePaths: [process.cwd()],
       typescriptDiagnosticsEnabled: true,
+      allowedShellCommands: ['node', 'npm', 'pnpm', 'git', 'rg', 'tsx', 'tsc'],
+      persistToolEvidence: true,
     },
     logging: {
       level: 'error',
@@ -514,6 +516,20 @@ test('runCycle supports think-act-observe loop with tool_request and final_outpu
   assert.equal(result.status, 'completed');
   assert.equal(store.events.some((event) => event.eventType === 'ROLE_TOOL_REQUESTED'), true);
   assert.equal(store.events.some((event) => event.eventType === 'ROLE_OBSERVATION_RECORDED'), true);
+  assert.equal(
+    store.events.some(
+      (event) => {
+        if (event.eventType !== 'TOOL_EVIDENCE_RECORDED') {
+          return false;
+        }
+        if (typeof event.payload !== 'object' || event.payload === null) {
+          return false;
+        }
+        return 'toolName' in event.payload && event.payload.toolName === 'git_status';
+      },
+    ),
+    true,
+  );
 });
 
 test('runCycle fails when role action loop exceeds max step limit', async () => {
@@ -557,6 +573,66 @@ test('runCycle fails when role action loop exceeds max step limit', async () => 
       error instanceof WorkflowPolicyError &&
       error.message.includes('exceeded action loop step limit'),
   );
+});
+
+test('runCycle skips tool evidence artifacts when persistToolEvidence is disabled', async () => {
+  class LoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      throw new Error('execute should not be called when executeStep is available');
+    }
+
+    async executeStep(
+      request: RoleRequest<{ task: unknown; prompt: unknown }>,
+      context: RoleExecutionContext,
+      observations: readonly RoleObservation[],
+    ): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+      void request;
+      void context;
+      if (observations.length === 0) {
+        return {
+          type: 'tool_request',
+          request: {
+            toolName: 'git_status',
+            input: {},
+            rationale: 'Inspect workspace changes before finalizing.',
+          },
+        };
+      }
+
+      return {
+        type: 'final_output',
+        response: {
+          role: 'coder',
+          summary: 'completed',
+          output: { changed: true, summary: 'done' },
+          warnings: [],
+          risks: [],
+          needsHumanDecision: false,
+          confidence: 0.9,
+        },
+      };
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new LoopingCoderRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const config = makeRuntimeConfig();
+  config.tools.persistToolEvidence = false;
+
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(config, { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, config, logger);
+
+  await orchestrator.runCycle();
+
+  assert.equal(store.events.some((event) => event.eventType === 'TOOL_EVIDENCE_RECORDED'), false);
 });
 
 test('runCycle fails when role step exceeds timeout budget', async () => {

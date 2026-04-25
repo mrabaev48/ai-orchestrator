@@ -38,6 +38,8 @@ function makeRuntimeConfig(): RuntimeConfig {
     tools: {
       allowedWritePaths: [process.cwd()],
       typescriptDiagnosticsEnabled: true,
+      allowedShellCommands: ['node', 'npm', 'pnpm', 'git', 'rg', 'tsx', 'tsc'],
+      persistToolEvidence: true,
     },
     logging: {
       level: 'error',
