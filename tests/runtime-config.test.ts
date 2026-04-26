@@ -82,31 +82,69 @@ test('loadRuntimeConfig supports distributed lock configuration', () => {
 });
 
 test('loadRuntimeConfig rejects multi-worker mode without shared run lock dsn', () => {
-  assert.throws(
-    () =>
-      loadRuntimeConfig({
-        env: {
-          TOOL_ALLOWED_WRITE_PATHS: '.',
-          WORKFLOW_WORKER_COUNT: '2',
-          WORKFLOW_RUN_LOCK_PROVIDER: 'postgresql',
-        },
-      }),
-    ConfigError,
+  const error = assertConfigError(() =>
+    loadRuntimeConfig({
+      env: {
+        TOOL_ALLOWED_WRITE_PATHS: '.',
+        WORKFLOW_WORKER_COUNT: '2',
+        WORKFLOW_RUN_LOCK_PROVIDER: 'postgresql',
+      },
+    }),
   );
+
+  assert.deepEqual(error.details, [
+    'workflow.runLockDsn is required when workflow.workerCount > 1; all workers must use the same shared DSN',
+    'workflow.runLockDsn is required when workflow.runLockProvider=postgresql',
+  ]);
 });
 
 test('loadRuntimeConfig rejects noop lock provider in multi-worker mode', () => {
-  assert.throws(
-    () =>
-      loadRuntimeConfig({
-        env: {
-          TOOL_ALLOWED_WRITE_PATHS: '.',
-          WORKFLOW_WORKER_COUNT: '2',
-          WORKFLOW_RUN_LOCK_PROVIDER: 'noop',
-        },
-      }),
-    ConfigError,
+  const error = assertConfigError(() =>
+    loadRuntimeConfig({
+      env: {
+        TOOL_ALLOWED_WRITE_PATHS: '.',
+        WORKFLOW_WORKER_COUNT: '2',
+        WORKFLOW_RUN_LOCK_PROVIDER: 'noop',
+      },
+    }),
   );
+
+  assert.deepEqual(error.details, [
+    'workflow.runLockDsn is required when workflow.workerCount > 1; all workers must use the same shared DSN',
+    'workflow.runLockProvider=noop is only allowed for single-worker mode',
+  ]);
+});
+
+test('loadRuntimeConfig rejects provider and dsn scheme mismatch in multi-worker mode', () => {
+  const error = assertConfigError(() =>
+    loadRuntimeConfig({
+      env: {
+        TOOL_ALLOWED_WRITE_PATHS: '.',
+        WORKFLOW_WORKER_COUNT: '2',
+        WORKFLOW_RUN_LOCK_PROVIDER: 'redis',
+        WORKFLOW_RUN_LOCK_DSN: 'postgresql://localhost:5432/ai_orchestrator',
+      },
+    }),
+  );
+
+  assert.deepEqual(error.details, [
+    'workflow.runLockDsn must use redis: or rediss: for provider redis (received postgresql:)',
+  ]);
+});
+
+test('loadRuntimeConfig accepts multi-worker redis lock with shared dsn', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      WORKFLOW_WORKER_COUNT: '4',
+      WORKFLOW_RUN_LOCK_PROVIDER: 'redis',
+      WORKFLOW_RUN_LOCK_DSN: 'redis://localhost:6379/0',
+    },
+  });
+
+  assert.equal(config.workflow.workerCount, 4);
+  assert.equal(config.workflow.runLockProvider, 'redis');
+  assert.equal(config.workflow.runLockDsn, 'redis://localhost:6379/0');
 });
 
 test('loadRuntimeConfig rejects invalid numeric values', () => {
@@ -273,3 +311,14 @@ test('loadRuntimeConfig auto-registers configured secret fields for string redac
   const redacted = redactSecrets('LLM secret provider-runtime-secret-001');
   assert.equal(redacted, 'LLM secret <redacted>');
 });
+
+function assertConfigError(fn: () => unknown): ConfigError {
+  try {
+    fn();
+  } catch (error) {
+    assert.ok(error instanceof ConfigError);
+    return error;
+  }
+
+  assert.fail('Expected ConfigError to be thrown');
+}
