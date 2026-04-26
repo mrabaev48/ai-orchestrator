@@ -31,6 +31,8 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   assert.equal(config.tools.allowedWritePaths[0], '/tmp/workspace/src');
   assert.equal(config.tools.allowedWritePaths[1], '/tmp/workspace/tests');
   assert.equal(config.tools.allowedShellCommands.includes('node'), true);
+  assert.equal(config.tools.writeMode, 'workspace-write');
+  assert.equal(config.tools.maxModifiedFiles, 200);
   assert.equal(config.tools.persistToolEvidence, true);
 });
 
@@ -43,6 +45,68 @@ test('loadRuntimeConfig normalizes allowlisted shell commands', () => {
   });
 
   assert.deepEqual(config.tools.allowedShellCommands, ['git', 'pnpm', 'node']);
+});
+
+test('loadRuntimeConfig supports safe write mode and guardrail settings', () => {
+  const config = loadRuntimeConfig({
+    cwd: '/tmp/workspace',
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: 'src',
+      TOOL_WRITE_MODE: 'sandbox-write',
+      TOOL_PROTECTED_WRITE_PATHS: 'package.json,.github',
+      TOOL_MAX_MODIFIED_FILES: '7',
+    },
+  });
+
+  assert.equal(config.tools.writeMode, 'sandbox-write');
+  assert.equal(config.tools.maxModifiedFiles, 7);
+  assert.deepEqual(config.tools.protectedWritePaths, [
+    '/tmp/workspace/package.json',
+    '/tmp/workspace/.github',
+  ]);
+});
+
+test('loadRuntimeConfig supports distributed lock configuration', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      WORKFLOW_WORKER_COUNT: '3',
+      WORKFLOW_RUN_LOCK_PROVIDER: 'postgresql',
+      WORKFLOW_RUN_LOCK_DSN: 'postgresql://localhost:5432/ai_orchestrator',
+    },
+  });
+
+  assert.equal(config.workflow.workerCount, 3);
+  assert.equal(config.workflow.runLockProvider, 'postgresql');
+  assert.equal(config.workflow.runLockDsn, 'postgresql://localhost:5432/ai_orchestrator');
+});
+
+test('loadRuntimeConfig rejects multi-worker mode without shared run lock dsn', () => {
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        env: {
+          TOOL_ALLOWED_WRITE_PATHS: '.',
+          WORKFLOW_WORKER_COUNT: '2',
+          WORKFLOW_RUN_LOCK_PROVIDER: 'postgresql',
+        },
+      }),
+    ConfigError,
+  );
+});
+
+test('loadRuntimeConfig rejects noop lock provider in multi-worker mode', () => {
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        env: {
+          TOOL_ALLOWED_WRITE_PATHS: '.',
+          WORKFLOW_WORKER_COUNT: '2',
+          WORKFLOW_RUN_LOCK_PROVIDER: 'noop',
+        },
+      }),
+    ConfigError,
+  );
 });
 
 test('loadRuntimeConfig rejects invalid numeric values', () => {

@@ -104,3 +104,96 @@ test('tools adapter blocks non-allowlisted shell command', async () => {
       error.message.includes('not allowlisted'),
   );
 });
+
+test('tools adapter blocks writes in read-only and propose-only modes', async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), 'toolset-write-mode-'));
+  const modes: ('read-only' | 'propose-only')[] = ['read-only', 'propose-only'];
+
+  for (const mode of modes) {
+    const tools = createLocalToolSet({
+      allowedWritePaths: [workspace],
+      allowedShellCommands: ['node'],
+      writeMode: mode,
+    });
+
+    await assert.rejects(
+      async () =>
+        tools.execute({
+          toolName: 'file_write',
+          input: { filePath: path.join(workspace, `${mode}.txt`), content: 'blocked' },
+        }),
+      (error: unknown) =>
+        error instanceof SafetyViolationError &&
+        error.message.includes(`Write is forbidden in ${mode} mode`),
+    );
+  }
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
+test('tools adapter requires protected-write mode for protected paths', async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), 'toolset-protected-path-'));
+  const protectedPath = path.join(workspace, 'package.json');
+
+  const workspaceTools = createLocalToolSet({
+    allowedWritePaths: [workspace],
+    allowedShellCommands: ['node'],
+    writeMode: 'workspace-write',
+    protectedWritePaths: [protectedPath],
+  });
+
+  await assert.rejects(
+    async () =>
+      workspaceTools.execute({
+        toolName: 'file_write',
+        input: { filePath: protectedPath, content: '{}' },
+      }),
+    (error: unknown) =>
+      error instanceof SafetyViolationError &&
+      error.message.includes('requires protected-write mode'),
+  );
+
+  const protectedTools = createLocalToolSet({
+    allowedWritePaths: [workspace],
+    allowedShellCommands: ['node'],
+    writeMode: 'protected-write',
+    protectedWritePaths: [protectedPath],
+  });
+
+  await protectedTools.execute({
+    toolName: 'file_write',
+    input: { filePath: protectedPath, content: '{"name":"ok"}' },
+  });
+  const saved = await readFile(protectedPath, 'utf8');
+  assert.equal(saved, '{"name":"ok"}');
+
+  await rm(workspace, { recursive: true, force: true });
+});
+
+test('tools adapter enforces maximum modified files threshold', async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), 'toolset-mod-limit-'));
+  const tools = createLocalToolSet({
+    allowedWritePaths: [workspace],
+    allowedShellCommands: ['node'],
+    writeMode: 'workspace-write',
+    maxModifiedFiles: 1,
+  });
+
+  await tools.execute({
+    toolName: 'file_write',
+    input: { filePath: path.join(workspace, 'one.txt'), content: '1' },
+  });
+
+  await assert.rejects(
+    async () =>
+      tools.execute({
+        toolName: 'file_write',
+        input: { filePath: path.join(workspace, 'two.txt'), content: '2' },
+      }),
+    (error: unknown) =>
+      error instanceof SafetyViolationError &&
+      error.message.includes('Maximum modified files threshold exceeded'),
+  );
+
+  await rm(workspace, { recursive: true, force: true });
+});

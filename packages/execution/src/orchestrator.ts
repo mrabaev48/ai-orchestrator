@@ -7,6 +7,7 @@ import path from 'node:path';
 import type { StateStore } from '../../state/src/index.ts';
 import type { ToolSet } from '../../tools/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
+import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
 import {
   nextFailureAction,
   requiresReview,
@@ -50,24 +51,43 @@ export class Orchestrator {
   private readonly roleRegistry: RoleRegistry;
   private readonly config: RuntimeConfig;
   private readonly logger: Logger;
+  private readonly lockAuthority: LockAuthority;
 
   constructor(
     stateStore: StateStore,
     roleRegistry: RoleRegistry,
     config: RuntimeConfig,
     logger: Logger,
+    overrides?: { lockAuthority?: LockAuthority },
   ) {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
     this.config = config;
     this.logger = logger;
-    this.tools = createLocalToolSet({
+    const toolPolicyConfig = {
       allowedWritePaths: config.tools.allowedWritePaths,
       allowedShellCommands: config.tools.allowedShellCommands,
-    });
+      ...(config.tools.writeMode ? { writeMode: config.tools.writeMode } : {}),
+      ...(config.tools.protectedWritePaths ? { protectedWritePaths: config.tools.protectedWritePaths } : {}),
+      ...(typeof config.tools.maxModifiedFiles === 'number'
+        ? { maxModifiedFiles: config.tools.maxModifiedFiles }
+        : {}),
+    };
+    this.tools = createLocalToolSet(toolPolicyConfig);
+    this.lockAuthority = overrides?.lockAuthority ?? createLockAuthority(config);
   }
 
   async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {
+    const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle');
+    if (!lockHandle) {
+      return {
+        runId: crypto.randomUUID(),
+        status: 'idle',
+        stopReason: 'run_lock_unavailable',
+      };
+    }
+
+    try {
     const state = await this.stateStore.load();
     assertProjectState(state);
 
@@ -152,7 +172,7 @@ export class Orchestrator {
 
       if (!review.output.approved || review.output.blockingIssues.length > 0) {
         await this.stateStore.recordEvent(makeEvent('REVIEW_REJECTED', { taskId: task.id }, { runId }));
-        return this.handleFailure(state, task, 'reviewer', 'review_rejected', runId);
+        return await this.handleFailure(state, task, 'reviewer', 'review_rejected', runId);
       }
 
       await this.stateStore.recordEvent(makeEvent('REVIEW_APPROVED', { taskId: task.id }, { runId }));
@@ -173,7 +193,7 @@ export class Orchestrator {
 
       if (!testing.output.passed || testing.output.failures.length > 0) {
         await this.stateStore.recordEvent(makeEvent('TEST_FAILED', { taskId: task.id }, { runId }));
-        return this.handleFailure(state, task, 'tester', 'test_failed', runId);
+        return await this.handleFailure(state, task, 'tester', 'test_failed', runId);
       }
 
       await this.stateStore.recordEvent(makeEvent('TEST_PASSED', { taskId: task.id }, { runId }));
@@ -215,6 +235,9 @@ export class Orchestrator {
       taskId: task.id,
       status: 'completed',
     };
+    } finally {
+      await lockHandle.release();
+    }
   }
 
   async runSingleTask(taskId: string): Promise<RunCycleResult> {

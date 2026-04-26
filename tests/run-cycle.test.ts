@@ -326,6 +326,20 @@ test('runSingleTask throws deterministic error for blocked task', async () => {
   );
 });
 
+test('runCycle returns idle when distributed run lock is unavailable', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
+    lockAuthority: {
+      acquireRunLock: async () => null,
+    },
+  });
+
+  const result = await orchestrator.runCycle();
+  assert.equal(result.status, 'idle');
+  assert.equal(result.stopReason, 'run_lock_unavailable');
+});
+
 test('runCycle rejects invalid coder output via role output schema registry', async () => {
   class InvalidCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
     readonly name = 'coder' as const;
