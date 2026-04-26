@@ -4,6 +4,8 @@ import { defaultRoleOutputSchemaRegistry, validateRoleResponse } from '../../cor
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import { SchemaValidationError, WorkflowPolicyError } from '../../shared/src/index.ts';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { StateStore } from '../../state/src/index.ts';
 import type { ToolSet } from '../../tools/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
@@ -33,6 +35,7 @@ import type {
   ToolCallRequest,
 } from '../../core/src/roles.ts';
 import type { QualityStageResult } from '../../core/src/testing.ts';
+const execFileAsync = promisify(execFile);
 
 export interface RunCycleResult {
   runId: string;
@@ -161,6 +164,11 @@ export class Orchestrator {
       });
       await this.stateStore.recordArtifact(workspaceArtifact);
       state.artifacts.push(workspaceArtifact);
+      await this.recordGitBranchArtifact(state, {
+        runId,
+        taskId: task.id,
+        ...(workspace.branchName ? { branchName: workspace.branchName } : {}),
+      });
 
       return await this.runTaskInWorkspace({
         state,
@@ -331,6 +339,13 @@ export class Orchestrator {
     await this.stateStore.recordArtifact(taskSummaryArtifact);
     await this.stateStore.recordArtifact(runSummaryArtifact);
     state.artifacts.push(taskSummaryArtifact, runSummaryArtifact);
+    await this.recordGitLifecycleCompletionArtifacts(state, {
+      runId,
+      taskId: task.id,
+      taskTitle: task.title,
+      workspaceRoot: workspace.rootPath,
+      ...(workspace.branchName ? { branchName: workspace.branchName } : {}),
+    });
 
     const stateCommittedEvent = makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId });
     await this.stateStore.saveWithEvents(state, [stateCommittedEvent]);
@@ -828,6 +843,143 @@ export class Orchestrator {
       retrySuggested: false,
       needsHumanDecision: reason === 'task_blocked' || reason === 'task_not_executable',
     });
+  }
+
+  private async recordGitBranchArtifact(
+    state: ProjectState,
+    input: { runId: string; taskId: string; branchName?: string },
+  ): Promise<void> {
+    const branchArtifact = makeArtifact('git_lifecycle', `Git branch for ${input.taskId}`, {
+      runId: input.runId,
+      taskId: input.taskId,
+      stage: 'branch',
+      branchName: input.branchName ?? 'unknown',
+    });
+    await this.stateStore.recordArtifact(branchArtifact);
+    state.artifacts.push(branchArtifact);
+  }
+
+  private async recordGitLifecycleCompletionArtifacts(
+    state: ProjectState,
+    input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
+  ): Promise<void> {
+    const branchName = input.branchName ?? (await this.currentGitBranch(input.workspaceRoot)) ?? 'unknown';
+    const hasChanges = await this.workspaceHasGitChanges(input.workspaceRoot);
+    const commitMessage = `feat(${input.taskId}): ${input.taskTitle} [run:${input.runId}]`;
+    let commitStatus = hasChanges ? 'pending' : 'skipped_no_changes';
+    let pushStatus = hasChanges ? 'pending' : 'skipped_no_changes';
+    let commitSha = 'none';
+
+    if (hasChanges) {
+      const committed = await this.createCommit(input.workspaceRoot, commitMessage);
+      commitStatus = committed.ok ? 'created' : 'failed';
+      if (committed.ok) {
+        commitSha = committed.commitSha;
+        const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
+        pushStatus = isPushed ? 'pushed' : 'failed';
+      } else {
+        pushStatus = 'skipped_commit_failed';
+      }
+    }
+
+    const commitArtifact = makeArtifact('git_lifecycle', `Git commit metadata for ${input.taskId}`, {
+      runId: input.runId,
+      taskId: input.taskId,
+      stage: 'commit',
+      branchName,
+      commitStatus,
+      pushStatus,
+      commitSha: truncateText(commitSha, 120),
+      commitMessage: truncateText(commitMessage, 250),
+    });
+    await this.stateStore.recordArtifact(commitArtifact);
+    state.artifacts.push(commitArtifact);
+
+    const prTitle = `[${input.taskId}] ${input.taskTitle}`;
+    const prBody = [
+      `Task: ${input.taskId}`,
+      `Run: ${input.runId}`,
+      `Branch: ${branchName}`,
+      `Commit: ${commitSha}`,
+      '',
+      'Automated draft PR from ai-orchestrator.',
+    ].join('\n');
+    const prStatus = pushStatus === 'pushed'
+      ? (await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody) ? 'created' : 'failed')
+      : 'skipped_push_not_successful';
+    const prArtifact = makeArtifact('git_lifecycle', `PR draft metadata for ${input.taskId}`, {
+      runId: input.runId,
+      taskId: input.taskId,
+      stage: 'pr_draft',
+      branchName,
+      prStatus,
+      prTitle: truncateText(prTitle, 250),
+      prBody: truncateText(prBody, 250),
+    });
+    await this.stateStore.recordArtifact(prArtifact);
+    state.artifacts.push(prArtifact);
+  }
+
+  private async workspaceHasGitChanges(workspaceRoot: string): Promise<boolean> {
+    try {
+      const { stdout } = await execFileAsync('git', ['status', '--short', '--untracked-files=all'], {
+        cwd: workspaceRoot,
+      });
+      return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private async currentGitBranch(workspaceRoot: string): Promise<string | null> {
+    try {
+      const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { cwd: workspaceRoot });
+      const branch = stdout.trim();
+      return branch.length > 0 ? branch : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async createCommit(
+    workspaceRoot: string,
+    commitMessage: string,
+  ): Promise<{ ok: true; commitSha: string } | { ok: false }> {
+    try {
+      await execFileAsync('git', ['add', '-A'], { cwd: workspaceRoot });
+      await execFileAsync('git', ['commit', '-m', commitMessage], { cwd: workspaceRoot });
+      const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: workspaceRoot });
+      return { ok: true, commitSha: stdout.trim() };
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  private async pushBranch(workspaceRoot: string, branchName: string): Promise<boolean> {
+    try {
+      await execFileAsync('git', ['push', '--set-upstream', 'origin', branchName], { cwd: workspaceRoot });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async createPullRequestDraft(
+    workspaceRoot: string,
+    branchName: string,
+    title: string,
+    body: string,
+  ): Promise<boolean> {
+    try {
+      await execFileAsync(
+        'gh',
+        ['pr', 'create', '--draft', '--head', branchName, '--title', title, '--body', body],
+        { cwd: workspaceRoot },
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

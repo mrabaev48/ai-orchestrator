@@ -15,6 +15,7 @@ const ARTIFACT_VALIDATORS: Record<ArtifactType, ArtifactValidator> = {
   plan: (artifact) => requireMetadata(artifact, ['promptId', 'milestoneId']),
   test_plan: () => [],
   report: () => [],
+  git_lifecycle: (artifact) => requireMetadata(artifact, ['taskId', 'runId', 'stage']),
 };
 
 export class ArtifactSchemaRegistry {

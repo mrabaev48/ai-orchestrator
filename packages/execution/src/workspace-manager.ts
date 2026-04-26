@@ -13,6 +13,7 @@ export interface WorkspaceAllocationInput {
 
 export interface ManagedWorkspace {
   rootPath: string;
+  branchName?: string;
   initialDiff: string;
   rollback: () => Promise<void>;
   cleanup: () => Promise<void>;
@@ -101,6 +102,7 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
 
       return {
         rootPath: workspaceRoot,
+        branchName,
         initialDiff,
         rollback,
         cleanup,

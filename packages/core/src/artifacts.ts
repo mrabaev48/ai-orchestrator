@@ -10,7 +10,8 @@ export type ArtifactType =
   | 'backlog_export'
   | 'plan'
   | 'test_plan'
-  | 'report';
+  | 'report'
+  | 'git_lifecycle';
 
 export interface ArtifactRecord {
   id: string;
