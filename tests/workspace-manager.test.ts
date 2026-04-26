@@ -8,6 +8,7 @@ import test from 'node:test';
 
 import {
   GitWorktreeWorkspaceManager,
+  parsePrunedWorktreeCount,
   StaticWorkspaceManager,
 } from '../packages/execution/src/workspace-manager.ts';
 
@@ -73,4 +74,36 @@ test('GitWorktreeWorkspaceManager prunes stale orchestrator branches using ttl',
   const branches = await execFileAsync('git', ['branch', '--list', 'orchestrator/run-stale'], { cwd: repoRoot });
   assert.equal(branches.stdout.trim(), '');
   await rm(repoRoot, { recursive: true, force: true });
+});
+
+test('parsePrunedWorktreeCount parses different git prune output formats', () => {
+  const fixtures = [
+    {
+      output: '',
+      expected: 0,
+    },
+    {
+      output: 'Removing /tmp/repo/.git/worktrees/run-1: gitdir file points to non-existent location',
+      expected: 1,
+    },
+    {
+      output: [
+        'Pruning worktree /tmp/repo/.git/worktrees/run-2',
+        'Pruning worktree /tmp/repo/.git/worktrees/run-3',
+      ].join('\n'),
+      expected: 2,
+    },
+    {
+      output: [
+        'prunable gitdir file points to non-existent location',
+        'random informational line',
+        'Removing /tmp/repo/.git/worktrees/run-4: stale',
+      ].join('\n'),
+      expected: 2,
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    assert.equal(parsePrunedWorktreeCount(fixture.output), fixture.expected);
+  }
 });

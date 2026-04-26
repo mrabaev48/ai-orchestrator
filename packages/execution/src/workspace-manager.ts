@@ -30,6 +30,8 @@ export interface CreateWorkspaceManagerInput {
   branchTtlHours: number;
 }
 
+const PRUNED_WORKTREE_PATTERNS = [/^Removing\s+/i, /^Pruning worktree\s+/i, /^prunable\s+/i];
+
 export class WorkspaceManagerError extends Error {
   readonly cause?: unknown;
 
@@ -125,7 +127,9 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
 
   private async cleanupStaleWorktreesAndBranches(): Promise<void> {
     const pruneWindow = `${this.branchTtlHours}.hours.ago`;
-    await this.git(['worktree', 'prune', `--expire=${pruneWindow}`], this.repoRoot).catch(() => {});
+    await this.git(['worktree', 'prune', '--verbose', `--expire=${pruneWindow}`], this.repoRoot)
+      .then((result) => parsePrunedWorktreeCount(result.stdout))
+      .catch(() => {});
     const ttlSeconds = this.branchTtlHours * 60 * 60;
     const nowSeconds = Math.floor(Date.now() / 1000);
     const refs = await this.git(
@@ -180,4 +184,13 @@ export function createWorkspaceManager(input: CreateWorkspaceManagerInput): Work
   }
 
   return new GitWorktreeWorkspaceManager(input.repoRoot, input.branchTtlHours);
+}
+
+export function parsePrunedWorktreeCount(output: string): number {
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => PRUNED_WORKTREE_PATTERNS.some((pattern) => pattern.test(line)))
+    .length;
 }
