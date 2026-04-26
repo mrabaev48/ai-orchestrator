@@ -27,6 +27,10 @@ interface RedisLike {
   eval: (script: string, options: { keys: string[]; arguments: string[] }) => Promise<unknown>;
 }
 
+interface RedisLockAuthorityOptions {
+  loadClient?: (dsn: string) => Promise<RedisLike>;
+}
+
 interface EtcdLeaseLike {
   put: (key: string) => {
     value: (value: string, options?: { prevNoExist?: boolean }) => Promise<unknown>;
@@ -36,6 +40,10 @@ interface EtcdLeaseLike {
 
 interface EtcdClientLike {
   lease: (ttlSeconds: number) => EtcdLeaseLike;
+}
+
+interface EtcdLockAuthorityOptions {
+  loadClient?: (dsn: string) => Promise<EtcdClientLike>;
 }
 
 export function createLockAuthority(config: RuntimeConfig): LockAuthority {
@@ -112,9 +120,9 @@ export class RedisLockAuthority implements LockAuthority {
   private readonly ttlMs = 60_000;
   private readonly dsn: string;
 
-  constructor(dsn: string) {
+  constructor(dsn: string, options: RedisLockAuthorityOptions = {}) {
     this.dsn = dsn;
-    this.clientPromise = loadRedisClient(dsn);
+    this.clientPromise = (options.loadClient ?? loadRedisClient)(dsn);
   }
 
   async acquireRunLock(key: string): Promise<RunLockHandle | null> {
@@ -122,20 +130,46 @@ export class RedisLockAuthority implements LockAuthority {
     const token = crypto.randomUUID();
     const lockKey = `ai-orchestrator:run-lock:${key}`;
 
-    const acquired = await client.set(lockKey, token, { NX: true, PX: this.ttlMs });
+    let acquired: unknown;
+    try {
+      acquired = await client.set(lockKey, token, { NX: true, PX: this.ttlMs });
+    } catch (error) {
+      throw new WorkflowPolicyError('Unable to acquire Redis run lock', {
+        cause: error,
+        details: {
+          provider: 'redis',
+          operation: 'acquire',
+          key,
+          dsn: this.dsn,
+        },
+      });
+    }
+
     if (!isRedisLockAcquired(acquired)) {
       return null;
     }
 
     return {
       release: async () => {
-        await client.eval(
-          'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end',
-          {
-            keys: [lockKey],
-            arguments: [token],
-          },
-        );
+        try {
+          await client.eval(
+            'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end',
+            {
+              keys: [lockKey],
+              arguments: [token],
+            },
+          );
+        } catch (error) {
+          throw new WorkflowPolicyError('Unable to release Redis run lock', {
+            cause: error,
+            details: {
+              provider: 'redis',
+              operation: 'release',
+              key,
+              dsn: this.dsn,
+            },
+          });
+        }
       },
     };
   }
@@ -146,9 +180,9 @@ export class EtcdLockAuthority implements LockAuthority {
   private readonly ttlSeconds = 60;
   private readonly dsn: string;
 
-  constructor(dsn: string) {
+  constructor(dsn: string, options: EtcdLockAuthorityOptions = {}) {
     this.dsn = dsn;
-    this.clientPromise = loadEtcdClient(dsn);
+    this.clientPromise = (options.loadClient ?? loadEtcdClient)(dsn);
   }
 
   async acquireRunLock(key: string): Promise<RunLockHandle | null> {
@@ -158,14 +192,38 @@ export class EtcdLockAuthority implements LockAuthority {
 
     try {
       await lease.put(`ai-orchestrator/run-lock/${key}`).value(value, { prevNoExist: true });
-    } catch {
+    } catch (error) {
       await lease.revoke().catch(() => undefined);
-      return null;
+      if (isEtcdLockContention(error)) {
+        return null;
+      }
+
+      throw new WorkflowPolicyError('Unable to acquire etcd run lock', {
+        cause: error,
+        details: {
+          provider: 'etcd',
+          operation: 'acquire',
+          key,
+          dsn: this.dsn,
+        },
+      });
     }
 
     return {
       release: async () => {
-        await lease.revoke();
+        try {
+          await lease.revoke();
+        } catch (error) {
+          throw new WorkflowPolicyError('Unable to release etcd run lock', {
+            cause: error,
+            details: {
+              provider: 'etcd',
+              operation: 'release',
+              key,
+              dsn: this.dsn,
+            },
+          });
+        }
       },
     };
   }
@@ -216,4 +274,13 @@ async function loadEtcdClient(dsn: string): Promise<EtcdClientLike> {
 
 function isRedisLockAcquired(result: unknown): boolean {
   return result === 'OK' || result === true;
+}
+
+function isEtcdLockContention(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return message.includes('already exists') || message.includes('compare failed');
 }
