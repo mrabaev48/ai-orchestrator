@@ -1,4 +1,5 @@
 import type { ToolEvidenceStore, UnifiedToolAdapter, UnifiedToolRequest } from './contracts.ts';
+import path from 'node:path';
 import { createEvidenceToolAdapter } from './evidence/adapter.ts';
 import {
   createFileSystemToolAdapter,
@@ -14,6 +15,7 @@ import { createSearchToolAdapter } from './search/adapter.ts';
 
 export type { ToolExecutionRecord, ToolAdapterName } from './contracts.ts';
 export type { FileSystemTool, GitTool, TypeScriptTool };
+export type { SafeWriteMode } from './policy/adapter.ts';
 
 export interface ToolSet {
   fileSystem: FileSystemTool;
@@ -24,6 +26,13 @@ export interface ToolSet {
 }
 
 const DEFAULT_ALLOWED_SHELL_COMMANDS = ['node', 'npm', 'pnpm', 'git', 'rg', 'tsx', 'tsc'] as const;
+const DEFAULT_PROTECTED_WRITE_PATHS = [
+  'package.json',
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  '.github',
+  '.env',
+] as const;
 
 type CreateLocalToolSetInput = string[] | ToolPolicyConfig;
 
@@ -32,10 +41,18 @@ function resolveToolPolicyConfig(input: CreateLocalToolSetInput): ToolPolicyConf
     return {
       allowedWritePaths: input,
       allowedShellCommands: [...DEFAULT_ALLOWED_SHELL_COMMANDS],
+      writeMode: 'workspace-write',
+      protectedWritePaths: DEFAULT_PROTECTED_WRITE_PATHS.map((entry) => path.resolve(process.cwd(), entry)),
+      maxModifiedFiles: 200,
     };
   }
 
-  return input;
+  return {
+    ...input,
+    writeMode: input.writeMode ?? 'workspace-write',
+    protectedWritePaths: input.protectedWritePaths ?? DEFAULT_PROTECTED_WRITE_PATHS.map((entry) => path.resolve(process.cwd(), entry)),
+    maxModifiedFiles: input.maxModifiedFiles ?? 200,
+  };
 }
 
 export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {

@@ -37,3 +37,12 @@ Response format:
 5. Validation
 6. Risks
 7. Git status
+
+## Subtasks (risk decomposition)
+
+- [ ] **12.1 — Add Redis/etcd LockAuthority adapters (port already extracted)**
+  - file: `tasks/target/12.1-lock-authority-redis-etcd-adapters.md`
+- [ ] **12.2 — Enforce shared `WORKFLOW_RUN_LOCK_DSN` for multi-worker mode**
+  - file: `tasks/target/12.2-enforce-shared-run-lock-dsn-for-multi-worker.md`
+- [ ] **12.3 — Operationalize lock fallback and misconfiguration diagnostics**
+  - file: `tasks/target/12.3-lock-fallback-and-misconfiguration-diagnostics.md`

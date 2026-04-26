@@ -10,6 +10,14 @@ const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 const logFormatSchema = z.enum(['json']);
 const llmProviderSchema = z.enum(['openai', 'anthropic', 'mock']);
 const stateBackendSchema = z.enum(['memory', 'postgresql']);
+const runLockProviderSchema = z.enum(['noop', 'postgresql', 'redis', 'etcd']);
+const safeWriteModeSchema = z.enum([
+  'read-only',
+  'propose-only',
+  'sandbox-write',
+  'workspace-write',
+  'protected-write',
+]);
 
 const runtimeConfigSchema = z.strictObject({
   llm: z.strictObject({
@@ -32,10 +40,16 @@ const runtimeConfigSchema = z.strictObject({
     maxStepsPerRun: z.number().int().positive(),
     maxRoleStepsPerTask: z.number().int().positive().optional(),
     maxRetriesPerTask: z.number().int().nonnegative(),
+    workerCount: z.number().int().positive().optional(),
+    runLockProvider: runLockProviderSchema.optional(),
+    runLockDsn: z.string().trim().min(1).optional(),
   }),
   tools: z.strictObject({
     allowedWritePaths: z.array(z.string().trim().min(1)).min(1),
     allowedShellCommands: z.array(z.string().trim().min(1)).min(1),
+    writeMode: safeWriteModeSchema.optional(),
+    protectedWritePaths: z.array(z.string().trim().min(1)).optional(),
+    maxModifiedFiles: z.number().int().positive().optional(),
     typescriptDiagnosticsEnabled: z.boolean(),
     persistToolEvidence: z.boolean(),
   }),
@@ -61,8 +75,14 @@ const envSchema = z.object({
   MAX_STEPS_PER_RUN: z.coerce.number().int().positive().default(8),
   MAX_ROLE_STEPS_PER_TASK: z.coerce.number().int().positive().optional(),
   MAX_RETRIES_PER_TASK: z.coerce.number().int().nonnegative().default(3),
+  WORKFLOW_WORKER_COUNT: z.coerce.number().int().positive().default(1),
+  WORKFLOW_RUN_LOCK_PROVIDER: runLockProviderSchema.default('noop'),
+  WORKFLOW_RUN_LOCK_DSN: z.string().trim().min(1).optional(),
   TOOL_ALLOWED_WRITE_PATHS: z.string().trim().min(1).default('.'),
   TOOL_ALLOWED_SHELL_COMMANDS: z.string().trim().min(1).default('node,npm,pnpm,git,rg,tsx,tsc'),
+  TOOL_WRITE_MODE: safeWriteModeSchema.default('workspace-write'),
+  TOOL_PROTECTED_WRITE_PATHS: z.string().trim().min(1).default('package.json,pnpm-lock.yaml,package-lock.json,.github,.env'),
+  TOOL_MAX_MODIFIED_FILES: z.coerce.number().int().positive().default(200),
   TOOL_TYPESCRIPT_DIAGNOSTICS: z.stringbool().default(true),
   TOOL_PERSIST_EVIDENCE: z.stringbool().default(true),
   LOG_LEVEL: logLevelSchema.default('info'),
@@ -121,6 +141,9 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
         ? { maxRoleStepsPerTask: env.data.MAX_ROLE_STEPS_PER_TASK }
         : {}),
       maxRetriesPerTask: env.data.MAX_RETRIES_PER_TASK,
+      workerCount: env.data.WORKFLOW_WORKER_COUNT,
+      runLockProvider: env.data.WORKFLOW_RUN_LOCK_PROVIDER,
+      ...(env.data.WORKFLOW_RUN_LOCK_DSN ? { runLockDsn: env.data.WORKFLOW_RUN_LOCK_DSN } : {}),
       ...fileConfig.workflow,
     },
     tools: {
@@ -131,6 +154,12 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       allowedShellCommands: normalizeCommaSeparatedValues(
         fileConfig.tools?.allowedShellCommands ?? env.data.TOOL_ALLOWED_SHELL_COMMANDS,
       ),
+      writeMode: fileConfig.tools?.writeMode ?? env.data.TOOL_WRITE_MODE,
+      protectedWritePaths: normalizeWritePaths(
+        fileConfig.tools?.protectedWritePaths ?? env.data.TOOL_PROTECTED_WRITE_PATHS,
+        cwd,
+      ),
+      maxModifiedFiles: fileConfig.tools?.maxModifiedFiles ?? env.data.TOOL_MAX_MODIFIED_FILES,
       typescriptDiagnosticsEnabled:
         fileConfig.tools?.typescriptDiagnosticsEnabled ?? env.data.TOOL_TYPESCRIPT_DIAGNOSTICS,
       persistToolEvidence: fileConfig.tools?.persistToolEvidence ?? env.data.TOOL_PERSIST_EVIDENCE,
@@ -233,6 +262,9 @@ function loadConfigFile(cwd: string, configFile?: string): Partial<RuntimeConfig
 function validateRuntimePolicy(config: RuntimeConfig): void {
   const policyIssues: string[] = [];
   const maxRoleStepsPerTask = config.workflow.maxRoleStepsPerTask;
+  const workerCount = config.workflow.workerCount ?? 1;
+  const runLockProvider = config.workflow.runLockProvider ?? 'noop';
+  const runLockDsn = config.workflow.runLockDsn;
 
   if (config.workflow.maxStepsPerRun > WORKFLOW_POLICY_LIMITS.maxStepsPerRun) {
     policyIssues.push(
@@ -270,6 +302,23 @@ function validateRuntimePolicy(config: RuntimeConfig): void {
     );
   }
 
+  if (workerCount > 1 && !runLockDsn) {
+    policyIssues.push(
+      'workflow.runLockDsn is required when workflow.workerCount > 1; all workers must use the same shared DSN',
+    );
+  }
+
+  if (runLockProvider === 'noop' && workerCount > 1) {
+    policyIssues.push(
+      'workflow.runLockProvider=noop is only allowed for single-worker mode',
+    );
+  }
+
+  const lockDsnIssue = validateRunLockDsn(runLockProvider, runLockDsn);
+  if (lockDsnIssue) {
+    policyIssues.push(lockDsnIssue);
+  }
+
   if (policyIssues.length > 0) {
     throw new ConfigError('Invalid runtime workflow policy', {
       details: policyIssues,
@@ -277,11 +326,47 @@ function validateRuntimePolicy(config: RuntimeConfig): void {
   }
 }
 
+function validateRunLockDsn(
+  provider: z.infer<typeof runLockProviderSchema>,
+  dsn?: string,
+): string | null {
+  if (provider === 'noop') {
+    return dsn ? 'workflow.runLockDsn must be omitted when workflow.runLockProvider=noop' : null;
+  }
+
+  if (!dsn) {
+    return `workflow.runLockDsn is required when workflow.runLockProvider=${provider}`;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(dsn);
+  } catch (error) {
+    return `workflow.runLockDsn must be a valid URL (${formatPathValidationError(error)})`;
+  }
+
+  const expectedSchemes: Record<'postgresql' | 'redis' | 'etcd', string[]> = {
+    postgresql: ['postgres:', 'postgresql:'],
+    redis: ['redis:', 'rediss:'],
+    etcd: ['etcd:', 'etcds:'],
+  };
+
+  const supportedSchemes = expectedSchemes[provider];
+  if (!supportedSchemes.includes(parsed.protocol)) {
+    return `workflow.runLockDsn must use ${supportedSchemes.join(' or ')} for provider ${provider} (received ${parsed.protocol})`;
+  }
+
+  return null;
+}
+
 function validateRuntimeFilesystemGuards(config: RuntimeConfig): void {
   const writePathIssues = config.tools.allowedWritePaths.flatMap((writePath) =>
     validateWritableDirectory(writePath, 'tools.allowedWritePaths'),
   );
-  const issues = [...writePathIssues];
+  const protectedPathIssues = (config.tools.protectedWritePaths ?? []).flatMap((writePath) =>
+    validateWritablePath(writePath, 'tools.protectedWritePaths'),
+  );
+  const issues = [...writePathIssues, ...protectedPathIssues];
   if (issues.length > 0) {
     throw new ConfigError('Invalid runtime writable path policy', {
       details: issues,
@@ -344,6 +429,20 @@ function validateWritableDirectory(directoryPath: string, scope: string): string
       `${scope} path must be writable via ancestor ${nearestExistingAncestor}: ${directoryPath} (${formatPathValidationError(error)})`,
     ];
   }
+}
+
+function validateWritablePath(targetPath: string, scope: string): string[] {
+  if (existsSync(targetPath)) {
+    try {
+      accessSync(targetPath, fsConstants.W_OK);
+      return [];
+    } catch (error) {
+      return [`${scope} path must be writable: ${targetPath} (${formatPathValidationError(error)})`];
+    }
+  }
+
+  const parentPath = path.dirname(targetPath);
+  return validateWritableDirectory(parentPath, scope);
 }
 
 function formatPathValidationError(error: unknown): string {
