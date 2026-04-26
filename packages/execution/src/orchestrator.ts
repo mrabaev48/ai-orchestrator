@@ -10,6 +10,12 @@ import { createLocalToolSet } from '../../tools/src/index.ts';
 import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
 import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.ts';
 import {
+  createWorkspaceManager,
+  StaticWorkspaceManager,
+  type ManagedWorkspace,
+  type WorkspaceManager,
+} from './workspace-manager.ts';
+import {
   nextFailureAction,
   requiresReview,
   requiresTesting,
@@ -47,19 +53,20 @@ export type RunSingleTaskErrorReason =
   | 'task_not_executable';
 
 export class Orchestrator {
-  private readonly tools: ToolSet;
+  private tools: ToolSet;
   private readonly stateStore: StateStore;
   private readonly roleRegistry: RoleRegistry;
   private readonly config: RuntimeConfig;
   private readonly logger: Logger;
   private readonly lockAuthority: LockAuthority;
   private readonly telemetry: ExecutionTelemetry;
+  private readonly workspaceManager: WorkspaceManager;
   constructor(
     stateStore: StateStore,
     roleRegistry: RoleRegistry,
     config: RuntimeConfig,
     logger: Logger,
-    overrides?: { lockAuthority?: LockAuthority; telemetry?: ExecutionTelemetry },
+    overrides?: { lockAuthority?: LockAuthority; telemetry?: ExecutionTelemetry; workspaceManager?: WorkspaceManager },
   ) {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
@@ -77,6 +84,10 @@ export class Orchestrator {
     this.tools = createLocalToolSet(toolPolicyConfig);
     this.lockAuthority = overrides?.lockAuthority ?? createLockAuthority(config);
     this.telemetry = overrides?.telemetry ?? new StateStoreExecutionTelemetry(stateStore, logger);
+    this.workspaceManager = overrides?.workspaceManager
+      ?? (config.tools.writeMode === 'workspace-write' || config.tools.writeMode === 'protected-write'
+        ? createWorkspaceManager(config.tools.allowedWritePaths[0] ?? process.cwd())
+        : new StaticWorkspaceManager(config.tools.allowedWritePaths[0] ?? process.cwd()));
   }
 
   async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {
@@ -89,40 +100,120 @@ export class Orchestrator {
         runId,
         tags: { lock_resource: 'global-run-cycle' },
       });
+      this.logger.info('Run cycle skipped because global run lock is unavailable', {
         event: 'cycle_idle_lock_unavailable',
         runId,
         data: {
           resource: 'global-run-cycle',
           delta: 1,
-
-    try {
-    const state = await this.stateStore.load();
-    assertProjectState(state);
-
-    const stop = shouldStopRun(state, this.config.workflow);
-    if (stop.stop) {
-      return {
-        runId: state.execution.activeRunId ?? crypto.randomUUID(),
-        status: 'idle',
-        ...(stop.reason ? { stopReason: stop.reason } : {}),
-      };
-    }
-
-    const runId = crypto.randomUUID();
-    const task = options.forcedTaskId
-      ? this.selectForcedTask(state, options.forcedTaskId)
-      : await this.selectNextTask(state, runId);
-    if (!task) {
+        },
+      });
       return {
         runId,
         status: 'idle',
-        stopReason: options.forcedTaskId ? 'forced_task_not_executable' : 'no_executable_task',
+        stopReason: 'run_lock_unavailable',
       };
     }
 
-    state.execution.activeRunId = runId;
-    state.execution.activeTaskId = task.id;
-    await this.stateStore.recordEvent(makeEvent('TASK_SELECTED', { taskId: task.id }, { runId }));
+    try {
+      const state = await this.stateStore.load();
+      assertProjectState(state);
+
+      const stop = shouldStopRun(state, this.config.workflow);
+      if (stop.stop) {
+        return {
+          runId: state.execution.activeRunId ?? crypto.randomUUID(),
+          status: 'idle',
+          ...(stop.reason ? { stopReason: stop.reason } : {}),
+        };
+      }
+
+      const runId = crypto.randomUUID();
+      const task = options.forcedTaskId
+        ? this.selectForcedTask(state, options.forcedTaskId)
+        : await this.selectNextTask(state, runId);
+      if (!task) {
+        return {
+          runId,
+          status: 'idle',
+          stopReason: options.forcedTaskId ? 'forced_task_not_executable' : 'no_executable_task',
+        };
+      }
+
+      const workspace = await this.workspaceManager.allocate({ runId, taskId: task.id });
+      const workspaceTools = createLocalToolSet({
+        allowedWritePaths: [workspace.rootPath],
+        allowedShellCommands: this.config.tools.allowedShellCommands,
+        ...(this.config.tools.writeMode ? { writeMode: this.config.tools.writeMode } : {}),
+        ...(this.config.tools.protectedWritePaths ? { protectedWritePaths: this.config.tools.protectedWritePaths } : {}),
+        ...(typeof this.config.tools.maxModifiedFiles === 'number'
+          ? { maxModifiedFiles: this.config.tools.maxModifiedFiles }
+          : {}),
+      });
+
+      const workspaceArtifact = makeArtifact('report', `Workspace initialized for ${task.id}`, {
+        runId,
+        taskId: task.id,
+        workspaceRoot: workspace.rootPath,
+        hasInitialDiff: workspace.initialDiff.length > 0 ? 'true' : 'false',
+      });
+      await this.stateStore.recordArtifact(workspaceArtifact);
+      state.artifacts.push(workspaceArtifact);
+
+      return await this.runTaskInWorkspace({
+        state,
+        task,
+        runId,
+        workspace,
+        workspaceTools,
+        ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
+      });
+    } finally {
+      await lockHandle.release();
+    }
+  }
+
+  async runSingleTask(taskId: string): Promise<RunCycleResult> {
+    const state = await this.stateStore.load();
+    assertProjectState(state);
+
+    const task = state.backlog.tasks[taskId];
+    if (!task) {
+      throw this.makeRunSingleTaskError(taskId, 'invalid_task_id', 'Requested task does not exist');
+    }
+
+    if (task.status === 'done' || state.execution.completedTaskIds.includes(taskId)) {
+      throw this.makeRunSingleTaskError(taskId, 'task_done', 'Requested task is already completed');
+    }
+
+    if (task.status === 'blocked' || state.execution.blockedTaskIds.includes(taskId)) {
+      throw this.makeRunSingleTaskError(taskId, 'task_blocked', 'Requested task is blocked');
+    }
+
+    const completed = new Set(state.execution.completedTaskIds);
+    const blocked = new Set(state.execution.blockedTaskIds);
+    if (!isExecutableTask(completed, blocked, task)) {
+      throw this.makeRunSingleTaskError(taskId, 'task_not_executable', 'Requested task is not executable');
+    }
+
+    return this.runCycle({ forcedTaskId: taskId });
+  }
+
+
+  private async runTaskInWorkspace(input: {
+    state: ProjectState;
+    task: BacklogTask;
+    runId: string;
+    workspace: ManagedWorkspace;
+    workspaceTools: ToolSet;
+    abortSignal?: AbortSignal;
+  }): Promise<RunCycleResult> {
+    const { state, task, runId, workspace, workspaceTools, abortSignal } = input;
+    this.tools = workspaceTools;
+    try {
+      state.execution.activeRunId = runId;
+      state.execution.activeTaskId = task.id;
+      await this.stateStore.recordEvent(makeEvent('TASK_SELECTED', { taskId: task.id }, { runId }));
 
     const failures = state.failures.filter((failure) => failure.taskId === task.id);
     const promptEngineer = this.roleRegistry.get<
@@ -130,7 +221,7 @@ export class Orchestrator {
       { id: string; role: string; systemPrompt: string; taskPrompt: string; contextSummary: string; constraints: string[]; outputSchema: Record<string, unknown> }
     >('prompt_engineer');
 
-    const promptResponse = await this.executeRole(promptEngineer, {
+      const promptResponse = await this.executeRole(promptEngineer, {
       role: 'prompt_engineer',
       objective: 'Optimize task prompt',
       input: {
@@ -140,7 +231,7 @@ export class Orchestrator {
         outputSchema: defaultRoleOutputSchemaRegistry.getSchema(routeTaskToRole(task)),
       },
       acceptanceCriteria: ['Prompt includes acceptance criteria and failure constraints'],
-    }, this.makeContext('prompt_engineer', runId, state, task.id, options.abortSignal));
+      }, this.makeContext('prompt_engineer', runId, state, workspace.rootPath, task.id, abortSignal));
 
     await this.stateStore.recordEvent(makeEvent('PROMPT_GENERATED', { taskId: task.id, promptId: promptResponse.output.id }, { runId }));
     const optimizedPromptArtifact = makeArtifact('optimized_prompt', `Prompt for ${task.id}`, {
@@ -156,12 +247,12 @@ export class Orchestrator {
       { changed: boolean; summary: string }
     >(roleName);
 
-    const executionResponse = await this.executeRole(executor, {
+      const executionResponse = await this.executeRole(executor, {
       role: roleName,
       objective: `Execute ${task.id}`,
       input: { task, prompt: promptResponse.output },
       acceptanceCriteria: task.acceptanceCriteria,
-    }, this.makeContext(roleName, runId, state, task.id, options.abortSignal));
+      }, this.makeContext(roleName, runId, state, workspace.rootPath, task.id, abortSignal));
 
     await this.stateStore.recordEvent(makeEvent('ROLE_EXECUTED', { taskId: task.id, role: roleName }, { runId }));
 
@@ -171,12 +262,12 @@ export class Orchestrator {
         { approved: boolean; blockingIssues: string[]; nonBlockingSuggestions: string[]; missingTests: string[]; notes: string[] }
       >('reviewer');
 
-      const review = await this.executeRole(reviewer, {
+        const review = await this.executeRole(reviewer, {
         role: 'reviewer',
         objective: `Review ${task.id}`,
         input: { task, result: executionResponse.output },
         acceptanceCriteria: ['Approve or return blocking issues'],
-      }, this.makeContext('reviewer', runId, state, task.id, options.abortSignal));
+        }, this.makeContext('reviewer', runId, state, workspace.rootPath, task.id, abortSignal));
 
       if (!review.output.approved || review.output.blockingIssues.length > 0) {
         await this.stateStore.recordEvent(makeEvent('REVIEW_REJECTED', { taskId: task.id }, { runId }));
@@ -192,12 +283,12 @@ export class Orchestrator {
         { passed: boolean; testPlan: string[]; evidence: string[]; failures: string[]; missingCoverage: string[] }
       >('tester');
 
-      const testing = await this.executeRole(tester, {
+        const testing = await this.executeRole(tester, {
         role: 'tester',
         objective: `Test ${task.id}`,
         input: { task, result: executionResponse.output },
         acceptanceCriteria: ['Return explicit evidence'],
-      }, this.makeContext('tester', runId, state, task.id, options.abortSignal));
+        }, this.makeContext('tester', runId, state, workspace.rootPath, task.id, abortSignal));
 
       if (!testing.output.passed || testing.output.failures.length > 0) {
         await this.stateStore.recordEvent(makeEvent('TEST_FAILED', { taskId: task.id }, { runId }));
@@ -238,40 +329,17 @@ export class Orchestrator {
       result: 'ok',
     });
 
-    return {
-      runId,
-      taskId: task.id,
-      status: 'completed',
-    };
+      return {
+        runId,
+        taskId: task.id,
+        status: 'completed',
+      };
+    } catch (error) {
+      await workspace.rollback().catch(() => {});
+      throw error;
     } finally {
-      await lockHandle.release();
+      await workspace.cleanup().catch(() => {});
     }
-  }
-
-  async runSingleTask(taskId: string): Promise<RunCycleResult> {
-    const state = await this.stateStore.load();
-    assertProjectState(state);
-
-    const task = state.backlog.tasks[taskId];
-    if (!task) {
-      throw this.makeRunSingleTaskError(taskId, 'invalid_task_id', 'Requested task does not exist');
-    }
-
-    if (task.status === 'done' || state.execution.completedTaskIds.includes(taskId)) {
-      throw this.makeRunSingleTaskError(taskId, 'task_done', 'Requested task is already completed');
-    }
-
-    if (task.status === 'blocked' || state.execution.blockedTaskIds.includes(taskId)) {
-      throw this.makeRunSingleTaskError(taskId, 'task_blocked', 'Requested task is blocked');
-    }
-
-    const completed = new Set(state.execution.completedTaskIds);
-    const blocked = new Set(state.execution.blockedTaskIds);
-    if (!isExecutableTask(completed, blocked, task)) {
-      throw this.makeRunSingleTaskError(taskId, 'task_not_executable', 'Requested task is not executable');
-    }
-
-    return this.runCycle({ forcedTaskId: taskId });
   }
 
   private async selectNextTask(state: ProjectState, runId: string): Promise<BacklogTask | null> {
@@ -281,7 +349,7 @@ export class Orchestrator {
       objective: 'Select next executable task',
       input: { state },
       acceptanceCriteria: ['Return a single executable task or null'],
-    }, this.makeContext('task_manager', runId, state));
+    }, this.makeContext('task_manager', runId, state, path.resolve(this.config.tools.allowedWritePaths[0] ?? process.cwd())));
 
     return taskSelection.output;
   }
@@ -398,6 +466,7 @@ export class Orchestrator {
     role: RoleExecutionContext['role'],
     runId: string,
     state: ProjectState,
+    workspaceRoot: string,
     taskId?: string,
     abortSignal?: AbortSignal,
   ): RoleExecutionContext {
@@ -419,7 +488,7 @@ export class Orchestrator {
         permissionScope: role === 'tester' ? 'test_execution' : role === 'coder' || role === 'docs_writer'
           ? 'repo_write'
           : 'read_only',
-        workspaceRoot: path.resolve(this.config.tools.allowedWritePaths[0] ?? process.cwd()),
+        workspaceRoot,
         evidenceSource: taskId ? 'runtime_events' : 'state_snapshot',
       },
       ...(abortSignal ? { abortSignal } : {}),
