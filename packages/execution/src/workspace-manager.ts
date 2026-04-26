@@ -22,6 +22,14 @@ export interface WorkspaceManager {
   allocate: (input: WorkspaceAllocationInput) => Promise<ManagedWorkspace>;
 }
 
+export type WorkspaceManagerMode = 'git-worktree' | 'static';
+
+export interface CreateWorkspaceManagerInput {
+  mode: WorkspaceManagerMode;
+  repoRoot: string;
+  branchTtlHours: number;
+}
+
 export class WorkspaceManagerError extends Error {
   readonly cause?: unknown;
 
@@ -52,16 +60,20 @@ export class StaticWorkspaceManager implements WorkspaceManager {
 
 export class GitWorktreeWorkspaceManager implements WorkspaceManager {
   private readonly repoRoot: string;
+  private readonly branchTtlHours: number;
 
-  constructor(repoRoot: string) {
+  constructor(repoRoot: string, branchTtlHours: number) {
     this.repoRoot = path.resolve(repoRoot);
+    this.branchTtlHours = branchTtlHours;
   }
 
   async allocate(input: WorkspaceAllocationInput): Promise<ManagedWorkspace> {
     const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), `ai-orchestrator-${input.runId}-`));
-    const branchName = `orchestrator/run-${input.runId}`;
+    const timestamp = Date.now();
+    const branchName = `orchestrator/run-${timestamp}-${input.runId}`;
 
     try {
+      await this.cleanupStaleWorktreesAndBranches();
       const baseBranch = await this.currentBranch();
       await this.git(['worktree', 'add', '--detach', workspaceRoot, baseBranch], this.repoRoot);
       await this.git(['checkout', '-b', branchName], workspaceRoot);
@@ -110,6 +122,46 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
   private async git(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
     return await execFileAsync('git', args, { cwd });
   }
+
+  private async cleanupStaleWorktreesAndBranches(): Promise<void> {
+    const pruneWindow = `${this.branchTtlHours}.hours.ago`;
+    await this.git(['worktree', 'prune', `--expire=${pruneWindow}`], this.repoRoot).catch(() => {});
+    const ttlSeconds = this.branchTtlHours * 60 * 60;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const refs = await this.git(
+      [
+        'for-each-ref',
+        '--format=%(refname:short)\t%(creatordate:unix)',
+        'refs/heads/orchestrator/run-*',
+      ],
+      this.repoRoot,
+    ).catch(() => ({ stdout: '', stderr: '' }));
+
+    const staleBranches = refs.stdout
+      .trim()
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => {
+        const [name, createdAtRaw] = line.split('\t');
+        return { name, createdAtSeconds: Number.parseInt(createdAtRaw ?? '0', 10) };
+      })
+      .filter(
+        (entry) =>
+          typeof entry.name === 'string' &&
+          entry.name.length > 0 &&
+          Number.isFinite(entry.createdAtSeconds) &&
+          entry.createdAtSeconds > 0 &&
+          nowSeconds - entry.createdAtSeconds >= ttlSeconds,
+      )
+      .map((entry) => entry.name);
+
+    for (const branchName of staleBranches) {
+      if (!branchName) {
+        continue;
+      }
+      await this.git(['branch', '-D', branchName], this.repoRoot).catch(() => {});
+    }
+  }
 }
 
 async function captureWorkspaceDiff(cwd: string): Promise<string> {
@@ -122,6 +174,10 @@ async function captureWorkspaceDiff(cwd: string): Promise<string> {
   return chunks.join('\n\n');
 }
 
-export function createWorkspaceManager(repoRoot: string): WorkspaceManager {
-  return new GitWorktreeWorkspaceManager(repoRoot);
+export function createWorkspaceManager(input: CreateWorkspaceManagerInput): WorkspaceManager {
+  if (input.mode === 'static') {
+    return new StaticWorkspaceManager(input.repoRoot);
+  }
+
+  return new GitWorktreeWorkspaceManager(input.repoRoot, input.branchTtlHours);
 }

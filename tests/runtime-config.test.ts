@@ -28,6 +28,8 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
 
   assert.equal(config.workflow.maxStepsPerRun, 8);
   assert.equal(config.workflow.maxRoleStepsPerTask, undefined);
+  assert.equal(config.workflow.workspaceManagerMode, 'git-worktree');
+  assert.equal(config.workflow.workspaceBranchTtlHours, 24);
   assert.equal(config.tools.allowedWritePaths[0], '/tmp/workspace/src');
   assert.equal(config.tools.allowedWritePaths[1], '/tmp/workspace/tests');
   assert.equal(config.tools.allowedShellCommands.includes('node'), true);
@@ -79,6 +81,19 @@ test('loadRuntimeConfig supports distributed lock configuration', () => {
   assert.equal(config.workflow.workerCount, 3);
   assert.equal(config.workflow.runLockProvider, 'postgresql');
   assert.equal(config.workflow.runLockDsn, 'postgresql://localhost:5432/ai_orchestrator');
+});
+
+test('loadRuntimeConfig supports workspace manager mode and ttl configuration', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      WORKFLOW_WORKSPACE_MANAGER_MODE: 'static',
+      WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS: '12',
+    },
+  });
+
+  assert.equal(config.workflow.workspaceManagerMode, 'static');
+  assert.equal(config.workflow.workspaceBranchTtlHours, 12);
 });
 
 test('loadRuntimeConfig rejects multi-worker mode without shared run lock dsn', () => {
@@ -167,6 +182,19 @@ test('loadRuntimeConfig rejects workflow values outside policy bounds', () => {
         env: {
           MAX_STEPS_PER_RUN: '201',
           TOOL_ALLOWED_WRITE_PATHS: '.',
+        },
+      }),
+    ConfigError,
+  );
+});
+
+test('loadRuntimeConfig rejects workspace branch ttl outside policy bounds', () => {
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        env: {
+          TOOL_ALLOWED_WRITE_PATHS: '.',
+          WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS: '721',
         },
       }),
     ConfigError,

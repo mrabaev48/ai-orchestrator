@@ -11,7 +11,6 @@ import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
 import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.ts';
 import {
   createWorkspaceManager,
-  StaticWorkspaceManager,
   type ManagedWorkspace,
   type WorkspaceManager,
 } from './workspace-manager.ts';
@@ -85,9 +84,11 @@ export class Orchestrator {
     this.lockAuthority = overrides?.lockAuthority ?? createLockAuthority(config);
     this.telemetry = overrides?.telemetry ?? new StateStoreExecutionTelemetry(stateStore, logger);
     this.workspaceManager = overrides?.workspaceManager
-      ?? (config.tools.writeMode === 'workspace-write' || config.tools.writeMode === 'protected-write'
-        ? createWorkspaceManager(config.tools.allowedWritePaths[0] ?? process.cwd())
-        : new StaticWorkspaceManager(config.tools.allowedWritePaths[0] ?? process.cwd()));
+      ?? createWorkspaceManager({
+        mode: config.workflow.workspaceManagerMode ?? 'git-worktree',
+        repoRoot: config.tools.allowedWritePaths[0] ?? process.cwd(),
+        branchTtlHours: config.workflow.workspaceBranchTtlHours ?? 24,
+      });
   }
 
   async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {

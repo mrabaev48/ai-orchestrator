@@ -11,6 +11,7 @@ const logFormatSchema = z.enum(['json']);
 const llmProviderSchema = z.enum(['openai', 'anthropic', 'mock']);
 const stateBackendSchema = z.enum(['memory', 'postgresql']);
 const runLockProviderSchema = z.enum(['noop', 'postgresql', 'redis', 'etcd']);
+const workspaceManagerModeSchema = z.enum(['git-worktree', 'static']);
 const safeWriteModeSchema = z.enum([
   'read-only',
   'propose-only',
@@ -43,6 +44,8 @@ const runtimeConfigSchema = z.strictObject({
     workerCount: z.number().int().positive().optional(),
     runLockProvider: runLockProviderSchema.optional(),
     runLockDsn: z.string().trim().min(1).optional(),
+    workspaceManagerMode: workspaceManagerModeSchema.optional(),
+    workspaceBranchTtlHours: z.number().int().positive().optional(),
   }),
   tools: z.strictObject({
     allowedWritePaths: z.array(z.string().trim().min(1)).min(1),
@@ -78,6 +81,8 @@ const envSchema = z.object({
   WORKFLOW_WORKER_COUNT: z.coerce.number().int().positive().default(1),
   WORKFLOW_RUN_LOCK_PROVIDER: runLockProviderSchema.default('noop'),
   WORKFLOW_RUN_LOCK_DSN: z.string().trim().min(1).optional(),
+  WORKFLOW_WORKSPACE_MANAGER_MODE: workspaceManagerModeSchema.default('git-worktree'),
+  WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS: z.coerce.number().int().positive().default(24),
   TOOL_ALLOWED_WRITE_PATHS: z.string().trim().min(1).default('.'),
   TOOL_ALLOWED_SHELL_COMMANDS: z.string().trim().min(1).default('node,npm,pnpm,git,rg,tsx,tsc'),
   TOOL_WRITE_MODE: safeWriteModeSchema.default('workspace-write'),
@@ -100,6 +105,7 @@ const WORKFLOW_POLICY_LIMITS = {
   maxStepsPerRun: 200,
   maxRoleStepsPerTask: 200,
   maxRetriesPerTask: 10,
+  workspaceBranchTtlHours: 24 * 30,
 } as const;
 
 export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): RuntimeConfig {
@@ -144,6 +150,8 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       workerCount: env.data.WORKFLOW_WORKER_COUNT,
       runLockProvider: env.data.WORKFLOW_RUN_LOCK_PROVIDER,
       ...(env.data.WORKFLOW_RUN_LOCK_DSN ? { runLockDsn: env.data.WORKFLOW_RUN_LOCK_DSN } : {}),
+      workspaceManagerMode: env.data.WORKFLOW_WORKSPACE_MANAGER_MODE,
+      workspaceBranchTtlHours: env.data.WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS,
       ...fileConfig.workflow,
     },
     tools: {
@@ -311,6 +319,13 @@ function validateRuntimePolicy(config: RuntimeConfig): void {
   if (runLockProvider === 'noop' && workerCount > 1) {
     policyIssues.push(
       'workflow.runLockProvider=noop is only allowed for single-worker mode',
+    );
+  }
+
+  const workspaceBranchTtlHours = config.workflow.workspaceBranchTtlHours ?? 24;
+  if (workspaceBranchTtlHours > WORKFLOW_POLICY_LIMITS.workspaceBranchTtlHours) {
+    policyIssues.push(
+      `workflow.workspaceBranchTtlHours must be <= ${WORKFLOW_POLICY_LIMITS.workspaceBranchTtlHours} (received ${workspaceBranchTtlHours})`,
     );
   }
 

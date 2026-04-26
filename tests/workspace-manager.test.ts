@@ -34,7 +34,7 @@ test('GitWorktreeWorkspaceManager allocates isolated workspace and cleanup remov
   await execFileAsync('git', ['add', '.'], { cwd: repoRoot });
   await execFileAsync('git', ['commit', '-m', 'init'], { cwd: repoRoot });
 
-  const manager = new GitWorktreeWorkspaceManager(repoRoot);
+  const manager = new GitWorktreeWorkspaceManager(repoRoot, 24);
   const workspace = await manager.allocate({ runId: 'run-42' });
 
   const markerPath = path.join(workspace.rootPath, 'marker.txt');
@@ -44,5 +44,33 @@ test('GitWorktreeWorkspaceManager allocates isolated workspace and cleanup remov
   await assert.rejects(async () => readFile(markerPath, 'utf8'));
 
   await workspace.cleanup();
+  await rm(repoRoot, { recursive: true, force: true });
+});
+
+test('GitWorktreeWorkspaceManager prunes stale orchestrator branches using ttl', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'workspace-manager-ttl-repo-'));
+  await execFileAsync('git', ['init', '--initial-branch=main'], { cwd: repoRoot });
+  await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: repoRoot });
+  await execFileAsync('git', ['config', 'user.name', 'Test'], { cwd: repoRoot });
+  await writeFile(path.join(repoRoot, 'README.md'), '# repo\n', 'utf8');
+  await execFileAsync('git', ['add', '.'], { cwd: repoRoot });
+  await execFileAsync('git', ['commit', '-m', 'init'], { cwd: repoRoot });
+  await execFileAsync('git', ['checkout', '-b', 'orchestrator/run-stale'], { cwd: repoRoot });
+  await execFileAsync('git', ['commit', '--allow-empty', '-m', 'stale'], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: '2000-01-01T00:00:00Z',
+      GIT_COMMITTER_DATE: '2000-01-01T00:00:00Z',
+    },
+  });
+  await execFileAsync('git', ['checkout', 'main'], { cwd: repoRoot });
+
+  const manager = new GitWorktreeWorkspaceManager(repoRoot, 1);
+  const workspace = await manager.allocate({ runId: 'run-ttl' });
+
+  await workspace.cleanup();
+  const branches = await execFileAsync('git', ['branch', '--list', 'orchestrator/run-stale'], { cwd: repoRoot });
+  assert.equal(branches.stdout.trim(), '');
   await rm(repoRoot, { recursive: true, force: true });
 });
