@@ -7,7 +7,7 @@ import {
   NoopLockAuthority,
   RedisLockAuthority,
 } from '../packages/execution/src/index.ts';
-import { WorkflowPolicyError } from '../packages/shared/src/index.ts';
+import { ConfigError, WorkflowPolicyError } from '../packages/shared/src/index.ts';
 import type { RuntimeConfig } from '../packages/shared/src/index.ts';
 
 function makeRuntimeConfig(): RuntimeConfig {
@@ -48,6 +48,20 @@ function makeRuntimeConfig(): RuntimeConfig {
 test('createLockAuthority defaults to NoopLockAuthority in single-worker mode', () => {
   const authority = createLockAuthority(makeRuntimeConfig());
   assert.equal(authority instanceof NoopLockAuthority, true);
+});
+
+test('createLockAuthority fails with actionable error when distributed lock dsn is missing', () => {
+  const config = makeRuntimeConfig();
+  config.workflow.runLockProvider = 'redis';
+  delete config.workflow.runLockDsn;
+
+  assert.throws(
+    () => createLockAuthority(config),
+    (error: unknown) =>
+      error instanceof ConfigError &&
+      error.message.includes('WORKFLOW_RUN_LOCK_DSN') &&
+      error.message.includes('shared provider DSN'),
+  );
 });
 
 test('RedisLockAuthority acquires and releases lock with ownership token', async () => {

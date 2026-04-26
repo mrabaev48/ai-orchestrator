@@ -55,7 +55,7 @@ export function createLockAuthority(config: RuntimeConfig): LockAuthority {
   const dsn = config.workflow.runLockDsn;
   if (!dsn) {
     throw new ConfigError(
-      `workflow.runLockDsn is required when runLockProvider=${runLockProvider}`,
+      `workflow.runLockDsn is required when workflow.runLockProvider=${runLockProvider}; set WORKFLOW_RUN_LOCK_DSN to a shared provider DSN`,
     );
   }
 
@@ -72,6 +72,12 @@ export function createLockAuthority(config: RuntimeConfig): LockAuthority {
 }
 
 export class NoopLockAuthority implements LockAuthority {
+  /**
+   * Single-process fallback only.
+   *
+   * This authority never coordinates across workers and must not be used for
+   * multi-worker execution.
+   */
   async acquireRunLock(): Promise<RunLockHandle> {
     return {
       release: async () => {},
@@ -234,7 +240,10 @@ async function loadPostgresPool(connectionString: string): Promise<PgPoolLike> {
   try {
     module = (await import('pg')) as PgModule;
   } catch (error) {
-    throw new ConfigError('PostgreSQL run lock provider requires `pg` package', { cause: error });
+    throw new ConfigError(
+      'PostgreSQL run lock provider requires `pg` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
+      { cause: error },
+    );
   }
 
   return new module.Pool({ connectionString });
@@ -249,7 +258,10 @@ async function loadRedisClient(dsn: string): Promise<RedisLike> {
   try {
     module = (await import('redis')) as RedisModule;
   } catch (error) {
-    throw new ConfigError('Redis run lock provider requires `redis` package', { cause: error });
+    throw new ConfigError(
+      'Redis run lock provider requires `redis` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
+      { cause: error },
+    );
   }
 
   const client = module.createClient({ url: dsn });
@@ -266,7 +278,10 @@ async function loadEtcdClient(dsn: string): Promise<EtcdClientLike> {
   try {
     module = (await import('etcd3')) as EtcdModule;
   } catch (error) {
-    throw new ConfigError('Etcd run lock provider requires `etcd3` package', { cause: error });
+    throw new ConfigError(
+      'Etcd run lock provider requires `etcd3` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
+      { cause: error },
+    );
   }
 
   return new module.Etcd3({ hosts: dsn });
