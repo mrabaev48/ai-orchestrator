@@ -138,6 +138,14 @@ test('runCycle happy path completes task and records summary artifact', async ()
     ),
     true,
   );
+  const commitArtifact = state.artifacts.find(
+    (artifact) => artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'commit',
+  );
+  const prArtifact = state.artifacts.find(
+    (artifact) => artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'pr_draft',
+  );
+  assert.equal(commitArtifact?.metadata.commitStatus, 'skipped_no_changes');
+  assert.equal(prArtifact?.metadata.prStatus, 'skipped_push_not_successful');
   assert.equal(state.repoHealth.build, 'passing');
   assert.equal(state.repoHealth.lint, 'passing');
   assert.equal(state.repoHealth.typecheck, 'passing');

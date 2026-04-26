@@ -863,36 +863,58 @@ export class Orchestrator {
     state: ProjectState,
     input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
   ): Promise<void> {
+    const branchName = input.branchName ?? (await this.currentGitBranch(input.workspaceRoot)) ?? 'unknown';
     const hasChanges = await this.workspaceHasGitChanges(input.workspaceRoot);
     const commitMessage = `feat(${input.taskId}): ${input.taskTitle} [run:${input.runId}]`;
+    let commitStatus = hasChanges ? 'pending' : 'skipped_no_changes';
+    let pushStatus = hasChanges ? 'pending' : 'skipped_no_changes';
+    let commitSha = 'none';
+
+    if (hasChanges) {
+      const committed = await this.createCommit(input.workspaceRoot, commitMessage);
+      commitStatus = committed.ok ? 'created' : 'failed';
+      if (committed.ok) {
+        commitSha = committed.commitSha;
+        const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
+        pushStatus = isPushed ? 'pushed' : 'failed';
+      } else {
+        pushStatus = 'skipped_commit_failed';
+      }
+    }
+
     const commitArtifact = makeArtifact('git_lifecycle', `Git commit metadata for ${input.taskId}`, {
       runId: input.runId,
       taskId: input.taskId,
       stage: 'commit',
-      branchName: input.branchName ?? 'unknown',
-      commitStatus: hasChanges ? 'proposed' : 'skipped_no_changes',
+      branchName,
+      commitStatus,
+      pushStatus,
+      commitSha: truncateText(commitSha, 120),
       commitMessage: truncateText(commitMessage, 250),
     });
     await this.stateStore.recordArtifact(commitArtifact);
     state.artifacts.push(commitArtifact);
 
     const prTitle = `[${input.taskId}] ${input.taskTitle}`;
+    const prBody = [
+      `Task: ${input.taskId}`,
+      `Run: ${input.runId}`,
+      `Branch: ${branchName}`,
+      `Commit: ${commitSha}`,
+      '',
+      'Automated draft PR from ai-orchestrator.',
+    ].join('\n');
+    const prStatus = pushStatus === 'pushed'
+      ? (await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody) ? 'created' : 'failed')
+      : 'skipped_push_not_successful';
     const prArtifact = makeArtifact('git_lifecycle', `PR draft metadata for ${input.taskId}`, {
       runId: input.runId,
       taskId: input.taskId,
       stage: 'pr_draft',
-      branchName: input.branchName ?? 'unknown',
-      prStatus: 'draft',
+      branchName,
+      prStatus,
       prTitle: truncateText(prTitle, 250),
-      prBody: truncateText(
-        [
-          `Task: ${input.taskId}`,
-          `Run: ${input.runId}`,
-          `Branch: ${input.branchName ?? 'unknown'}`,
-          `Commit: ${hasChanges ? commitMessage : 'no changes to commit'}`,
-        ].join('\n'),
-        250,
-      ),
+      prBody: truncateText(prBody, 250),
     });
     await this.stateStore.recordArtifact(prArtifact);
     state.artifacts.push(prArtifact);
@@ -904,6 +926,57 @@ export class Orchestrator {
         cwd: workspaceRoot,
       });
       return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private async currentGitBranch(workspaceRoot: string): Promise<string | null> {
+    try {
+      const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { cwd: workspaceRoot });
+      const branch = stdout.trim();
+      return branch.length > 0 ? branch : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async createCommit(
+    workspaceRoot: string,
+    commitMessage: string,
+  ): Promise<{ ok: true; commitSha: string } | { ok: false }> {
+    try {
+      await execFileAsync('git', ['add', '-A'], { cwd: workspaceRoot });
+      await execFileAsync('git', ['commit', '-m', commitMessage], { cwd: workspaceRoot });
+      const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: workspaceRoot });
+      return { ok: true, commitSha: stdout.trim() };
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  private async pushBranch(workspaceRoot: string, branchName: string): Promise<boolean> {
+    try {
+      await execFileAsync('git', ['push', '--set-upstream', 'origin', branchName], { cwd: workspaceRoot });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async createPullRequestDraft(
+    workspaceRoot: string,
+    branchName: string,
+    title: string,
+    body: string,
+  ): Promise<boolean> {
+    try {
+      await execFileAsync(
+        'gh',
+        ['pr', 'create', '--draft', '--head', branchName, '--title', title, '--body', body],
+        { cwd: workspaceRoot },
+      );
+      return true;
     } catch {
       return false;
     }
