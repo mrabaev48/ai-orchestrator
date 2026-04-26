@@ -17,11 +17,12 @@ import type { ReviewResult } from '../../core/src/review.ts';
 import type {
   AgentRole,
   AgentRoleName,
+  RoleObservation,
   RoleExecutionContext,
   RoleRequest,
   RoleResponse,
 } from '../../core/src/roles.ts';
-import type { TestExecutionResult } from '../../core/src/testing.ts';
+import type { QualityStageResult, TestExecutionResult } from '../../core/src/testing.ts';
 import type { ProjectState } from '../../core/src/project-state.ts';
 import type { OptimizedPrompt } from '../../prompts/src/index.ts';
 import { PromptPipeline } from '../../prompts/src/index.ts';
@@ -521,18 +522,153 @@ export class TesterRole implements AgentRole<{ task: BacklogTask; result: CodeEx
 
   execute = async (
     request: RoleRequest<{ task: BacklogTask; result: CodeExecutionOutput }>,
+    context: RoleExecutionContext,
   ): Promise<RoleResponse<TestExecutionResult>> => {
-    const isFailed = request.input.task.acceptanceCriteria.some((criterion) =>
-      criterion.toLowerCase().includes('[fail-test]'),
+    const synthetic = buildSyntheticQualityStages(request.input.task);
+    if (context.toolExecution.qualityGateMode === 'synthetic' || synthetic != null) {
+      return makeResponse(this.name, `Tested ${request.input.task.id}`, buildTestResult(request.input.task, synthetic ?? PASSING_STAGES));
+    }
+
+    return makeResponse(
+      this.name,
+      `Tested ${request.input.task.id} without tool observations`,
+      buildTestResult(request.input.task, FAILING_STAGES_WITHOUT_EXECUTION),
+    );
+  };
+
+  executeStep = async (
+    request: RoleRequest<{ task: BacklogTask; result: CodeExecutionOutput }>,
+    context: RoleExecutionContext,
+    observations: readonly RoleObservation[],
+  ) => {
+    const synthetic = buildSyntheticQualityStages(request.input.task);
+    if (context.toolExecution.qualityGateMode === 'synthetic' || synthetic != null) {
+      return {
+        type: 'final_output',
+        response: makeResponse(this.name, `Tested ${request.input.task.id}`, buildTestResult(request.input.task, synthetic ?? PASSING_STAGES)),
+      } as const;
+    }
+
+    if (observations.length < QUALITY_GATE_STAGES.length) {
+      const stage = QUALITY_GATE_STAGES[observations.length];
+      return {
+        type: 'tool_request',
+        request: {
+          toolName: 'testing_run',
+          rationale: `Execute ${stage} quality stage`,
+          input: {
+            command: 'npm',
+            args: ['run', stage],
+            timeoutMs: QUALITY_STAGE_TIMEOUT_MS,
+          },
+        },
+      } as const;
+    }
+
+    const qualityStages = QUALITY_GATE_STAGES.map((stage, index) =>
+      stageResultFromObservation(stage, observations[index]),
     );
 
-    return makeResponse(this.name, `Tested ${request.input.task.id}`, {
-      passed: !isFailed,
-      testPlan: [`Validate ${request.input.task.title}`],
-      evidence: isFailed ? [] : ['Synthetic runtime test passed'],
-      failures: isFailed ? ['Forced tester failure'] : [],
-      missingCoverage: [],
-    });
+    return {
+      type: 'final_output',
+      response: makeResponse(this.name, `Tested ${request.input.task.id}`, buildTestResult(request.input.task, qualityStages)),
+    } as const;
+  };
+}
+
+const QUALITY_GATE_STAGES = ['build', 'lint', 'typecheck', 'test'] as const;
+const QUALITY_STAGE_TIMEOUT_MS = 10 * 60_000;
+const PASSING_STAGES: QualityStageResult[] = QUALITY_GATE_STAGES.map((stage) => ({
+  stage,
+  status: 'passing',
+  diagnostics: [],
+}));
+const FAILING_STAGES_WITHOUT_EXECUTION: QualityStageResult[] = QUALITY_GATE_STAGES.map((stage) => ({
+  stage,
+  status: 'failing',
+  diagnostics: ['quality stage execution was skipped because no observations were provided'],
+}));
+
+function buildSyntheticQualityStages(task: BacklogTask): QualityStageResult[] | null {
+  const criteria = task.acceptanceCriteria.map((entry) => entry.toLowerCase());
+  const failMarkers: { stage: (typeof QUALITY_GATE_STAGES)[number]; marker: string }[] = [
+    { stage: 'build', marker: '[fail-build]' },
+    { stage: 'lint', marker: '[fail-lint]' },
+    { stage: 'typecheck', marker: '[fail-typecheck]' },
+    { stage: 'test', marker: '[fail-test]' },
+  ];
+
+  const hasSyntheticMarkers = failMarkers.some(({ marker }) => criteria.some((criterion) => criterion.includes(marker)));
+  if (!hasSyntheticMarkers) {
+    return null;
+  }
+
+  return failMarkers.map(({ stage, marker }) => {
+    const isFailedStage = criteria.some((criterion) => criterion.includes(marker));
+    return {
+      stage,
+      status: isFailedStage ? 'failing' : 'passing',
+      diagnostics: isFailedStage ? [`${stage} stage failed due to task acceptance marker ${marker}`] : [],
+    } as const;
+  });
+}
+
+function stageResultFromObservation(
+  stage: (typeof QUALITY_GATE_STAGES)[number],
+  observation: RoleObservation | undefined,
+): { stage: (typeof QUALITY_GATE_STAGES)[number]; status: 'passing' | 'failing'; diagnostics: string[] } {
+  if (!observation) {
+    return {
+      stage,
+      status: 'failing',
+      diagnostics: ['quality stage observation missing'],
+    };
+  }
+
+  if (!observation.ok) {
+    return {
+      stage,
+      status: 'failing',
+      diagnostics: [observation.error ?? 'unknown tool error'],
+    };
+  }
+
+  const output = observation.output as { ok?: boolean; stderr?: string; stdout?: string; exitCode?: number };
+  if (!output.ok) {
+    return {
+      stage,
+        status: 'failing',
+        diagnostics: [
+          output.stderr?.trim() ?? `quality stage exited with code ${String(output.exitCode ?? 'unknown')}`,
+        ],
+      };
+  }
+
+  return {
+    stage,
+    status: 'passing',
+    diagnostics: [],
+  };
+}
+
+function buildTestResult(
+  task: BacklogTask,
+  qualityStages: QualityStageResult[] | undefined,
+): TestExecutionResult {
+  const failedStages = (qualityStages ?? []).filter((stage) => stage.status === 'failing');
+  const isFailed = failedStages.length > 0;
+  return {
+    passed: !isFailed,
+    testPlan: [
+      'Run build stage',
+      'Run lint stage',
+      'Run typecheck stage',
+      `Validate ${task.title}`,
+    ],
+    evidence: isFailed ? [] : (qualityStages ?? []).map((stage) => `Quality stage ${stage.stage} passed`),
+    failures: failedStages.map((stage) => `${stage.stage} stage failed`),
+    missingCoverage: [],
+    ...(qualityStages ? { qualityStages } : {}),
   };
 }
 

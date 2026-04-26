@@ -12,6 +12,7 @@ const llmProviderSchema = z.enum(['openai', 'anthropic', 'mock']);
 const stateBackendSchema = z.enum(['memory', 'postgresql']);
 const runLockProviderSchema = z.enum(['noop', 'postgresql', 'redis', 'etcd']);
 const workspaceManagerModeSchema = z.enum(['git-worktree', 'static']);
+const qualityGateModeSchema = z.enum(['tooling', 'synthetic']);
 const safeWriteModeSchema = z.enum([
   'read-only',
   'propose-only',
@@ -46,6 +47,7 @@ const runtimeConfigSchema = z.strictObject({
     runLockDsn: z.string().trim().min(1).optional(),
     workspaceManagerMode: workspaceManagerModeSchema.optional(),
     workspaceBranchTtlHours: z.number().int().positive().optional(),
+    qualityGateMode: qualityGateModeSchema.optional(),
   }),
   tools: z.strictObject({
     allowedWritePaths: z.array(z.string().trim().min(1)).min(1),
@@ -83,6 +85,7 @@ const envSchema = z.object({
   WORKFLOW_RUN_LOCK_DSN: z.string().trim().min(1).optional(),
   WORKFLOW_WORKSPACE_MANAGER_MODE: workspaceManagerModeSchema.default('git-worktree'),
   WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS: z.coerce.number().int().positive().default(24),
+  WORKFLOW_QUALITY_GATE_MODE: qualityGateModeSchema.default('tooling'),
   TOOL_ALLOWED_WRITE_PATHS: z.string().trim().min(1).default('.'),
   TOOL_ALLOWED_SHELL_COMMANDS: z.string().trim().min(1).default('node,npm,pnpm,git,rg,tsx,tsc'),
   TOOL_WRITE_MODE: safeWriteModeSchema.default('workspace-write'),
@@ -152,6 +155,7 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       ...(env.data.WORKFLOW_RUN_LOCK_DSN ? { runLockDsn: env.data.WORKFLOW_RUN_LOCK_DSN } : {}),
       workspaceManagerMode: env.data.WORKFLOW_WORKSPACE_MANAGER_MODE,
       workspaceBranchTtlHours: env.data.WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS,
+      qualityGateMode: env.data.WORKFLOW_QUALITY_GATE_MODE,
       ...fileConfig.workflow,
     },
     tools: {

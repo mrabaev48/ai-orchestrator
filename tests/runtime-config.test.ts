@@ -30,6 +30,7 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   assert.equal(config.workflow.maxRoleStepsPerTask, undefined);
   assert.equal(config.workflow.workspaceManagerMode, 'git-worktree');
   assert.equal(config.workflow.workspaceBranchTtlHours, 24);
+  assert.equal(config.workflow.qualityGateMode, 'tooling');
   assert.equal(config.tools.allowedWritePaths[0], '/tmp/workspace/src');
   assert.equal(config.tools.allowedWritePaths[1], '/tmp/workspace/tests');
   assert.equal(config.tools.allowedShellCommands.includes('node'), true);
@@ -94,6 +95,17 @@ test('loadRuntimeConfig supports workspace manager mode and ttl configuration', 
 
   assert.equal(config.workflow.workspaceManagerMode, 'static');
   assert.equal(config.workflow.workspaceBranchTtlHours, 12);
+});
+
+test('loadRuntimeConfig supports quality gate mode configuration', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      WORKFLOW_QUALITY_GATE_MODE: 'synthetic',
+    },
+  });
+
+  assert.equal(config.workflow.qualityGateMode, 'synthetic');
 });
 
 test('loadRuntimeConfig rejects multi-worker mode without shared run lock dsn', () => {

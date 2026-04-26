@@ -32,6 +32,7 @@ import type {
   RoleStepResult,
   ToolCallRequest,
 } from '../../core/src/roles.ts';
+import type { QualityStageResult } from '../../core/src/testing.ts';
 
 export interface RunCycleResult {
   runId: string;
@@ -281,7 +282,14 @@ export class Orchestrator {
     if (requiresTesting(task)) {
       const tester = this.roleRegistry.get<
         { task: BacklogTask; result: typeof executionResponse.output },
-        { passed: boolean; testPlan: string[]; evidence: string[]; failures: string[]; missingCoverage: string[] }
+        {
+          passed: boolean;
+          testPlan: string[];
+          evidence: string[];
+          failures: string[];
+          missingCoverage: string[];
+          qualityStages?: QualityStageResult[];
+        }
       >('tester');
 
         const testing = await this.executeRole(tester, {
@@ -292,10 +300,14 @@ export class Orchestrator {
         }, this.makeContext('tester', runId, state, workspace.rootPath, task.id, abortSignal));
 
       if (!testing.output.passed || testing.output.failures.length > 0) {
+        this.applyRepoHealthFromTestingResult(state, testing.output.qualityStages, false);
+        await this.persistQualityStageArtifacts(state, runId, task.id, testing.output.qualityStages);
         await this.stateStore.recordEvent(makeEvent('TEST_FAILED', { taskId: task.id }, { runId }));
         return await this.handleFailure(state, task, 'tester', 'test_failed', runId);
       }
 
+      this.applyRepoHealthFromTestingResult(state, testing.output.qualityStages, true);
+      await this.persistQualityStageArtifacts(state, runId, task.id, testing.output.qualityStages);
       await this.stateStore.recordEvent(makeEvent('TEST_PASSED', { taskId: task.id }, { runId }));
     }
 
@@ -340,6 +352,48 @@ export class Orchestrator {
       throw error;
     } finally {
       await workspace.cleanup().catch(() => {});
+    }
+  }
+
+  private applyRepoHealthFromTestingResult(
+    state: ProjectState,
+    qualityStages: readonly QualityStageResult[] | undefined,
+    testsPassed: boolean,
+  ): void {
+    state.repoHealth.tests = testsPassed ? 'passing' : 'failing';
+    if (!qualityStages) {
+      return;
+    }
+
+    for (const stage of qualityStages) {
+      if (stage.stage === 'test') {
+        continue;
+      }
+      state.repoHealth[stage.stage] = stage.status;
+    }
+  }
+
+  private async persistQualityStageArtifacts(
+    state: ProjectState,
+    runId: string,
+    taskId: string,
+    qualityStages: readonly QualityStageResult[] | undefined,
+  ): Promise<void> {
+    if (!qualityStages || qualityStages.length === 0) {
+      return;
+    }
+
+    for (const stage of qualityStages) {
+      const diagnostics = stage.diagnostics.length > 0 ? stage.diagnostics.join(' | ') : 'none';
+      const artifact = makeArtifact('report', `Quality stage ${stage.stage} for ${taskId}`, {
+        runId,
+        taskId,
+        stage: stage.stage,
+        status: stage.status,
+        diagnostics: truncateText(diagnostics, 250),
+      });
+      await this.stateStore.recordArtifact(artifact);
+      state.artifacts.push(artifact);
     }
   }
 
@@ -491,6 +545,7 @@ export class Orchestrator {
           : 'read_only',
         workspaceRoot,
         evidenceSource: taskId ? 'runtime_events' : 'state_snapshot',
+        qualityGateMode: this.config.workflow.qualityGateMode ?? 'tooling',
       },
       ...(abortSignal ? { abortSignal } : {}),
       logger: this.logger.withContext({
