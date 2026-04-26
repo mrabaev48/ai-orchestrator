@@ -41,6 +41,7 @@ export interface ToolExecutionContext {
   permissionScope: ToolPermissionScope;
   workspaceRoot: string;
   evidenceSource: EvidenceSource;
+  qualityGateMode?: 'tooling' | 'synthetic';
 }
 
 export interface RoleExecutionContext {

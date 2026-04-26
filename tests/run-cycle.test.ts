@@ -44,6 +44,7 @@ function makeRuntimeConfig(): RuntimeConfig {
     workflow: {
       maxStepsPerRun: 5,
       maxRetriesPerTask: 2,
+      qualityGateMode: 'synthetic',
     },
     tools: {
       allowedWritePaths: [process.cwd()],
@@ -116,6 +117,38 @@ test('runCycle happy path completes task and records summary artifact', async ()
   assert.equal(state.backlog.tasks['task-1']?.status, 'done');
   assert.equal(state.execution.completedTaskIds.includes('task-1'), true);
   assert.equal(state.artifacts.some((artifact) => artifact.type === 'run_summary'), true);
+  assert.equal(state.repoHealth.build, 'passing');
+  assert.equal(state.repoHealth.lint, 'passing');
+  assert.equal(state.repoHealth.typecheck, 'passing');
+  assert.equal(state.repoHealth.tests, 'passing');
+  assert.equal(
+    state.artifacts.some((artifact) => artifact.title.includes('Quality stage build for task-1')),
+    true,
+  );
+});
+
+test('runCycle persists failing quality stage diagnostics and updates repo health', async () => {
+  const store = new InMemoryStateStore(makeState(['[fail-lint]']));
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+
+  const result = await orchestrator.runCycle();
+  const state = await store.load();
+  const lintArtifact = state.artifacts.find((artifact) =>
+    artifact.title.includes('Quality stage lint for task-1')
+  );
+
+  assert.equal(result.status, 'idle');
+  assert.equal(result.stopReason, 'test_failed');
+  assert.equal(state.repoHealth.tests, 'failing');
+  assert.equal(state.repoHealth.lint, 'failing');
+  assert.equal(state.repoHealth.build, 'passing');
+  assert.equal(state.repoHealth.typecheck, 'passing');
+  assert.equal(lintArtifact?.metadata.status, 'failing');
+  assert.equal(
+    (lintArtifact?.metadata.diagnostics ?? '').includes('acceptance marker [fail-lint]'),
+    true,
+  );
 });
 
 test('runCycle blocks task after repeated review failures', async () => {
@@ -442,6 +475,7 @@ test('runCycle provides tool execution context with policy, permission scope, wo
       assert.equal(context.toolExecution.policy, 'quality_gate');
       assert.equal(context.toolExecution.permissionScope, 'test_execution');
       assert.equal(context.toolExecution.evidenceSource, 'runtime_events');
+      assert.equal(context.toolExecution.qualityGateMode, 'synthetic');
 
       return {
         role: 'tester',

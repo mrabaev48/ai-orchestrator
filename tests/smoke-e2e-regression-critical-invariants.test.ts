@@ -35,6 +35,7 @@ function makeRuntimeConfig(): RuntimeConfig {
     workflow: {
       maxStepsPerRun: 5,
       maxRetriesPerTask: 2,
+      qualityGateMode: 'synthetic',
     },
     tools: {
       allowedWritePaths: [process.cwd()],
