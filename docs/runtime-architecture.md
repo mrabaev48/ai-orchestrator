@@ -52,3 +52,11 @@ This split keeps composition, orchestration, persistence, and presentation conce
 - NestJS API work can reuse application services and read models
 - persistence backends can grow independently from command handling
 - runtime behavior remains testable without shell-level integration for every change
+
+## Run lock operations
+
+- `NoopLockAuthority` is a **single-node fallback only**. It does not coordinate lock ownership between workers.
+- Multi-worker execution requires a shared lock backend configured with:
+  - `WORKFLOW_RUN_LOCK_PROVIDER` (`postgresql`, `redis`, or `etcd`)
+  - one shared `WORKFLOW_RUN_LOCK_DSN` used by **all workers**
+- If the global run lock cannot be acquired, the orchestrator returns an idle cycle with `stopReason=run_lock_unavailable` and emits a deterministic runtime log event (`cycle_idle_lock_unavailable`) for operators.

@@ -14,6 +14,7 @@ import { Orchestrator } from '../packages/execution/src/index.ts';
 import { SchemaValidationError, WorkflowPolicyError } from '../packages/shared/src/errors/index.ts';
 import { InMemoryStateStore } from '../packages/state/src/index.ts';
 import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
+import type { LockAuthority } from '../packages/execution/src/lock-authority.ts';
 import type {
   AgentRole,
   RoleExecutionContext,
@@ -234,6 +235,34 @@ test('runCycle returns idle for non-executable forced task', async () => {
   assert.equal(result.status, 'idle');
   assert.equal(result.stopReason, 'forced_task_not_executable');
   assert.equal(loaded.backlog.tasks['blocked-task']?.status, 'todo');
+});
+
+test('runCycle returns deterministic idle reason when global run lock is unavailable', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const records: Record<string, unknown>[] = [];
+  const config = makeRuntimeConfig();
+  config.logging.level = 'info';
+  const logger = createLogger(config, {
+    sink: (record) => {
+      records.push(JSON.parse(record) as Record<string, unknown>);
+    },
+  });
+  const lockAuthority: LockAuthority = {
+    acquireRunLock: async () => null,
+  };
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
+    lockAuthority,
+  });
+
+  const result = await orchestrator.runCycle();
+  const idleRecord = records.find((record) => record.event === 'cycle_idle_lock_unavailable');
+
+  assert.equal(result.status, 'idle');
+  assert.equal(result.stopReason, 'run_lock_unavailable');
+  assert.equal(typeof result.runId, 'string');
+  assert.notEqual(idleRecord, undefined);
+  assert.equal(idleRecord?.message, 'Run cycle skipped because global run lock is unavailable');
+  assert.deepEqual(idleRecord?.data, { resource: 'global-run-cycle' });
 });
 
 test('runSingleTask executes only requested executable task', async () => {

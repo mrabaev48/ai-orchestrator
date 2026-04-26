@@ -80,8 +80,16 @@ export class Orchestrator {
   async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {
     const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle');
     if (!lockHandle) {
+      const runId = crypto.randomUUID();
+      this.logger.info('Run cycle skipped because global run lock is unavailable', {
+        event: 'cycle_idle_lock_unavailable',
+        runId,
+        data: {
+          resource: 'global-run-cycle',
+        },
+      });
       return {
-        runId: crypto.randomUUID(),
+        runId,
         status: 'idle',
         stopReason: 'run_lock_unavailable',
       };
