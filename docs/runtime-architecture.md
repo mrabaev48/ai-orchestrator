@@ -61,3 +61,11 @@ This split keeps composition, orchestration, persistence, and presentation conce
   - one shared `WORKFLOW_RUN_LOCK_DSN` used by **all workers**
 - If the global run lock cannot be acquired, the orchestrator returns an idle cycle with `stopReason=run_lock_unavailable` and emits a deterministic runtime log event (`cycle_idle_lock_unavailable`) for operators.
 - The runtime also emits a contention counter metric (`run_lock_contention_total`) as centralized `METRIC_RECORDED` domain events in the shared state store, enabling cross-worker aggregation in multi-worker deployments.
+
+## Workspace manager operations
+
+- Workspace isolation mode is configured through `WORKFLOW_WORKSPACE_MANAGER_MODE`:
+  - `git-worktree` (default): allocate per-run isolated git worktree workspace.
+  - `static`: run directly in the configured write scope without allocating a git worktree.
+- Stale orchestrator branches are pruned using `WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS` (default `24`, max `720`).
+- In `git-worktree` mode, each run captures initial workspace diff, attempts rollback on execution failure, and performs cleanup in finally.
