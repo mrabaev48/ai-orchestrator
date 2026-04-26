@@ -19,7 +19,8 @@ export type DomainEventType =
   | 'TEST_FAILED'
   | 'TASK_COMPLETED'
   | 'TASK_BLOCKED'
-  | 'STATE_COMMITTED';
+  | 'STATE_COMMITTED'
+  | 'METRIC_RECORDED';
 
 export interface DomainEvent<TPayload = Record<string, unknown>> {
   id: string;

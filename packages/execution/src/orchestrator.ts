@@ -8,6 +8,7 @@ import type { StateStore } from '../../state/src/index.ts';
 import type { ToolSet } from '../../tools/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
 import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
+import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.ts';
 import {
   nextFailureAction,
   requiresReview,
@@ -52,13 +53,13 @@ export class Orchestrator {
   private readonly config: RuntimeConfig;
   private readonly logger: Logger;
   private readonly lockAuthority: LockAuthority;
-
+  private readonly telemetry: ExecutionTelemetry;
   constructor(
     stateStore: StateStore,
     roleRegistry: RoleRegistry,
     config: RuntimeConfig,
     logger: Logger,
-    overrides?: { lockAuthority?: LockAuthority },
+    overrides?: { lockAuthority?: LockAuthority; telemetry?: ExecutionTelemetry },
   ) {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
@@ -75,25 +76,24 @@ export class Orchestrator {
     };
     this.tools = createLocalToolSet(toolPolicyConfig);
     this.lockAuthority = overrides?.lockAuthority ?? createLockAuthority(config);
+    this.telemetry = overrides?.telemetry ?? new StateStoreExecutionTelemetry(stateStore, logger);
   }
 
   async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {
     const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle');
     if (!lockHandle) {
       const runId = crypto.randomUUID();
-      this.logger.info('Run cycle skipped because global run lock is unavailable', {
+      await this.telemetry.incrementCounter({
+        name: 'run_lock_contention_total',
+        value: 1,
+        runId,
+        tags: { lock_resource: 'global-run-cycle' },
+      });
         event: 'cycle_idle_lock_unavailable',
         runId,
         data: {
           resource: 'global-run-cycle',
-        },
-      });
-      return {
-        runId,
-        status: 'idle',
-        stopReason: 'run_lock_unavailable',
-      };
-    }
+          delta: 1,
 
     try {
     const state = await this.stateStore.load();

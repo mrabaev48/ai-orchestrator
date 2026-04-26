@@ -256,24 +256,31 @@ test('runCycle returns deterministic idle reason when global run lock is unavail
 
   const result = await orchestrator.runCycle();
   const idleRecord = records.find((record) => record.event === 'cycle_idle_lock_unavailable');
-
+  const metricEvent = store.events.find((event) => event.eventType === 'METRIC_RECORDED');
   assert.equal(result.status, 'idle');
   assert.equal(result.stopReason, 'run_lock_unavailable');
   assert.equal(typeof result.runId, 'string');
   assert.notEqual(idleRecord, undefined);
   assert.equal(idleRecord?.message, 'Run cycle skipped because global run lock is unavailable');
-  assert.deepEqual(idleRecord?.data, { resource: 'global-run-cycle' });
-});
-
-test('runSingleTask executes only requested executable task', async () => {
-  const state = makeState();
-  state.backlog.tasks['task-2'] = {
-    id: 'task-2',
-    featureId: 'feature-1',
-    title: 'Second executable task',
-    kind: 'implementation',
-    status: 'todo',
-    priority: 'p1',
+    delta: 1,
+  });
+  assert.notEqual(metricEvent, undefined);
+  assert.deepEqual(metricEvent?.payload, {
+    metricType: 'counter',
+    name: 'run_lock_contention_total',
+    tags: { lock_resource: 'global-run-cycle' },
+  const metricEvents = store.events.filter((event) => event.eventType === 'METRIC_RECORDED');
+  assert.equal(records.filter((record) => record.event === 'cycle_idle_lock_unavailable').length, 2);
+  assert.equal(metricEvents.length, 2);
+  assert.deepEqual(metricEvents[0]?.payload, {
+    metricType: 'counter',
+    name: 'run_lock_contention_total',
+    tags: { lock_resource: 'global-run-cycle' },
+  assert.deepEqual(metricEvents[1]?.payload, {
+    metricType: 'counter',
+    name: 'run_lock_contention_total',
+    value: 1,
+    tags: { lock_resource: 'global-run-cycle' },
     dependsOn: [],
     acceptanceCriteria: ['done'],
     affectedModules: ['packages/execution'],

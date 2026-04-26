@@ -60,3 +60,4 @@ This split keeps composition, orchestration, persistence, and presentation conce
   - `WORKFLOW_RUN_LOCK_PROVIDER` (`postgresql`, `redis`, or `etcd`)
   - one shared `WORKFLOW_RUN_LOCK_DSN` used by **all workers**
 - If the global run lock cannot be acquired, the orchestrator returns an idle cycle with `stopReason=run_lock_unavailable` and emits a deterministic runtime log event (`cycle_idle_lock_unavailable`) for operators.
+- The runtime also emits a contention counter metric (`run_lock_contention_total`) as centralized `METRIC_RECORDED` domain events in the shared state store, enabling cross-worker aggregation in multi-worker deployments.
