@@ -117,6 +117,27 @@ test('runCycle happy path completes task and records summary artifact', async ()
   assert.equal(state.backlog.tasks['task-1']?.status, 'done');
   assert.equal(state.execution.completedTaskIds.includes('task-1'), true);
   assert.equal(state.artifacts.some((artifact) => artifact.type === 'run_summary'), true);
+  assert.equal(
+    state.artifacts.some(
+      (artifact) =>
+        artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'branch' && artifact.metadata.taskId === 'task-1',
+    ),
+    true,
+  );
+  assert.equal(
+    state.artifacts.some(
+      (artifact) =>
+        artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'commit' && artifact.metadata.runId === result.runId,
+    ),
+    true,
+  );
+  assert.equal(
+    state.artifacts.some(
+      (artifact) =>
+        artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'pr_draft' && artifact.metadata.taskId === 'task-1',
+    ),
+    true,
+  );
   assert.equal(state.repoHealth.build, 'passing');
   assert.equal(state.repoHealth.lint, 'passing');
   assert.equal(state.repoHealth.typecheck, 'passing');

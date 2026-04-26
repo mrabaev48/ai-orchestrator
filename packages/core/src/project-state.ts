@@ -160,6 +160,7 @@ const artifactSchema = z.object({
     'plan',
     'test_plan',
     'report',
+    'git_lifecycle',
   ]),
   title: z.string().min(1),
   location: z.string().min(1).optional(),
