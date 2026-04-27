@@ -36,6 +36,7 @@ test('toStateSummaryView maps raw state into a stable read model', () => {
       architectureFindings: 0,
       completedTasks: 1,
       blockedTasks: 1,
+      pendingApprovals: 0,
     },
   });
 });

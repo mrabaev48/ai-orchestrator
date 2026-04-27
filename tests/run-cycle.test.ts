@@ -59,6 +59,16 @@ function makeRuntimeConfig(): RuntimeConfig {
   };
 }
 
+function makeApprovalRuntimeConfig(): RuntimeConfig {
+  return {
+    ...makeRuntimeConfig(),
+    workflow: {
+      ...makeRuntimeConfig().workflow,
+      approvalGateMode: 'enabled',
+    },
+  };
+}
+
 function makeRegistry(): RoleRegistry {
   const registry = new RoleRegistry();
   registry.register(new TaskManagerRole());
@@ -178,6 +188,27 @@ test('runCycle persists failing quality stage diagnostics and updates repo healt
     (lintArtifact?.metadata.diagnostics ?? '').includes('acceptance marker [fail-lint]'),
     true,
   );
+});
+
+test('runCycle requests approval for risky git lifecycle actions when approval gate is enabled', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeApprovalRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeApprovalRuntimeConfig(), logger);
+  const internals = orchestrator as unknown as {
+    workspaceHasGitChanges: () => Promise<boolean>;
+    createCommit: () => Promise<{ ok: true; commitSha: string }>;
+  };
+  internals.workspaceHasGitChanges = async () => true;
+  internals.createCommit = async () => ({ ok: true, commitSha: 'abc123' });
+
+  const result = await orchestrator.runCycle();
+  const state = await store.load();
+
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.stopReason, 'approval_pending');
+  assert.equal(state.approvals.length > 0, true);
+  assert.equal(state.approvals[0]?.requestedAction, 'git_push');
+  assert.equal(state.approvals[0]?.status, 'pending');
 });
 
 test('runCycle blocks task after repeated review failures', async () => {

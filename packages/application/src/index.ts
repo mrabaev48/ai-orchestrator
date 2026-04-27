@@ -1,5 +1,6 @@
 export * from './bootstrap-service.ts';
 export * from './architecture-service.ts';
+export * from './approval-gate-service.ts';
 export * from './control-plane-service.ts';
 export * from './dashboard-query-service.ts';
 export * from './documentation-service.ts';

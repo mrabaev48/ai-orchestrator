@@ -4,6 +4,7 @@ import type {
   DecisionLogItem,
   DomainEvent,
   FailureRecord,
+  ApprovalRequest,
   Milestone,
   ProjectState,
 } from '../../core/src/index.ts';
@@ -22,6 +23,7 @@ export interface StateSummaryView {
     architectureFindings: number;
     completedTasks: number;
     blockedTasks: number;
+    pendingApprovals: number;
   };
 }
 
@@ -134,6 +136,25 @@ export interface LatestRunSummaryView {
   summary?: string;
 }
 
+export interface ApprovalRequestView {
+  id: string;
+  runId: string;
+  taskId: string;
+  reason: string;
+  requestedAction: ApprovalRequest['requestedAction'];
+  riskLevel: ApprovalRequest['riskLevel'];
+  status: ApprovalRequest['status'];
+  createdAt: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  resumedBy?: string;
+  resumedAt?: string;
+  completedAt?: string;
+}
+
 export function toStateSummaryView(state: ProjectState): StateSummaryView {
   return {
     projectId: state.projectId,
@@ -148,6 +169,7 @@ export function toStateSummaryView(state: ProjectState): StateSummaryView {
       architectureFindings: state.architecture.findings.length,
       completedTasks: state.execution.completedTaskIds.length,
       blockedTasks: state.execution.blockedTaskIds.length,
+      pendingApprovals: state.approvals.filter((entry) => entry.status === 'pending').length,
     },
   };
 }
@@ -333,6 +355,30 @@ export function toLatestRunSummaryView(state: ProjectState): LatestRunSummaryVie
     ...(artifact.metadata.taskId ? { taskId: artifact.metadata.taskId } : {}),
     ...(artifact.metadata.summary ? { summary: artifact.metadata.summary } : {}),
   };
+}
+
+export function toApprovalRequestView(requests: ApprovalRequest[]): ApprovalRequestView[] {
+  return requests
+    .slice()
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .map((request) => ({
+      id: request.id,
+      runId: request.runId,
+      taskId: request.taskId,
+      reason: request.reason,
+      requestedAction: request.requestedAction,
+      riskLevel: request.riskLevel,
+      status: request.status,
+      createdAt: request.createdAt,
+      ...(request.approvedBy ? { approvedBy: request.approvedBy } : {}),
+      ...(request.approvedAt ? { approvedAt: request.approvedAt } : {}),
+      ...(request.rejectedBy ? { rejectedBy: request.rejectedBy } : {}),
+      ...(request.rejectedAt ? { rejectedAt: request.rejectedAt } : {}),
+      ...(request.rejectionReason ? { rejectionReason: request.rejectionReason } : {}),
+      ...(request.resumedBy ? { resumedBy: request.resumedBy } : {}),
+      ...(request.resumedAt ? { resumedAt: request.resumedAt } : {}),
+      ...(request.completedAt ? { completedAt: request.completedAt } : {}),
+    }));
 }
 
 function summarizePayload(payload: Record<string, unknown>): string {

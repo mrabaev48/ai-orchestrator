@@ -1,10 +1,12 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 
 import type {
   BacklogExportView,
 } from '../../../../packages/application/src/read-models.ts';
 import {
   ArtifactHistoryQueryDto,
+  ApprovalDecisionBodyDto,
+  ApprovalHistoryQueryDto,
   BacklogExportQueryDto,
   EventHistoryQueryDto,
   FailureHistoryQueryDto,
@@ -71,6 +73,35 @@ export class DashboardQueryController {
   @Get('runs/latest')
   async getLatestRunSummary() {
     return await this.dashboardReadApiService.getLatestRunSummary();
+  }
+
+  @Get('approvals')
+  async getApprovals(@Query() query: ApprovalHistoryQueryDto) {
+    return await this.dashboardReadApiService.getApprovals(query.status);
+  }
+
+  @Post('approvals/:requestId/approve')
+  async approve(
+    @Param('requestId') requestId: string,
+    @Body() body: ApprovalDecisionBodyDto,
+  ) {
+    return await this.dashboardReadApiService.approve(requestId, body.actor);
+  }
+
+  @Post('approvals/:requestId/reject')
+  async reject(
+    @Param('requestId') requestId: string,
+    @Body() body: ApprovalDecisionBodyDto,
+  ) {
+    return await this.dashboardReadApiService.reject(requestId, body.actor, body.reason ?? 'Rejected by operator');
+  }
+
+  @Post('approvals/:requestId/resume')
+  async resume(
+    @Param('requestId') requestId: string,
+    @Body() body: ApprovalDecisionBodyDto,
+  ) {
+    return await this.dashboardReadApiService.resume(requestId, body.actor);
   }
 }
 

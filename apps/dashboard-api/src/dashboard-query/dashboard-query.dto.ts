@@ -39,6 +39,10 @@ export class EventHistoryQueryDto extends HistoryQueryDto {
     'TASK_SELECTED',
     'PROMPT_GENERATED',
     'ROLE_EXECUTED',
+    'APPROVAL_REQUESTED',
+    'APPROVAL_APPROVED',
+    'APPROVAL_REJECTED',
+    'APPROVAL_RESUMED',
     'REVIEW_APPROVED',
     'REVIEW_REJECTED',
     'TEST_PASSED',
@@ -74,4 +78,20 @@ export class ArtifactHistoryQueryDto extends HistoryQueryDto {
     'report',
   ])
   type?: string;
+}
+
+export class ApprovalHistoryQueryDto {
+  @IsOptional()
+  @IsString()
+  @IsIn(['pending', 'approved', 'rejected', 'resumed', 'completed'])
+  status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed';
+}
+
+export class ApprovalDecisionBodyDto {
+  @IsString()
+  actor!: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }

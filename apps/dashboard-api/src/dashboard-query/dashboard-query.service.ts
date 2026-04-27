@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import {
+  ApprovalGateService,
   DashboardQueryService as ApplicationDashboardQueryService,
 } from '../../../../packages/application/src/index.ts';
 import type { DomainEventType } from '../../../../packages/core/src/index.ts';
@@ -8,12 +9,16 @@ import type { DomainEventType } from '../../../../packages/core/src/index.ts';
 @Injectable()
 export class DashboardReadApiService {
   private readonly dashboardQueryService: ApplicationDashboardQueryService;
+  private readonly approvalGateService: ApprovalGateService;
 
   constructor(
     @Inject(ApplicationDashboardQueryService)
     dashboardQueryService: ApplicationDashboardQueryService,
+    @Inject(ApprovalGateService)
+    approvalGateService: ApprovalGateService,
   ) {
     this.dashboardQueryService = dashboardQueryService;
+    this.approvalGateService = approvalGateService;
   }
 
   async getStateSummary() {
@@ -65,5 +70,21 @@ export class DashboardReadApiService {
 
   async getLatestRunSummary() {
     return await this.dashboardQueryService.getLatestRunSummary();
+  }
+
+  async getApprovals(status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed') {
+    return await this.dashboardQueryService.getApprovals(status ? { status } : {});
+  }
+
+  async approve(requestId: string, actor: string) {
+    return await this.approvalGateService.approve(requestId, actor);
+  }
+
+  async reject(requestId: string, actor: string, reason: string) {
+    return await this.approvalGateService.reject(requestId, actor, reason);
+  }
+
+  async resume(requestId: string, actor: string) {
+    return await this.approvalGateService.resume(requestId, actor);
   }
 }

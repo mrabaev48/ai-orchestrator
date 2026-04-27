@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import {
+  ApprovalGateService,
   DashboardQueryService,
   createStateStore,
 } from '../../../../packages/application/src/index.ts';
@@ -30,8 +31,13 @@ import type { DashboardApiConfig } from '../config/dashboard-config.ts';
       useFactory: (stateStore: StateStore): DashboardQueryService =>
         new DashboardQueryService(stateStore),
     },
+    {
+      provide: ApprovalGateService,
+      inject: [STATE_STORE],
+      useFactory: (stateStore: StateStore): ApprovalGateService => new ApprovalGateService(stateStore),
+    },
   ],
-  exports: [STATE_STORE, DashboardQueryService],
+  exports: [STATE_STORE, DashboardQueryService, ApprovalGateService],
 })
 // Nest uses declarative module marker classes here.
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
