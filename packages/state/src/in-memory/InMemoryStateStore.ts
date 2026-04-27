@@ -6,8 +6,9 @@ import {
   type DomainEvent,
   type FailureRecord,
   type ProjectState,
+  type RunStepLogEntry,
 } from '../../../core/src/index.ts';
-import type { ListEventsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
+import type { ListEventsQuery, ListRunStepsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
 import { StateStoreError } from '../../../shared/src/index.ts';
 
 export class InMemoryStateStore implements StateStore {
@@ -49,6 +50,27 @@ export class InMemoryStateStore implements StateStore {
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         .slice(offset, offset + limit),
     );
+  }
+
+  async listRunSteps(query: ListRunStepsQuery = {}): Promise<RunStepLogEntry[]> {
+    const state = await this.load();
+    const steps = state.execution.runStepLog ?? [];
+    const filtered = steps.filter((step) => {
+      if (query.runId && step.runId !== query.runId) {
+        return false;
+      }
+      if (query.taskId && step.taskId !== query.taskId) {
+        return false;
+      }
+      return true;
+    });
+
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 50;
+    return filtered
+      .slice()
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(offset, offset + limit);
   }
 
   async recordEvent(event: DomainEvent): Promise<void> {
@@ -93,6 +115,13 @@ export class InMemoryStateStore implements StateStore {
   async recordDecision(decision: DecisionLogItem): Promise<void> {
     const current = await this.load();
     current.decisions.push(structuredClone(decision));
+    await this.save(current);
+  }
+
+  async recordRunStep(step: RunStepLogEntry): Promise<void> {
+    const current = await this.load();
+    current.execution.runStepLog ??= [];
+    current.execution.runStepLog.push(structuredClone(step));
     await this.save(current);
   }
 

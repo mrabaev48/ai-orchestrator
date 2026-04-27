@@ -34,6 +34,7 @@ import type {
   RoleStepResult,
   ToolCallRequest,
 } from '../../core/src/roles.ts';
+import type { RunStepLogEntry } from '../../core/src/index.ts';
 import type { QualityStageResult } from '../../core/src/testing.ts';
 const execFileAsync = promisify(execFile);
 
@@ -64,6 +65,7 @@ export class Orchestrator {
   private readonly lockAuthority: LockAuthority;
   private readonly telemetry: ExecutionTelemetry;
   private readonly workspaceManager: WorkspaceManager;
+  private currentRunStepBuffer: RunStepLogEntry[] | null = null;
   constructor(
     stateStore: StateStore,
     roleRegistry: RoleRegistry,
@@ -220,6 +222,7 @@ export class Orchestrator {
   }): Promise<RunCycleResult> {
     const { state, task, runId, workspace, workspaceTools, abortSignal } = input;
     this.tools = workspaceTools;
+    this.currentRunStepBuffer = [];
     try {
       state.execution.activeRunId = runId;
       state.execution.activeTaskId = task.id;
@@ -348,6 +351,7 @@ export class Orchestrator {
     });
 
     const stateCommittedEvent = makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId });
+    this.flushRunStepBufferToState(state);
     await this.stateStore.saveWithEvents(state, [stateCommittedEvent]);
 
     this.logger.info('Run cycle completed', {
@@ -366,6 +370,7 @@ export class Orchestrator {
       await workspace.rollback().catch(() => {});
       throw error;
     } finally {
+      this.currentRunStepBuffer = null;
       await workspace.cleanup().catch(() => {});
     }
   }
@@ -467,6 +472,7 @@ export class Orchestrator {
     state.failures.push(failure);
     state.execution.retryCounts[task.id] = (state.execution.retryCounts[task.id] ?? 0) + 1;
     delete state.execution.activeTaskId;
+    this.flushRunStepBufferToState(state);
 
     if (action === 'split') {
       const splitPlan = splitTaskForRetry(task, reason);
@@ -576,10 +582,21 @@ export class Orchestrator {
     request: RoleRequest<TInput>,
     context: RoleExecutionContext,
   ): Promise<RoleResponse<TOutput>> {
+    const startedAt = Date.now();
     const firstAttempt = await this.executeRoleWithLoop(role, request, context);
     try {
       await role.validate?.(firstAttempt);
       this.validateRoleResult(request.role, firstAttempt);
+      await this.recordRunStep({
+        runId: context.runId,
+        ...(context.taskId ? { taskId: context.taskId } : {}),
+        role: role.name,
+        tool: 'role.execute',
+        input: request.input,
+        output: firstAttempt.output,
+        status: 'succeeded',
+        durationMs: Date.now() - startedAt,
+      });
       return firstAttempt;
     } catch {
       context.logger.warn('Role validation failed, retrying once', {
@@ -590,11 +607,31 @@ export class Orchestrator {
         await role.validate?.(secondAttempt);
         this.validateRoleResult(request.role, secondAttempt);
       } catch (validationError) {
+        await this.recordRunStep({
+          runId: context.runId,
+          ...(context.taskId ? { taskId: context.taskId } : {}),
+          role: role.name,
+          tool: 'role.execute',
+          input: request.input,
+          output: validationError instanceof Error ? validationError.message : String(validationError),
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+        });
         throw new SchemaValidationError('Role response schema validation failed', {
           cause: validationError,
           retrySuggested: false,
         });
       }
+      await this.recordRunStep({
+        runId: context.runId,
+        ...(context.taskId ? { taskId: context.taskId } : {}),
+        role: role.name,
+        tool: 'role.execute',
+        input: request.input,
+        output: secondAttempt.output,
+        status: 'succeeded',
+        durationMs: Date.now() - startedAt,
+      });
       return secondAttempt;
     }
   }
@@ -657,7 +694,7 @@ export class Orchestrator {
         ),
       );
 
-      const observation = await this.invokeToolRequest(stepResult.request, step, context.abortSignal);
+      const observation = await this.invokeToolRequest(stepResult.request, step, role.name, context);
       observations.push(observation);
 
       await this.stateStore.recordEvent(
@@ -704,16 +741,28 @@ export class Orchestrator {
   private async invokeToolRequest(
     request: ToolCallRequest,
     step: number,
-    parentSignal?: AbortSignal,
+    roleName: string,
+    context: RoleExecutionContext,
   ): Promise<RoleObservation> {
     const createdAt = new Date().toISOString();
+    const startedAt = Date.now();
     try {
       const output = await this.runWithTimeout(
         async (signal) => this.executeTool(request, signal),
         this.config.llm.timeoutMs,
         `Tool ${request.toolName} timed out at step ${step}`,
-        withParentSignal(parentSignal),
+        withParentSignal(context.abortSignal),
       );
+      await this.recordRunStep({
+        runId: context.runId,
+        ...(context.taskId ? { taskId: context.taskId } : {}),
+        role: roleName,
+        tool: request.toolName,
+        input: request.input,
+        output,
+        status: 'succeeded',
+        durationMs: Date.now() - startedAt,
+      });
       return {
         step,
         toolName: request.toolName,
@@ -723,6 +772,16 @@ export class Orchestrator {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      await this.recordRunStep({
+        runId: context.runId,
+        ...(context.taskId ? { taskId: context.taskId } : {}),
+        role: roleName,
+        tool: request.toolName,
+        input: request.input,
+        output: message,
+        status: 'failed',
+        durationMs: Date.now() - startedAt,
+      });
       return {
         step,
         toolName: request.toolName,
@@ -981,6 +1040,41 @@ export class Orchestrator {
       return false;
     }
   }
+
+  private async recordRunStep(input: {
+    runId: string;
+    taskId?: string;
+    role: string;
+    tool?: string;
+    input: unknown;
+    output: unknown;
+    status: RunStepLogEntry['status'];
+    durationMs: number;
+  }): Promise<void> {
+    const step: RunStepLogEntry = {
+      id: crypto.randomUUID(),
+      runId: input.runId,
+      ...(input.taskId ? { taskId: input.taskId } : {}),
+      role: input.role,
+      ...(input.tool ? { tool: input.tool } : {}),
+      input: truncateText(safeStringify(input.input)),
+      output: truncateText(safeStringify(input.output)),
+      status: input.status,
+      durationMs: Math.max(0, input.durationMs),
+      createdAt: new Date().toISOString(),
+    };
+    await this.stateStore.recordRunStep(step);
+    this.currentRunStepBuffer?.push(step);
+  }
+
+  private flushRunStepBufferToState(state: ProjectState): void {
+    if (!this.currentRunStepBuffer || this.currentRunStepBuffer.length === 0) {
+      return;
+    }
+    state.execution.runStepLog ??= [];
+    state.execution.runStepLog.push(...this.currentRunStepBuffer);
+    this.currentRunStepBuffer = [];
+  }
 }
 
 function rewriteSupersededDependencies(
@@ -1054,6 +1148,20 @@ function truncateText(value: string, maxLength = 500): string {
     return value;
   }
   return `${value.slice(0, maxLength)}...(truncated)`;
+}
+
+function safeStringify(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'undefined') {
+    return 'undefined';
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '[unserializable]';
+  }
 }
 
 function withSignal(signal?: AbortSignal): { signal?: AbortSignal } {

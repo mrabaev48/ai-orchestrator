@@ -628,6 +628,10 @@ test('runCycle supports think-act-observe loop with tool_request and final_outpu
   assert.equal(result.status, 'completed');
   assert.equal(store.events.some((event) => event.eventType === 'ROLE_TOOL_REQUESTED'), true);
   assert.equal(store.events.some((event) => event.eventType === 'ROLE_OBSERVATION_RECORDED'), true);
+  const state = await store.load();
+  assert.equal(state.execution.runStepLog.length > 0, true);
+  assert.equal(state.execution.runStepLog.some((stepEntry) => stepEntry.tool === 'git_status'), true);
+  assert.equal(state.execution.runStepLog.every((stepEntry) => stepEntry.durationMs >= 0), true);
   assert.equal(
     store.events.some(
       (event) => {

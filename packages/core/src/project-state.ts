@@ -38,6 +38,20 @@ export interface ExecutionState {
   blockedTaskIds: string[];
   retryCounts: Record<string, number>;
   stepCount: number;
+  runStepLog: RunStepLogEntry[];
+}
+
+export interface RunStepLogEntry {
+  id: string;
+  runId: string;
+  taskId?: string;
+  role: string;
+  tool?: string;
+  input: string;
+  output: string;
+  status: 'succeeded' | 'failed';
+  durationMs: number;
+  createdAt: string;
 }
 
 export interface ProjectState {
@@ -168,6 +182,29 @@ const artifactSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
 });
 
+const runStepLogEntrySchema = z.object({
+  id: z.string().min(1),
+  runId: z.string().min(1),
+  taskId: z.string().min(1).optional(),
+  role: z.string().min(1),
+  tool: z.string().min(1).optional(),
+  input: z.string(),
+  output: z.string(),
+  status: z.enum(['succeeded', 'failed']),
+  durationMs: z.number().int().nonnegative(),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+
+const executionStateSchema = z.object({
+  activeTaskId: z.string().min(1).optional(),
+  activeRunId: z.string().min(1).optional(),
+  completedTaskIds: z.array(z.string().min(1)),
+  blockedTaskIds: z.array(z.string().min(1)),
+  retryCounts: z.record(z.string(), z.number().int().nonnegative()),
+  stepCount: z.number().int().nonnegative(),
+  runStepLog: z.array(runStepLogEntrySchema),
+});
+
 const projectStateDeepSchema = z.object({
   backlog: z.object({
     epics: z.record(z.string(), epicSchema),
@@ -178,6 +215,7 @@ const projectStateDeepSchema = z.object({
   decisions: z.array(decisionSchema),
   failures: z.array(failureSchema),
   artifacts: z.array(artifactSchema),
+  execution: executionStateSchema,
 });
 
 function toPath(path: PropertyKey[]): string {
@@ -231,6 +269,7 @@ export function createEmptyProjectState(input: {
       blockedTaskIds: [],
       retryCounts: {},
       stepCount: 0,
+      runStepLog: [],
     },
     milestones: {},
     decisions: [],
@@ -239,7 +278,13 @@ export function createEmptyProjectState(input: {
   };
 }
 
+export function withProjectStateDefaults(state: ProjectState): ProjectState {
+  state.execution.runStepLog ??= [];
+  return state;
+}
+
 export function validateProjectState(state: ProjectState): ValidationResult {
+  withProjectStateDefaults(state);
   const issues: string[] = [];
   const deepValidation = projectStateDeepSchema.safeParse(state);
 
