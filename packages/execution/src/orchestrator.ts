@@ -924,6 +924,7 @@ export class Orchestrator {
     input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
   ): Promise<'ok' | 'approval_pending'> {
     const isApprovalGateEnabled = (this.config.workflow.approvalGateMode ?? 'disabled') === 'enabled';
+    const requiredApprovalActions = new Set(this.config.workflow.approvalRequiredActions ?? ['git_push', 'pr_draft']);
     const branchName = input.branchName ?? (await this.currentGitBranch(input.workspaceRoot)) ?? 'unknown';
     const hasChanges = await this.workspaceHasGitChanges(input.workspaceRoot);
     const commitMessage = `feat(${input.taskId}): ${input.taskTitle} [run:${input.runId}]`;
@@ -938,7 +939,29 @@ export class Orchestrator {
       commitStatus = committed.ok ? 'created' : 'failed';
       if (committed.ok) {
         commitSha = committed.commitSha;
+        if (isApprovalGateEnabled) {
+          const sourceRiskActions = await this.detectRiskyActionsFromCommit(input.workspaceRoot, commitSha);
+          for (const riskAction of sourceRiskActions) {
+            if (!requiredApprovalActions.has(riskAction)) {
+              continue;
+            }
+            const sourceGate = await this.evaluateApprovalGate(state, {
+              runId: input.runId,
+              taskId: input.taskId,
+              requestedAction: riskAction,
+              reason: this.describeRiskAction(riskAction),
+              metadata: {
+                branchName,
+                commitSha,
+              },
+            });
+            if (sourceGate.status !== 'resumed') {
+              isWaitingForApproval = true;
+            }
+          }
+        }
         const pushGate = isApprovalGateEnabled
+          && requiredApprovalActions.has('git_push')
           ? await this.evaluateApprovalGate(state, {
             runId: input.runId,
             taskId: input.taskId,
@@ -988,6 +1011,7 @@ export class Orchestrator {
     ].join('\n');
     if (pushStatus === 'pushed') {
       const prGate = isApprovalGateEnabled
+        && requiredApprovalActions.has('pr_draft')
         ? await this.evaluateApprovalGate(state, {
           runId: input.runId,
           taskId: input.taskId,
@@ -1021,7 +1045,104 @@ export class Orchestrator {
     });
     await this.stateStore.recordArtifact(prArtifact);
     state.artifacts.push(prArtifact);
+    if (isWaitingForApproval) {
+      const resumeModeArtifact = makeArtifact('report', `Approval pending for ${input.taskId}`, {
+        runId: input.runId,
+        taskId: input.taskId,
+        resumeMode: 'manual_run_cycle',
+        note: 'Approve and resume by invoking the run cycle again from control plane',
+      });
+      await this.stateStore.recordArtifact(resumeModeArtifact);
+      state.artifacts.push(resumeModeArtifact);
+    }
     return isWaitingForApproval ? 'approval_pending' : 'ok';
+  }
+
+  private describeRiskAction(action: ApprovalRequest['requestedAction']): string {
+    const messages: Record<ApprovalRequest['requestedAction'], string> = {
+      git_push: 'Push branch to origin',
+      pr_draft: 'Create draft pull request',
+      db_migration: 'Database migration files changed',
+      file_delete: 'One or more files were deleted',
+      api_breaking_change: 'Potential public API surface change detected',
+      dependency_bump: 'Dependency manifest or lock file changed',
+      security_auth_change: 'Security/auth-related files changed',
+      production_config_change: 'Production configuration files changed',
+      bulk_file_change: 'Large batch of files changed',
+    };
+    return messages[action];
+  }
+
+  private async detectRiskyActionsFromCommit(
+    workspaceRoot: string,
+    commitSha: string,
+  ): Promise<ApprovalRequest['requestedAction'][]> {
+    const actions = new Set<ApprovalRequest['requestedAction']>();
+    const lines = await this.readCommitNameStatus(workspaceRoot, commitSha);
+    const changedPaths: string[] = [];
+    for (const line of lines) {
+      const [status, ...rest] = line.split('\t');
+      const filePath = rest.at(-1);
+      if (!status || !filePath) {
+        continue;
+      }
+      changedPaths.push(filePath);
+      const normalized = filePath.toLowerCase();
+      if (status.startsWith('D')) {
+        actions.add('file_delete');
+      }
+      if (
+        normalized.endsWith('package.json')
+        || normalized.endsWith('package-lock.json')
+        || normalized.endsWith('pnpm-lock.yaml')
+      ) {
+        actions.add('dependency_bump');
+      }
+      if (normalized.includes('migration') || normalized.endsWith('.sql')) {
+        actions.add('db_migration');
+      }
+      if (normalized.includes('/auth/') || normalized.includes('/security/')) {
+        actions.add('security_auth_change');
+      }
+      if (
+        normalized.endsWith('.env')
+        || normalized.includes('/k8s/')
+        || normalized.includes('/helm/')
+        || normalized.includes('/deploy/')
+        || normalized.includes('/terraform/')
+      ) {
+        actions.add('production_config_change');
+      }
+      if (
+        normalized.includes('/api/')
+        || normalized.includes('/public/')
+        || normalized.endsWith('/index.ts')
+        || normalized.includes('/contracts/')
+      ) {
+        actions.add('api_breaking_change');
+      }
+    }
+
+    if (changedPaths.length >= (this.config.workflow.approvalBulkFileThreshold ?? 25)) {
+      actions.add('bulk_file_change');
+    }
+    return [...actions];
+  }
+
+  private async readCommitNameStatus(workspaceRoot: string, commitSha: string): Promise<string[]> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['show', '--name-status', '--format=', '--no-renames', commitSha],
+        { cwd: workspaceRoot },
+      );
+      return stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 
   private async evaluateApprovalGate(

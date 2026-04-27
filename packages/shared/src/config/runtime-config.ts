@@ -14,6 +14,17 @@ const runLockProviderSchema = z.enum(['noop', 'postgresql', 'redis', 'etcd']);
 const workspaceManagerModeSchema = z.enum(['git-worktree', 'static']);
 const qualityGateModeSchema = z.enum(['tooling', 'synthetic']);
 const approvalGateModeSchema = z.enum(['disabled', 'enabled']);
+const approvalRequestedActionSchema = z.enum([
+  'git_push',
+  'pr_draft',
+  'db_migration',
+  'file_delete',
+  'api_breaking_change',
+  'dependency_bump',
+  'security_auth_change',
+  'production_config_change',
+  'bulk_file_change',
+]);
 const safeWriteModeSchema = z.enum([
   'read-only',
   'propose-only',
@@ -50,6 +61,8 @@ const runtimeConfigSchema = z.strictObject({
     workspaceBranchTtlHours: z.number().int().positive().optional(),
     qualityGateMode: qualityGateModeSchema.optional(),
     approvalGateMode: approvalGateModeSchema.optional(),
+    approvalRequiredActions: z.array(approvalRequestedActionSchema).min(1).optional(),
+    approvalBulkFileThreshold: z.number().int().positive().optional(),
   }),
   tools: z.strictObject({
     allowedWritePaths: z.array(z.string().trim().min(1)).min(1),
@@ -89,6 +102,8 @@ const envSchema = z.object({
   WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS: z.coerce.number().int().positive().default(24),
   WORKFLOW_QUALITY_GATE_MODE: qualityGateModeSchema.default('tooling'),
   WORKFLOW_APPROVAL_GATE_MODE: approvalGateModeSchema.default('disabled'),
+  WORKFLOW_APPROVAL_REQUIRED_ACTIONS: z.string().trim().min(1).default('git_push,pr_draft'),
+  WORKFLOW_APPROVAL_BULK_FILE_THRESHOLD: z.coerce.number().int().positive().default(25),
   TOOL_ALLOWED_WRITE_PATHS: z.string().trim().min(1).default('.'),
   TOOL_ALLOWED_SHELL_COMMANDS: z.string().trim().min(1).default('node,npm,pnpm,git,rg,tsx,tsc'),
   TOOL_WRITE_MODE: safeWriteModeSchema.default('workspace-write'),
@@ -160,6 +175,11 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       workspaceBranchTtlHours: env.data.WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS,
       qualityGateMode: env.data.WORKFLOW_QUALITY_GATE_MODE,
       approvalGateMode: env.data.WORKFLOW_APPROVAL_GATE_MODE,
+      approvalRequiredActions: normalizeCommaSeparatedValues(
+        fileConfig.workflow?.approvalRequiredActions ?? env.data.WORKFLOW_APPROVAL_REQUIRED_ACTIONS,
+      ) as z.infer<typeof approvalRequestedActionSchema>[],
+      approvalBulkFileThreshold:
+        fileConfig.workflow?.approvalBulkFileThreshold ?? env.data.WORKFLOW_APPROVAL_BULK_FILE_THRESHOLD,
       ...fileConfig.workflow,
     },
     tools: {
