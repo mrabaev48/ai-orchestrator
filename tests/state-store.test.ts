@@ -122,6 +122,41 @@ test('saveWithEvents persists snapshot and events together', async () => {
   }
 });
 
+test('state stores persist and query run steps without relying on event stream', async () => {
+  const step = {
+    id: crypto.randomUUID(),
+    runId: crypto.randomUUID(),
+    taskId: 'task-1',
+    role: 'coder',
+    tool: 'git_status',
+    input: '{"path":"."}',
+    output: '{"changed":false}',
+    status: 'succeeded' as const,
+    durationMs: 12,
+    createdAt: new Date().toISOString(),
+  };
+
+  const memoryStore = new InMemoryStateStore(makeState());
+  await memoryStore.recordRunStep(step);
+  const memorySteps = await memoryStore.listRunSteps({ runId: step.runId });
+  assert.equal(memorySteps.length, 1);
+  assert.equal(memorySteps[0]?.tool, 'git_status');
+  assert.equal((await memoryStore.listEvents({ eventType: 'TASK_SELECTED' })).length, 0);
+
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'ai-orchestrator-'));
+  const dbPath = path.join(tempDir, 'state.db');
+  try {
+    const sqliteStore = new SqliteStateStore(dbPath, makeState());
+    await sqliteStore.recordRunStep(step);
+    const sqliteSteps = await sqliteStore.listRunSteps({ runId: step.runId });
+    assert.equal(sqliteSteps.length, 1);
+    assert.equal(sqliteSteps[0]?.role, 'coder');
+    assert.equal((await sqliteStore.listEvents({ eventType: 'TASK_SELECTED' })).length, 0);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('InMemoryStateStore rejects artifacts that violate schema registry', async () => {
   const store = new InMemoryStateStore(makeState());
 

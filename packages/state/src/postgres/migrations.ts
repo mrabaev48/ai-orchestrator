@@ -50,5 +50,27 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
         )`,
       ],
     },
+    {
+      id: 2,
+      name: 'run_step_log',
+      statements: [
+        `CREATE TABLE IF NOT EXISTS ${table('run_step_log')} (
+          id UUID PRIMARY KEY,
+          run_id UUID NOT NULL,
+          task_id TEXT,
+          role TEXT NOT NULL,
+          tool TEXT,
+          input_text TEXT NOT NULL,
+          output_text TEXT NOT NULL,
+          status TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL
+        )`,
+        `CREATE INDEX IF NOT EXISTS run_step_log_run_id_created_at_idx
+          ON ${table('run_step_log')} (run_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS run_step_log_task_id_created_at_idx
+          ON ${table('run_step_log')} (task_id, created_at DESC)`,
+      ],
+    },
   ];
 }

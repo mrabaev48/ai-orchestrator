@@ -82,6 +82,7 @@ test('StateIntegrityService persists explainable integrity report for invalid st
       events.push(...nextEvents);
     },
     listEvents: async () => [],
+    listRunSteps: async () => [],
     recordEvent: async (event: DomainEvent) => {
       events.push(event);
     },
@@ -95,6 +96,7 @@ test('StateIntegrityService persists explainable integrity report for invalid st
     recordDecision: async (decision: DecisionLogItem) => {
       void decision;
     },
+    recordRunStep: async () => {},
     markTaskDone: async (taskId: string, summary: string) => {
       void taskId;
       void summary;

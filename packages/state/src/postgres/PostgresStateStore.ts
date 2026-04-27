@@ -6,10 +6,11 @@ import {
   type DomainEvent,
   type FailureRecord,
   type ProjectState,
+  type RunStepLogEntry,
   makeEvent,
 } from '../../../core/src/index.ts';
 import { StateStoreError, redactSecrets } from '../../../shared/src/index.ts';
-import type { ListEventsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
+import type { ListEventsQuery, ListRunStepsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
 import { createPostgresMigrations } from './migrations.ts';
 
 interface PgPoolLike {
@@ -124,6 +125,63 @@ export class PostgresStateStore implements StateStore {
     }));
   }
 
+  async listRunSteps(query: ListRunStepsQuery = {}): Promise<RunStepLogEntry[]> {
+    await this.ensureInitialized();
+    const pool = await this.poolPromise;
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (query.runId) {
+      clauses.push(`run_id = $${params.length + 1}`);
+      params.push(query.runId);
+    }
+    if (query.taskId) {
+      clauses.push(`task_id = $${params.length + 1}`);
+      params.push(query.taskId);
+    }
+
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    params.push(limit, offset);
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const result = (await pool.query(
+      `SELECT id, run_id, task_id, role, tool, input_text, output_text, status, duration_ms, created_at
+       FROM ${this.table('run_step_log')}
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT $${params.length - 1}
+       OFFSET $${params.length}`,
+      params,
+    )) as {
+      rows: {
+        id: string;
+        run_id: string;
+        task_id: string | null;
+        role: string;
+        tool: string | null;
+        input_text: string;
+        output_text: string;
+        status: RunStepLogEntry['status'];
+        duration_ms: number;
+        created_at: string;
+      }[];
+    };
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      runId: row.run_id,
+      ...(row.task_id ? { taskId: row.task_id } : {}),
+      role: row.role,
+      ...(row.tool ? { tool: row.tool } : {}),
+      input: row.input_text,
+      output: row.output_text,
+      status: row.status,
+      durationMs: row.duration_ms,
+      createdAt: row.created_at,
+    }));
+  }
+
   async recordEvent(event: DomainEvent): Promise<void> {
     await this.ensureInitialized();
     await this.withTransaction(async (client) => {
@@ -224,6 +282,29 @@ export class PostgresStateStore implements StateStore {
         ],
       );
       await this.insertSnapshot(client, current);
+    });
+  }
+
+  async recordRunStep(step: RunStepLogEntry): Promise<void> {
+    await this.ensureInitialized();
+    await this.withTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO ${this.table('run_step_log')} (
+          id, run_id, task_id, role, tool, input_text, output_text, status, duration_ms, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          step.id,
+          step.runId,
+          step.taskId ?? null,
+          step.role,
+          step.tool ?? null,
+          step.input,
+          step.output,
+          step.status,
+          step.durationMs,
+          step.createdAt,
+        ],
+      );
     });
   }
 

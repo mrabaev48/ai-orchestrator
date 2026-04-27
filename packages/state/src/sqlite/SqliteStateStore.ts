@@ -10,10 +10,11 @@ import {
   type DomainEvent,
   type FailureRecord,
   type ProjectState,
+  type RunStepLogEntry,
   makeEvent,
 } from '../../../core/src/index.ts';
 import { StateStoreError, redactSecrets } from '../../../shared/src/index.ts';
-import type { ListEventsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
+import type { ListEventsQuery, ListRunStepsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
 import { sqliteSchemaStatements } from './schema.ts';
 
 export class SqliteStateStore implements StateStore {
@@ -100,6 +101,57 @@ export class SqliteStateStore implements StateStore {
       createdAt: row.created_at,
       payload: JSON.parse(row.payload_json) as DomainEvent['payload'],
       ...(row.run_id ? { runId: row.run_id } : {}),
+    }));
+  }
+
+  async listRunSteps(query: ListRunStepsQuery = {}): Promise<RunStepLogEntry[]> {
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (query.runId) {
+      clauses.push('run_id = ?');
+      params.push(query.runId);
+    }
+    if (query.taskId) {
+      clauses.push('task_id = ?');
+      params.push(query.taskId);
+    }
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    params.push(limit, offset);
+
+    const rows = this.db.prepare(
+      `SELECT id, run_id, task_id, role, tool, input_text, output_text, status, duration_ms, created_at
+       FROM run_step_log
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+    ).all(...params) as {
+      id: string;
+      run_id: string;
+      task_id: string | null;
+      role: string;
+      tool: string | null;
+      input_text: string;
+      output_text: string;
+      status: RunStepLogEntry['status'];
+      duration_ms: number;
+      created_at: string;
+    }[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      runId: row.run_id,
+      ...(row.task_id ? { taskId: row.task_id } : {}),
+      role: row.role,
+      ...(row.tool ? { tool: row.tool } : {}),
+      input: row.input_text,
+      output: row.output_text,
+      status: row.status,
+      durationMs: row.duration_ms,
+      createdAt: row.created_at,
     }));
   }
 
@@ -195,6 +247,29 @@ export class SqliteStateStore implements StateStore {
           JSON.stringify(decision.affectedAreas),
         );
       this.insertSnapshot(current);
+    });
+  }
+
+  async recordRunStep(step: RunStepLogEntry): Promise<void> {
+    this.withTransaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO run_step_log (
+            id, run_id, task_id, role, tool, input_text, output_text, status, duration_ms, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          step.id,
+          step.runId,
+          step.taskId ?? null,
+          step.role,
+          step.tool ?? null,
+          step.input,
+          step.output,
+          step.status,
+          step.durationMs,
+          step.createdAt,
+        );
     });
   }
 
