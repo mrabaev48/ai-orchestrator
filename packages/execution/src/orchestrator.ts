@@ -1,4 +1,4 @@
-import type { ArtifactRecord, BacklogTask, ProjectState } from '../../core/src/index.ts';
+import type { ApprovalRequest, ArtifactRecord, BacklogTask, ProjectState } from '../../core/src/index.ts';
 import { assertProjectState, isExecutableTask, makeEvent } from '../../core/src/index.ts';
 import { defaultRoleOutputSchemaRegistry, validateRoleResponse } from '../../core/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
@@ -342,7 +342,7 @@ export class Orchestrator {
     await this.stateStore.recordArtifact(taskSummaryArtifact);
     await this.stateStore.recordArtifact(runSummaryArtifact);
     state.artifacts.push(taskSummaryArtifact, runSummaryArtifact);
-    await this.recordGitLifecycleCompletionArtifacts(state, {
+    const gitLifecycleStatus = await this.recordGitLifecycleCompletionArtifacts(state, {
       runId,
       taskId: task.id,
       taskTitle: task.title,
@@ -364,7 +364,8 @@ export class Orchestrator {
       return {
         runId,
         taskId: task.id,
-        status: 'completed',
+        status: gitLifecycleStatus === 'approval_pending' ? 'blocked' : 'completed',
+        ...(gitLifecycleStatus === 'approval_pending' ? { stopReason: 'approval_pending' } : {}),
       };
     } catch (error) {
       await workspace.rollback().catch(() => {});
@@ -921,21 +922,66 @@ export class Orchestrator {
   private async recordGitLifecycleCompletionArtifacts(
     state: ProjectState,
     input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
-  ): Promise<void> {
+  ): Promise<'ok' | 'approval_pending'> {
+    const isApprovalGateEnabled = (this.config.workflow.approvalGateMode ?? 'disabled') === 'enabled';
+    const requiredApprovalActions = new Set(this.config.workflow.approvalRequiredActions ?? ['git_push', 'pr_draft']);
     const branchName = input.branchName ?? (await this.currentGitBranch(input.workspaceRoot)) ?? 'unknown';
     const hasChanges = await this.workspaceHasGitChanges(input.workspaceRoot);
     const commitMessage = `feat(${input.taskId}): ${input.taskTitle} [run:${input.runId}]`;
     let commitStatus = hasChanges ? 'pending' : 'skipped_no_changes';
     let pushStatus = hasChanges ? 'pending' : 'skipped_no_changes';
     let commitSha = 'none';
+    let prStatus = 'skipped_push_not_successful';
+    let isWaitingForApproval = false;
 
     if (hasChanges) {
       const committed = await this.createCommit(input.workspaceRoot, commitMessage);
       commitStatus = committed.ok ? 'created' : 'failed';
       if (committed.ok) {
         commitSha = committed.commitSha;
-        const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
-        pushStatus = isPushed ? 'pushed' : 'failed';
+        if (isApprovalGateEnabled) {
+          const sourceRiskActions = await this.detectRiskyActionsFromCommit(input.workspaceRoot, commitSha);
+          for (const riskAction of sourceRiskActions) {
+            if (!requiredApprovalActions.has(riskAction)) {
+              continue;
+            }
+            const sourceGate = await this.evaluateApprovalGate(state, {
+              runId: input.runId,
+              taskId: input.taskId,
+              requestedAction: riskAction,
+              reason: this.describeRiskAction(riskAction),
+              metadata: {
+                branchName,
+                commitSha,
+              },
+            });
+            if (sourceGate.status !== 'resumed') {
+              isWaitingForApproval = true;
+            }
+          }
+        }
+        const pushGate = isApprovalGateEnabled
+          && requiredApprovalActions.has('git_push')
+          ? await this.evaluateApprovalGate(state, {
+            runId: input.runId,
+            taskId: input.taskId,
+            requestedAction: 'git_push',
+            reason: `Push branch ${branchName} to origin`,
+            metadata: {
+              branchName,
+              commitSha,
+            },
+          })
+          : { status: 'resumed' as const };
+        if (pushGate.status === 'rejected') {
+          pushStatus = 'skipped_rejected';
+        } else if (pushGate.status === 'pending' || pushGate.status === 'approved') {
+          pushStatus = pushGate.status === 'pending' ? 'pending_approval' : 'waiting_resume';
+          isWaitingForApproval = true;
+        } else {
+          const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
+          pushStatus = isPushed ? 'pushed' : 'failed';
+        }
       } else {
         pushStatus = 'skipped_commit_failed';
       }
@@ -963,9 +1009,31 @@ export class Orchestrator {
       '',
       'Automated draft PR from ai-orchestrator.',
     ].join('\n');
-    const prStatus = pushStatus === 'pushed'
-      ? (await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody) ? 'created' : 'failed')
-      : 'skipped_push_not_successful';
+    if (pushStatus === 'pushed') {
+      const prGate = isApprovalGateEnabled
+        && requiredApprovalActions.has('pr_draft')
+        ? await this.evaluateApprovalGate(state, {
+          runId: input.runId,
+          taskId: input.taskId,
+          requestedAction: 'pr_draft',
+          reason: `Create draft PR for branch ${branchName}`,
+          metadata: {
+            branchName,
+            prTitle,
+          },
+        })
+        : { status: 'resumed' as const };
+      if (prGate.status === 'rejected') {
+        prStatus = 'skipped_rejected';
+      } else if (prGate.status === 'pending' || prGate.status === 'approved') {
+        prStatus = prGate.status === 'pending' ? 'pending_approval' : 'waiting_resume';
+        isWaitingForApproval = true;
+      } else {
+        prStatus = await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody)
+          ? 'created'
+          : 'failed';
+      }
+    }
     const prArtifact = makeArtifact('git_lifecycle', `PR draft metadata for ${input.taskId}`, {
       runId: input.runId,
       taskId: input.taskId,
@@ -977,6 +1045,156 @@ export class Orchestrator {
     });
     await this.stateStore.recordArtifact(prArtifact);
     state.artifacts.push(prArtifact);
+    if (isWaitingForApproval) {
+      const resumeModeArtifact = makeArtifact('report', `Approval pending for ${input.taskId}`, {
+        runId: input.runId,
+        taskId: input.taskId,
+        resumeMode: 'manual_run_cycle',
+        note: 'Approve and resume by invoking the run cycle again from control plane',
+      });
+      await this.stateStore.recordArtifact(resumeModeArtifact);
+      state.artifacts.push(resumeModeArtifact);
+    }
+    return isWaitingForApproval ? 'approval_pending' : 'ok';
+  }
+
+  private describeRiskAction(action: ApprovalRequest['requestedAction']): string {
+    const messages: Record<ApprovalRequest['requestedAction'], string> = {
+      git_push: 'Push branch to origin',
+      pr_draft: 'Create draft pull request',
+      db_migration: 'Database migration files changed',
+      file_delete: 'One or more files were deleted',
+      api_breaking_change: 'Potential public API surface change detected',
+      dependency_bump: 'Dependency manifest or lock file changed',
+      security_auth_change: 'Security/auth-related files changed',
+      production_config_change: 'Production configuration files changed',
+      bulk_file_change: 'Large batch of files changed',
+    };
+    return messages[action];
+  }
+
+  private async detectRiskyActionsFromCommit(
+    workspaceRoot: string,
+    commitSha: string,
+  ): Promise<ApprovalRequest['requestedAction'][]> {
+    const actions = new Set<ApprovalRequest['requestedAction']>();
+    const lines = await this.readCommitNameStatus(workspaceRoot, commitSha);
+    const changedPaths: string[] = [];
+    for (const line of lines) {
+      const [status, ...rest] = line.split('\t');
+      const filePath = rest.at(-1);
+      if (!status || !filePath) {
+        continue;
+      }
+      changedPaths.push(filePath);
+      const normalized = filePath.toLowerCase();
+      if (status.startsWith('D')) {
+        actions.add('file_delete');
+      }
+      if (
+        normalized.endsWith('package.json')
+        || normalized.endsWith('package-lock.json')
+        || normalized.endsWith('pnpm-lock.yaml')
+      ) {
+        actions.add('dependency_bump');
+      }
+      if (normalized.includes('migration') || normalized.endsWith('.sql')) {
+        actions.add('db_migration');
+      }
+      if (normalized.includes('/auth/') || normalized.includes('/security/')) {
+        actions.add('security_auth_change');
+      }
+      if (
+        normalized.endsWith('.env')
+        || normalized.includes('/k8s/')
+        || normalized.includes('/helm/')
+        || normalized.includes('/deploy/')
+        || normalized.includes('/terraform/')
+      ) {
+        actions.add('production_config_change');
+      }
+      if (
+        normalized.includes('/api/')
+        || normalized.includes('/public/')
+        || normalized.endsWith('/index.ts')
+        || normalized.includes('/contracts/')
+      ) {
+        actions.add('api_breaking_change');
+      }
+    }
+
+    if (changedPaths.length >= (this.config.workflow.approvalBulkFileThreshold ?? 25)) {
+      actions.add('bulk_file_change');
+    }
+    return [...actions];
+  }
+
+  private async readCommitNameStatus(workspaceRoot: string, commitSha: string): Promise<string[]> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['show', '--name-status', '--format=', '--no-renames', commitSha],
+        { cwd: workspaceRoot },
+      );
+      return stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  private async evaluateApprovalGate(
+    state: ProjectState,
+    input: {
+      runId: string;
+      taskId: string;
+      requestedAction: ApprovalRequest['requestedAction'];
+      reason: string;
+      metadata: Record<string, string>;
+    },
+  ): Promise<{ status: 'pending' | 'approved' | 'rejected' | 'resumed' }> {
+    const existing = state.approvals.find((request) =>
+      request.runId === input.runId
+      && request.taskId === input.taskId
+      && request.requestedAction === input.requestedAction
+      && request.status !== 'completed'
+    );
+    if (existing) {
+      if (existing.status === 'completed') {
+        return { status: 'resumed' };
+      }
+      return { status: existing.status };
+    }
+
+    const approvalRequest: ApprovalRequest = {
+      id: crypto.randomUUID(),
+      runId: input.runId,
+      taskId: input.taskId,
+      reason: input.reason,
+      requestedAction: input.requestedAction,
+      riskLevel: 'high',
+      status: 'pending',
+      metadata: input.metadata,
+      createdAt: new Date().toISOString(),
+    };
+    state.approvals = [...state.approvals, approvalRequest];
+    await this.stateStore.recordEvent(
+      makeEvent(
+        'APPROVAL_REQUESTED',
+        {
+          approvalRequestId: approvalRequest.id,
+          runId: approvalRequest.runId,
+          taskId: approvalRequest.taskId,
+          requestedAction: approvalRequest.requestedAction,
+          reason: approvalRequest.reason,
+          status: approvalRequest.status,
+        },
+        { runId: approvalRequest.runId },
+      ),
+    );
+    return { status: 'pending' };
   }
 
   private async workspaceHasGitChanges(workspaceRoot: string): Promise<boolean> {

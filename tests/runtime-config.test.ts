@@ -108,6 +108,21 @@ test('loadRuntimeConfig supports quality gate mode configuration', () => {
   assert.equal(config.workflow.qualityGateMode, 'synthetic');
 });
 
+test('loadRuntimeConfig supports configurable approval required actions', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      WORKFLOW_APPROVAL_GATE_MODE: 'enabled',
+      WORKFLOW_APPROVAL_REQUIRED_ACTIONS: 'git_push,db_migration,file_delete',
+      WORKFLOW_APPROVAL_BULK_FILE_THRESHOLD: '15',
+    },
+  });
+
+  assert.equal(config.workflow.approvalGateMode, 'enabled');
+  assert.deepEqual(config.workflow.approvalRequiredActions, ['git_push', 'db_migration', 'file_delete']);
+  assert.equal(config.workflow.approvalBulkFileThreshold, 15);
+});
+
 test('loadRuntimeConfig rejects multi-worker mode without shared run lock dsn', () => {
   const error = assertConfigError(() =>
     loadRuntimeConfig({

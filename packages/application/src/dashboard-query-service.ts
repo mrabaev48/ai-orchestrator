@@ -10,6 +10,7 @@ import type {
   LatestRunSummaryView,
   MilestoneListItemView,
   PaginatedView,
+  ApprovalRequestView,
 } from './read-models.ts';
 import {
   toArtifactHistoryView,
@@ -21,6 +22,7 @@ import {
   toFailureHistoryView,
   toLatestRunSummaryView,
   toMilestoneListView,
+  toApprovalRequestView,
 } from './read-models.ts';
 
 export interface HistoryQueryInput {
@@ -139,6 +141,14 @@ export class DashboardQueryService {
   async getLatestRunSummary(): Promise<LatestRunSummaryView | null> {
     const state = await this.stateStore.load();
     return toLatestRunSummaryView(state);
+  }
+
+  async getApprovals(query: { status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed' } = {}): Promise<ApprovalRequestView[]> {
+    const state = await this.stateStore.load();
+    const approvals = query.status
+      ? state.approvals.filter((entry) => entry.status === query.status)
+      : state.approvals;
+    return toApprovalRequestView(approvals);
   }
 }
 

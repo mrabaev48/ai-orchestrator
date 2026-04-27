@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { StateIntegrityError } from '../../shared/src/index.ts';
+import type { ApprovalRequest } from './approvals.ts';
 import type { ArchitectureFinding } from './architecture-findings.ts';
 import { validateArchitectureFinding } from './architecture-findings.ts';
 import type { ArtifactRecord } from './artifacts.ts';
@@ -68,6 +69,7 @@ export interface ProjectState {
   decisions: DecisionLogItem[];
   failures: FailureRecord[];
   artifacts: ArtifactRecord[];
+  approvals: ApprovalRequest[];
 }
 
 export interface ValidationResult {
@@ -195,6 +197,36 @@ const runStepLogEntrySchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
 });
 
+const approvalRequestSchema = z.object({
+  id: z.string().min(1),
+  runId: z.string().min(1),
+  taskId: z.string().min(1),
+  reason: z.string().min(1),
+  requestedAction: z.enum([
+    'git_push',
+    'pr_draft',
+    'db_migration',
+    'file_delete',
+    'api_breaking_change',
+    'dependency_bump',
+    'security_auth_change',
+    'production_config_change',
+    'bulk_file_change',
+  ]),
+  riskLevel: z.enum(['medium', 'high']),
+  status: z.enum(['pending', 'approved', 'rejected', 'resumed', 'completed']),
+  metadata: z.record(z.string(), z.string().min(1)),
+  createdAt: z.iso.datetime({ offset: true }),
+  approvedAt: z.iso.datetime({ offset: true }).optional(),
+  approvedBy: z.string().min(1).optional(),
+  rejectedAt: z.iso.datetime({ offset: true }).optional(),
+  rejectedBy: z.string().min(1).optional(),
+  rejectionReason: z.string().min(1).optional(),
+  resumedAt: z.iso.datetime({ offset: true }).optional(),
+  resumedBy: z.string().min(1).optional(),
+  completedAt: z.iso.datetime({ offset: true }).optional(),
+});
+
 const executionStateSchema = z.object({
   activeTaskId: z.string().min(1).optional(),
   activeRunId: z.string().min(1).optional(),
@@ -215,6 +247,7 @@ const projectStateDeepSchema = z.object({
   decisions: z.array(decisionSchema),
   failures: z.array(failureSchema),
   artifacts: z.array(artifactSchema),
+  approvals: z.array(approvalRequestSchema),
   execution: executionStateSchema,
 });
 
@@ -275,11 +308,13 @@ export function createEmptyProjectState(input: {
     decisions: [],
     failures: [],
     artifacts: [],
+    approvals: [],
   };
 }
 
 export function withProjectStateDefaults(state: ProjectState): ProjectState {
   state.execution.runStepLog ??= [];
+  state.approvals ??= [];
   return state;
 }
 
