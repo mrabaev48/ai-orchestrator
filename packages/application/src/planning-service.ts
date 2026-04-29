@@ -1,5 +1,5 @@
 import type { RoleRegistry } from '../../agents/src/index.ts';
-import {
+import { defaultExecutionPolicyEngine,
   assertProjectState,
   makeEvent,
   type ArchitectureFinding,
@@ -69,24 +69,15 @@ export class PlanningService {
     >('planner');
     const response = await planner.execute(
       makePlannerRoleRequest(currentState, prompt.outputSchema),
-      {
+      defaultExecutionPolicyEngine.resolve({
         runId: crypto.randomUUID(),
         role: 'planner',
         stateSummary: currentState.summary,
-        toolProfile: {
-          allowedWritePaths: [],
-          canWriteRepo: false,
-          canApproveChanges: false,
-          canRunTests: false,
-        },
-        toolExecution: {
-          policy: 'read_only_analysis',
-          permissionScope: 'read_only',
-          workspaceRoot: process.cwd(),
-          evidenceSource: 'state_snapshot',
-        },
-        logger: this.logger.withContext({ role: 'planner' }),
-      },
+        workspaceRoot: process.cwd(),
+        allowedWritePaths: [],
+        evidenceSource: 'state_snapshot',
+        logger: this.logger,
+      }),
     );
     await planner.validate?.(response);
     assertRoleOutput('planner', response);

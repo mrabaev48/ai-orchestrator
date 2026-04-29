@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type { RoleRegistry } from '../../agents/src/index.ts';
 import {
+  defaultExecutionPolicyEngine,
   assertProjectState,
   makeEvent,
   type ProjectDiscovery,
@@ -44,24 +45,15 @@ export class BootstrapService {
     >('bootstrap_analyst');
     const response = await bootstrapAnalyst.execute(
       makeBootstrapRoleRequest(snapshot, prompt.outputSchema),
-      {
+      defaultExecutionPolicyEngine.resolve({
         runId: crypto.randomUUID(),
         role: 'bootstrap_analyst',
         stateSummary: state.summary,
-        toolProfile: {
-          allowedWritePaths: [this.rootPath],
-          canWriteRepo: false,
-          canApproveChanges: false,
-          canRunTests: false,
-        },
-        toolExecution: {
-          policy: 'read_only_analysis',
-          permissionScope: 'read_only',
-          workspaceRoot: this.rootPath,
-          evidenceSource: 'state_snapshot',
-        },
-        logger: this.logger.withContext({ role: 'bootstrap_analyst' }),
-      },
+        workspaceRoot: this.rootPath,
+        allowedWritePaths: [this.rootPath],
+        evidenceSource: 'state_snapshot',
+        logger: this.logger,
+      }),
     );
     await bootstrapAnalyst.validate?.(response);
     assertRoleOutput('bootstrap_analyst', response);

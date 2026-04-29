@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import type { RoleRegistry } from '../../agents/src/index.ts';
+import { defaultExecutionPolicyEngine } from '../../core/src/index.ts';
 import { buildDocsWriterPrompt } from '../../prompts/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
@@ -65,24 +66,15 @@ export class DocumentationService {
     >('docs_writer');
     const response = await docsWriter.execute(
       makeDocsWriterRequest(state.projectName, state.summary, affectedModules, behaviorChanges, designRationale, followUpGaps, prompt.outputSchema),
-      {
+      defaultExecutionPolicyEngine.resolve({
         runId: crypto.randomUUID(),
         role: 'docs_writer',
         stateSummary: state.summary,
-        toolProfile: {
-          allowedWritePaths: [],
-          canWriteRepo: false,
-          canApproveChanges: false,
-          canRunTests: false,
-        },
-        toolExecution: {
-          policy: 'orchestrator_default',
-          permissionScope: 'repo_write',
-          workspaceRoot: process.cwd(),
-          evidenceSource: 'artifacts',
-        },
-        logger: this.logger.withContext({ role: 'docs_writer' }),
-      },
+        workspaceRoot: process.cwd(),
+        allowedWritePaths: this.toolSet.fileSystem ? [process.cwd()] : [],
+        evidenceSource: 'artifacts',
+        logger: this.logger,
+      }),
     );
     await docsWriter.validate?.(response);
     assertRoleOutput('docs_writer', response);

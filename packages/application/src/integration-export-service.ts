@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import {
+  defaultExecutionPolicyEngine,
   makeEvent,
   type IntegrationExportPayload,
   type IntegrationExportRecord,
@@ -20,6 +21,7 @@ export class IntegrationExportService {
   private readonly roleRegistry: RoleRegistry;
   private readonly logger: Logger;
   private readonly toolSet: ReturnType<typeof createLocalToolSet>;
+  private readonly allowedWritePaths: string[];
 
   constructor(
     stateStore: StateStore,
@@ -30,6 +32,7 @@ export class IntegrationExportService {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
     this.logger = logger;
+    this.allowedWritePaths = config.tools.allowedWritePaths;
     this.toolSet = createLocalToolSet({
       allowedWritePaths: config.tools.allowedWritePaths,
       allowedShellCommands: config.tools.allowedShellCommands,
@@ -56,24 +59,15 @@ export class IntegrationExportService {
     >('integration_manager');
     const response = await integrationManager.execute(
       makeIntegrationRequest(mappedEntities, missingRequiredFields, exportBlockers, prompt.outputSchema),
-      {
+      defaultExecutionPolicyEngine.resolve({
         runId: crypto.randomUUID(),
         role: 'integration_manager',
         stateSummary: state.summary,
-        toolProfile: {
-          allowedWritePaths: [],
-          canWriteRepo: false,
-          canApproveChanges: false,
-          canRunTests: false,
-        },
-        toolExecution: {
-          policy: 'orchestrator_default',
-          permissionScope: 'repo_write',
-          workspaceRoot: process.cwd(),
-          evidenceSource: 'artifacts',
-        },
-        logger: this.logger.withContext({ role: 'integration_manager' }),
-      },
+        workspaceRoot: process.cwd(),
+        allowedWritePaths: this.allowedWritePaths,
+        evidenceSource: 'artifacts',
+        logger: this.logger,
+      }),
     );
     await integrationManager.validate?.(response);
     assertRoleOutput('integration_manager', response);

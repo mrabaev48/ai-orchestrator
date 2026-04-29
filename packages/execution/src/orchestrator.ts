@@ -1,6 +1,10 @@
 import type { ApprovalRequest, ArtifactRecord, BacklogTask, ProjectState } from '../../core/src/index.ts';
 import { assertProjectState, isExecutableTask, makeEvent } from '../../core/src/index.ts';
-import { defaultRoleOutputSchemaRegistry, validateRoleResponse } from '../../core/src/index.ts';
+import {
+  defaultExecutionPolicyEngine,
+  defaultRoleOutputSchemaRegistry,
+  validateRoleResponse,
+} from '../../core/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import { SchemaValidationError, WorkflowPolicyError } from '../../shared/src/index.ts';
 import path from 'node:path';
@@ -547,35 +551,18 @@ export class Orchestrator {
     taskId?: string,
     abortSignal?: AbortSignal,
   ): RoleExecutionContext {
-    return {
+    return defaultExecutionPolicyEngine.resolve({
       role,
       runId,
       ...(taskId ? { taskId } : {}),
       stateSummary: summarizeState(state),
-      toolProfile: {
-        allowedWritePaths: this.config.tools.allowedWritePaths,
-        canWriteRepo: role === 'coder' || role === 'docs_writer',
-        canApproveChanges: false,
-        canRunTests: role === 'tester',
-      },
-      toolExecution: {
-        policy: role === 'tester' ? 'quality_gate' : role === 'coder' || role === 'docs_writer'
-          ? 'orchestrator_default'
-          : 'read_only_analysis',
-        permissionScope: role === 'tester' ? 'test_execution' : role === 'coder' || role === 'docs_writer'
-          ? 'repo_write'
-          : 'read_only',
-        workspaceRoot,
-        evidenceSource: taskId ? 'runtime_events' : 'state_snapshot',
-        qualityGateMode: this.config.workflow.qualityGateMode ?? 'tooling',
-      },
+      workspaceRoot,
+      allowedWritePaths: this.config.tools.allowedWritePaths,
+      evidenceSource: taskId ? 'runtime_events' : 'state_snapshot',
+      qualityGateMode: this.config.workflow.qualityGateMode ?? 'tooling',
       ...(abortSignal ? { abortSignal } : {}),
-      logger: this.logger.withContext({
-        runId,
-        role,
-        ...(taskId ? { taskId } : {}),
-      }),
-    };
+      logger: this.logger,
+    });
   }
 
   private async executeRole<TInput, TOutput>(

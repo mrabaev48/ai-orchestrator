@@ -1,4 +1,4 @@
-import {
+import { defaultExecutionPolicyEngine,
   makeEvent,
   validateProjectState,
   type StateIntegrityAssessment,
@@ -37,24 +37,15 @@ export class StateIntegrityService {
     );
     const response = await stateSteward.execute(
       makeStateStewardRequest(validation.issues, prompt.outputSchema),
-      {
+      defaultExecutionPolicyEngine.resolve({
         runId: crypto.randomUUID(),
         role: 'state_steward',
         stateSummary: state.summary,
-        toolProfile: {
-          allowedWritePaths: [],
-          canWriteRepo: false,
-          canApproveChanges: false,
-          canRunTests: false,
-        },
-        toolExecution: {
-          policy: 'quality_gate',
-          permissionScope: 'read_only',
-          workspaceRoot: process.cwd(),
-          evidenceSource: 'state_snapshot',
-        },
-        logger: this.logger.withContext({ role: 'state_steward' }),
-      },
+        workspaceRoot: process.cwd(),
+        allowedWritePaths: [],
+        evidenceSource: 'state_snapshot',
+        logger: this.logger,
+      }),
     );
     await stateSteward.validate?.(response);
     assertRoleOutput('state_steward', response);
