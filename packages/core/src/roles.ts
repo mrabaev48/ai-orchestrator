@@ -51,6 +51,11 @@ export interface RoleExecutionContext {
   stateSummary: string;
   toolProfile: ToolProfile;
   toolExecution: ToolExecutionContext;
+  policyRules?: {
+    maxChangedFiles: number;
+    forbiddenDirectories: string[];
+    requiredChecks: string[];
+  };
   abortSignal?: AbortSignal;
   logger: Logger;
 }

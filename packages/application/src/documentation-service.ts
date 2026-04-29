@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import type { RoleRegistry } from '../../agents/src/index.ts';
+import { defaultExecutionPolicyEngine } from '../../core/src/index.ts';
 import { buildDocsWriterPrompt } from '../../prompts/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
@@ -22,6 +23,7 @@ export class DocumentationService {
   private readonly roleRegistry: RoleRegistry;
   private readonly logger: Logger;
   private readonly toolSet: ReturnType<typeof createLocalToolSet>;
+  private readonly allowedWritePaths: string[];
 
   constructor(
     stateStore: StateStore,
@@ -32,6 +34,7 @@ export class DocumentationService {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
     this.logger = logger;
+    this.allowedWritePaths = config.tools.allowedWritePaths;
     this.toolSet = createLocalToolSet({
       allowedWritePaths: config.tools.allowedWritePaths,
       allowedShellCommands: config.tools.allowedShellCommands,
@@ -65,24 +68,15 @@ export class DocumentationService {
     >('docs_writer');
     const response = await docsWriter.execute(
       makeDocsWriterRequest(state.projectName, state.summary, affectedModules, behaviorChanges, designRationale, followUpGaps, prompt.outputSchema),
-      {
+      defaultExecutionPolicyEngine.resolve({
         runId: crypto.randomUUID(),
         role: 'docs_writer',
         stateSummary: state.summary,
-        toolProfile: {
-          allowedWritePaths: [],
-          canWriteRepo: false,
-          canApproveChanges: false,
-          canRunTests: false,
-        },
-        toolExecution: {
-          policy: 'orchestrator_default',
-          permissionScope: 'repo_write',
-          workspaceRoot: process.cwd(),
-          evidenceSource: 'artifacts',
-        },
-        logger: this.logger.withContext({ role: 'docs_writer' }),
-      },
+        workspaceRoot: process.cwd(),
+        allowedWritePaths: this.allowedWritePaths,
+        evidenceSource: 'artifacts',
+        logger: this.logger,
+      }),
     );
     await docsWriter.validate?.(response);
     assertRoleOutput('docs_writer', response);

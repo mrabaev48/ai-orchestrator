@@ -1,5 +1,5 @@
 import { buildReleaseAssessmentPrompt } from '../../prompts/src/index.ts';
-import { makeEvent, type ReleaseAssessment } from '../../core/src/index.ts';
+import { defaultExecutionPolicyEngine, makeEvent, type ReleaseAssessment } from '../../core/src/index.ts';
 import type { RoleRegistry } from '../../agents/src/index.ts';
 import type { Logger } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
@@ -33,24 +33,15 @@ export class ReleaseReadinessService {
     >('release_auditor');
     const response = await releaseAuditor.execute(
       makeReleaseRequest(blockers, warnings, evidence, prompt.outputSchema),
-      {
+      defaultExecutionPolicyEngine.resolve({
         runId: crypto.randomUUID(),
         role: 'release_auditor',
         stateSummary: state.summary,
-        toolProfile: {
-          allowedWritePaths: [],
-          canWriteRepo: false,
-          canApproveChanges: false,
-          canRunTests: false,
-        },
-        toolExecution: {
-          policy: 'quality_gate',
-          permissionScope: 'read_only',
-          workspaceRoot: process.cwd(),
-          evidenceSource: 'artifacts',
-        },
-        logger: this.logger.withContext({ role: 'release_auditor' }),
-      },
+        workspaceRoot: process.cwd(),
+        allowedWritePaths: [],
+        evidenceSource: 'artifacts',
+        logger: this.logger,
+      }),
     );
     await releaseAuditor.validate?.(response);
     assertRoleOutput('release_auditor', response);

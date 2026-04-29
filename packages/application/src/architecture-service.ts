@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type { RoleRegistry } from '../../agents/src/index.ts';
 import {
+  defaultExecutionPolicyEngine,
   assertProjectState,
   makeEvent,
   type ArchitectureAnalysis,
@@ -45,24 +46,15 @@ export class ArchitectureService {
     >('architect');
     const response = await architect.execute(
       makeArchitectRoleRequest(currentState, sourceImports, prompt.outputSchema),
-      {
+      defaultExecutionPolicyEngine.resolve({
         runId: crypto.randomUUID(),
         role: 'architect',
         stateSummary: currentState.summary,
-        toolProfile: {
-          allowedWritePaths: [this.rootPath],
-          canWriteRepo: false,
-          canApproveChanges: false,
-          canRunTests: false,
-        },
-        toolExecution: {
-          policy: 'read_only_analysis',
-          permissionScope: 'read_only',
-          workspaceRoot: this.rootPath,
-          evidenceSource: 'state_snapshot',
-        },
-        logger: this.logger.withContext({ role: 'architect' }),
-      },
+        workspaceRoot: this.rootPath,
+        allowedWritePaths: [this.rootPath],
+        evidenceSource: 'state_snapshot',
+        logger: this.logger,
+      }),
     );
     await architect.validate?.(response);
     assertRoleOutput('architect', response);
