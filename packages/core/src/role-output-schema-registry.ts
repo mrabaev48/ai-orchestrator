@@ -13,7 +13,34 @@ import type { AgentRoleName, RoleResponse } from './roles.ts';
 import type { Backlog } from './backlog.ts';
 import type { Milestone } from './milestones.ts';
 
-type PlannerOutput = { milestone: Milestone; backlog: Backlog; summary: string };
+type PlannerOutput = {
+  milestone: Milestone;
+  backlog: Backlog;
+  summary: string;
+  dependencyEdges: {
+    fromId: string;
+    toId: string;
+    type: 'contains' | 'depends_on';
+    rationale: string;
+  }[];
+  assumptions: string[];
+  risks: {
+    id: string;
+    title: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    description: string;
+    mitigation: string;
+    relatedIds: string[];
+  }[];
+  mergePreview: {
+    batches: {
+      id: string;
+      taskIds: string[];
+      rationale: string;
+    }[];
+    notes: string[];
+  };
+};
 type DocsWriterOutput = {
   summary: string;
   affectedModules: string[];
@@ -46,7 +73,7 @@ const ROLE_OUTPUT_SCHEMAS: Record<AgentRoleName, Record<string, unknown>> = {
   },
   planner: {
     type: 'object',
-    required: ['milestone', 'backlog', 'summary'],
+    required: ['milestone', 'backlog', 'summary', 'dependencyEdges', 'assumptions', 'risks', 'mergePreview'],
   },
   release_auditor: {
     type: 'object',
@@ -151,6 +178,18 @@ function validatePlannerOutput(output: PlannerOutput): string[] {
   }
   for (const task of Object.values(output.backlog?.tasks ?? {})) {
     issues.push(...validateBacklogTask(task));
+  }
+  if (!Array.isArray(output.dependencyEdges) || output.dependencyEdges.length === 0) {
+    issues.push('Planner dependencyEdges must be a non-empty array');
+  }
+  if (!Array.isArray(output.assumptions) || output.assumptions.length === 0) {
+    issues.push('Planner assumptions must be a non-empty array');
+  }
+  if (!Array.isArray(output.risks)) {
+    issues.push('Planner risks must be an array');
+  }
+  if (!output.mergePreview || !Array.isArray(output.mergePreview.batches) || output.mergePreview.batches.length === 0) {
+    issues.push('Planner mergePreview.batches must be a non-empty array');
   }
   return issues;
 }

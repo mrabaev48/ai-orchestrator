@@ -53,6 +53,37 @@ interface PlanningOutput {
   milestone: Milestone;
   backlog: Backlog;
   summary: string;
+  dependencyEdges: PlanningDependencyEdge[];
+  assumptions: string[];
+  risks: PlanningRisk[];
+  mergePreview: PlanningMergePreview;
+}
+
+interface PlanningDependencyEdge {
+  fromId: string;
+  toId: string;
+  type: 'contains' | 'depends_on';
+  rationale: string;
+}
+
+interface PlanningRisk {
+  id: string;
+  title: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description: string;
+  mitigation: string;
+  relatedIds: string[];
+}
+
+interface PlanningMergeBatch {
+  id: string;
+  taskIds: string[];
+  rationale: string;
+}
+
+interface PlanningMergePreview {
+  batches: PlanningMergeBatch[];
+  notes: string[];
 }
 
 interface DocsWriterInput {
@@ -295,11 +326,30 @@ export class PlannerRole implements AgentRole<PlannerInput, PlanningOutput> {
       entryCriteria: ['Discovery and architecture analysis completed'],
       exitCriteria: ['All planned architecture tasks are completed'],
     };
+    const dependencyEdges: PlanningDependencyEdge[] = [];
+    dependencyEdges.push(
+      ...buildContainmentEdges(milestone, backlog),
+      ...buildTaskDependencyEdges(backlog.tasks),
+    );
+    const assumptions = buildPlanningAssumptions(request.input.discovery, sortedFindings.length);
+    const risks = sortedFindings.map((finding, index) => ({
+      id: `risk-${index + 1}`,
+      title: `${humanizeSubsystem(finding.subsystem)}: ${humanizeIssueType(finding.issueType)}`,
+      severity: finding.severity,
+      description: finding.impact,
+      mitigation: finding.recommendation,
+      relatedIds: [finding.subsystem, ...finding.affectedModules],
+    }));
+    const mergePreview = buildMergePreview(backlog.tasks);
 
     return makeResponse(this.name, 'Produced milestone-aware backlog plan', {
       milestone,
       backlog,
       summary: `Planned ${Object.keys(backlog.tasks).length} architecture task(s) from ${sortedFindings.length} finding(s).`,
+      dependencyEdges,
+      assumptions,
+      risks,
+      mergePreview,
     });
   };
 
@@ -312,6 +362,18 @@ export class PlannerRole implements AgentRole<PlannerInput, PlanningOutput> {
       if (task.acceptanceCriteria.length === 0) {
         throw new Error(`Planned task ${task.id} is missing acceptance criteria`);
       }
+    }
+
+    if (response.output.dependencyEdges.length === 0) {
+      throw new Error('Planner output must include dependency edges');
+    }
+
+    if (response.output.assumptions.length === 0) {
+      throw new Error('Planner output must include assumptions');
+    }
+
+    if (response.output.mergePreview.batches.length === 0) {
+      throw new Error('Planner output must include merge preview batches');
     }
   };
 }
@@ -801,6 +863,124 @@ function slugify(input: string): string {
 
 function humanizeSubsystem(subsystem: string): string {
   return subsystem.replace(/[_-]+/g, ' ');
+}
+
+function buildContainmentEdges(milestone: Milestone, backlog: Backlog): PlanningDependencyEdge[] {
+  const edges: PlanningDependencyEdge[] = [];
+
+  for (const epicId of milestone.epicIds) {
+    edges.push({
+      fromId: milestone.id,
+      toId: epicId,
+      type: 'contains',
+      rationale: 'Milestone tracks execution for this epic.',
+    });
+    const epic = backlog.epics[epicId];
+    if (!epic) {
+      continue;
+    }
+    for (const featureId of epic.featureIds) {
+      edges.push({
+        fromId: epicId,
+        toId: featureId,
+        type: 'contains',
+        rationale: 'Epic decomposes into feature delivery slices.',
+      });
+      const feature = backlog.features[featureId];
+      if (!feature) {
+        continue;
+      }
+      for (const taskId of feature.taskIds) {
+        edges.push({
+          fromId: featureId,
+          toId: taskId,
+          type: 'contains',
+          rationale: 'Feature is delivered through executable tasks.',
+        });
+      }
+    }
+  }
+
+  return edges;
+}
+
+function buildTaskDependencyEdges(tasks: Backlog['tasks']): PlanningDependencyEdge[] {
+  const edges: PlanningDependencyEdge[] = [];
+
+  for (const task of Object.values(tasks)) {
+    for (const dependency of task.dependsOn) {
+      edges.push({
+        fromId: dependency,
+        toId: task.id,
+        type: 'depends_on',
+        rationale: `Task ${task.id} depends on ${dependency}.`,
+      });
+    }
+  }
+
+  return edges;
+}
+
+function buildPlanningAssumptions(discovery: ProjectDiscovery, findingCount: number): string[] {
+  const assumptions = [
+    'Architecture findings are prioritized by severity and implementation impact.',
+    'Task dependency ordering remains valid unless new blocking findings are introduced.',
+  ];
+
+  if (discovery.packageInventory.length > 0) {
+    assumptions.push(`Planning scope remains constrained to ${discovery.packageInventory.length} discovered packages.`);
+  }
+
+  if (findingCount > 0) {
+    assumptions.push('Each architecture finding maps to at least one implementation-ready task.');
+  }
+
+  return assumptions;
+}
+
+export function buildMergePreview(tasks: Backlog['tasks']): PlanningMergePreview {
+  const remaining = new Map<string, BacklogTask>();
+  for (const task of Object.values(tasks)) {
+    remaining.set(task.id, task);
+  }
+
+  const completed = new Set<string>();
+  const batches: PlanningMergeBatch[] = [];
+  const notes = [
+    'Batches are ordered to honor task dependency edges.',
+    'Each batch can be reviewed independently to reduce merge risk.',
+  ];
+
+  while (remaining.size > 0) {
+    const readyTaskIds = [...remaining.values()]
+      .filter((task) => task.dependsOn.every((dependency) => completed.has(dependency)))
+      .map((task) => task.id)
+      .sort((left, right) => left.localeCompare(right));
+
+    if (readyTaskIds.length === 0) {
+      const fallbackTaskIds = [...remaining.keys()].sort((left, right) => left.localeCompare(right));
+      batches.push({
+        id: `batch-${batches.length + 1}`,
+        taskIds: fallbackTaskIds,
+        rationale: 'Fallback batch: cyclic or unresolved dependencies require manual review.',
+      });
+      notes.push(`Fallback batch created for unresolved dependency graph: ${fallbackTaskIds.join(', ')}.`);
+      break;
+    }
+
+    batches.push({
+      id: `batch-${batches.length + 1}`,
+      taskIds: readyTaskIds,
+      rationale: 'Dependencies for this batch are satisfied by completed or prior batches.',
+    });
+
+    for (const taskId of readyTaskIds) {
+      completed.add(taskId);
+      remaining.delete(taskId);
+    }
+  }
+
+  return { batches, notes };
 }
 
 function humanizeIssueType(issueType: ArchitectureFinding['issueType']): string {
