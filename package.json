@@ -26,7 +26,8 @@
     "turbo:lint": "node scripts/turbo-runner.mjs run lint",
     "turbo:test": "node scripts/turbo-runner.mjs run test",
     "turbo:typecheck": "node scripts/turbo-runner.mjs run typecheck",
-    "turbo:build": "node scripts/turbo-runner.mjs run build"
+    "turbo:build": "node scripts/turbo-runner.mjs run build",
+    "worker:start": "tsx apps/worker/src/main.ts"
   },
   "keywords": [],
   "author": "",
