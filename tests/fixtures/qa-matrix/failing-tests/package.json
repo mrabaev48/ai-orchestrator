@@ -1,0 +1,10 @@
+{
+  "name": "qa-fixture-failing-tests",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"console.log('failing fixture build ok')\"",
+    "lint": "node -e \"console.log('failing fixture lint ok')\"",
+    "typecheck": "node -e \"console.log('failing fixture typecheck ok')\"",
+    "test": "node -e \"console.error('fixture test failed'); process.exit(1)\""
+  }
+}

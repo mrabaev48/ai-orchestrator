@@ -1,0 +1,11 @@
+{
+  "name": "qa-fixture-monorepo-root",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "node -e \"console.log('monorepo build ok')\"",
+    "lint": "node -e \"console.log('monorepo lint ok')\"",
+    "typecheck": "node -e \"console.log('monorepo typecheck ok')\"",
+    "test": "node -e \"console.log('monorepo test ok')\""
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "qa-fixture-library",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"console.log('library build ok')\"",
+    "lint": "node -e \"console.log('library lint ok')\"",
+    "typecheck": "node -e \"console.log('library typecheck ok')\"",
+    "test": "node -e \"console.log('library test ok')\""
+  }
+}
