@@ -8,6 +8,7 @@ import type {
   RunStepLogEntry,
 } from '../../core/src/index.ts';
 import type { AgentRoleName } from '../../core/src/roles.ts';
+import type { FailureStatus } from '../../core/src/failures.ts';
 
 export interface RecordFailureInput {
   taskId: string;
@@ -16,6 +17,10 @@ export interface RecordFailureInput {
   symptoms?: string[];
   badPatterns?: string[];
   retrySuggested?: boolean;
+  status?: FailureStatus;
+  checkpointRunId?: string;
+  checkpointStepId?: string;
+  deadLetteredAt?: string;
 }
 
 export interface ListEventsQuery {

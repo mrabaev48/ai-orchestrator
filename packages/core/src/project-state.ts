@@ -158,6 +158,12 @@ const failureSchema = z.object({
   symptoms: z.array(z.string().min(1)),
   badPatterns: z.array(z.string().min(1)),
   retrySuggested: z.boolean(),
+  status: z.enum(['retryable', 'dead_lettered', 'resumed', 'replayed']).optional(),
+  checkpointRunId: z.string().min(1).optional(),
+  checkpointStepId: z.string().min(1).optional(),
+  deadLetteredAt: z.iso.datetime({ offset: true }).optional(),
+  resumedAt: z.iso.datetime({ offset: true }).optional(),
+  replayedAt: z.iso.datetime({ offset: true }).optional(),
   createdAt: z.iso.datetime({ offset: true }),
 });
 

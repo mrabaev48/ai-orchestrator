@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { makeEvent, type ProjectState } from '../../core/src/index.ts';
+import { WorkflowPolicyError } from '../../shared/src/index.ts';
 import type { Logger } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
 import { toBacklogExportView, toStateSummaryView, type StateSummaryView } from './read-models.ts';
@@ -61,5 +62,63 @@ export class ControlPlaneService {
     });
 
     return outputPath;
+  }
+
+  async resumeFailure(failureId: string): Promise<void> {
+    const state = await this.stateStore.load();
+    const failure = state.failures.find((item) => item.id === failureId);
+    if (!failure) {
+      throw new WorkflowPolicyError(`Failure ${failureId} not found`, {
+        details: { failureId, operation: 'resume_failure' },
+      });
+    }
+    if ((failure.status ?? 'retryable') !== 'dead_lettered') {
+      throw new WorkflowPolicyError(`Failure ${failureId} is not dead-lettered`, {
+        details: { failureId, status: failure.status ?? 'retryable', operation: 'resume_failure' },
+      });
+    }
+
+    failure.status = 'resumed';
+    failure.resumedAt = new Date().toISOString();
+    const task = state.backlog.tasks[failure.taskId];
+    if (task?.status === 'blocked') {
+      task.status = 'todo';
+      state.execution.blockedTaskIds = state.execution.blockedTaskIds.filter((taskId) => taskId !== task.id);
+    }
+    await this.stateStore.saveWithEvents(state, [
+      makeEvent(
+        'APPROVAL_RESUMED',
+        { failureId, taskId: failure.taskId },
+        failure.checkpointRunId ? { runId: failure.checkpointRunId } : {},
+      ),
+    ]);
+  }
+
+  async replayFromFailureCheckpoint(failureId: string): Promise<{ taskId: string; runId?: string }> {
+    const state = await this.stateStore.load();
+    const failure = state.failures.find((item) => item.id === failureId);
+    if (!failure) {
+      throw new WorkflowPolicyError(`Failure ${failureId} not found`, {
+        details: { failureId, operation: 'replay_failure' },
+      });
+    }
+
+    failure.status = 'replayed';
+    failure.replayedAt = new Date().toISOString();
+    if (failure.checkpointRunId) {
+      state.execution.activeRunId = failure.checkpointRunId;
+    } else {
+      delete state.execution.activeRunId;
+    }
+    state.execution.activeTaskId = failure.taskId;
+    await this.stateStore.saveWithEvents(state, [
+      makeEvent(
+        'TASK_SELECTED',
+        { taskId: failure.taskId, replayFromFailureId: failure.id },
+        failure.checkpointRunId ? { runId: failure.checkpointRunId } : {},
+      ),
+    ]);
+
+    return { taskId: failure.taskId, ...(failure.checkpointRunId ? { runId: failure.checkpointRunId } : {}) };
   }
 }

@@ -83,3 +83,51 @@ test('ControlPlaneService exportBacklog writes artifact file through read model'
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('ControlPlaneService can resume dead-lettered failure and unblock task', async () => {
+  const state = createEmptyProjectState({ projectId: 'project-1', projectName: 'Project', summary: 'Summary' });
+  state.backlog.tasks['task-1'] = {
+    id: 'task-1', featureId: 'feature-1', title: 'Task', kind: 'implementation', status: 'blocked',
+    priority: 'p1', dependsOn: [], acceptanceCriteria: ['done'], affectedModules: ['packages/execution'], estimatedRisk: 'medium',
+  };
+  state.backlog.features['feature-1'] = { id: 'feature-1', epicId: 'epic-1', title: 'Feature', outcome: 'Outcome', risks: [], taskIds: ['task-1'] };
+  state.backlog.epics['epic-1'] = { id: 'epic-1', title: 'Epic', goal: 'Goal', status: 'todo', featureIds: ['feature-1'] };
+  state.execution.blockedTaskIds.push('task-1');
+  state.failures.push({
+    id: 'failure-1', taskId: 'task-1', role: 'reviewer', reason: 'failed', symptoms: [], badPatterns: [], retrySuggested: false,
+    status: 'dead_lettered', checkpointRunId: 'run-1', deadLetteredAt: new Date().toISOString(), createdAt: new Date().toISOString(),
+  });
+  const store = new InMemoryStateStore(state);
+  const service = new ControlPlaneService(store, createLogger(makeRuntimeConfig(), { sink: () => {} }));
+
+  await service.resumeFailure('failure-1');
+  const loaded = await store.load();
+
+  assert.equal(loaded.failures[0]?.status, 'resumed');
+  assert.equal(loaded.backlog.tasks['task-1']?.status, 'todo');
+  assert.equal(loaded.execution.blockedTaskIds.includes('task-1'), false);
+});
+
+test('ControlPlaneService replays task from failure checkpoint', async () => {
+  const state = createEmptyProjectState({ projectId: 'project-1', projectName: 'Project', summary: 'Summary' });
+  state.backlog.tasks['task-2'] = {
+    id: 'task-2', featureId: 'feature-1', title: 'Task', kind: 'implementation', status: 'todo',
+    priority: 'p1', dependsOn: [], acceptanceCriteria: ['done'], affectedModules: ['packages/execution'], estimatedRisk: 'medium',
+  };
+  state.backlog.features['feature-1'] = { id: 'feature-1', epicId: 'epic-1', title: 'Feature', outcome: 'Outcome', risks: [], taskIds: ['task-2'] };
+  state.backlog.epics['epic-1'] = { id: 'epic-1', title: 'Epic', goal: 'Goal', status: 'todo', featureIds: ['feature-1'] };
+  state.failures.push({
+    id: 'failure-2', taskId: 'task-2', role: 'tester', reason: 'failed', symptoms: [], badPatterns: [], retrySuggested: true,
+    status: 'retryable', checkpointRunId: 'run-2', checkpointStepId: 'step-5', createdAt: new Date().toISOString(),
+  });
+  const store = new InMemoryStateStore(state);
+  const service = new ControlPlaneService(store, createLogger(makeRuntimeConfig(), { sink: () => {} }));
+
+  const result = await service.replayFromFailureCheckpoint('failure-2');
+  const loaded = await store.load();
+
+  assert.equal(result.taskId, 'task-2');
+  assert.equal(loaded.execution.activeTaskId, 'task-2');
+  assert.equal(loaded.execution.activeRunId, 'run-2');
+  assert.equal(loaded.failures[0]?.status, 'replayed');
+});
