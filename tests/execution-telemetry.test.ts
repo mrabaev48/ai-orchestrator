@@ -68,6 +68,30 @@ test('StateStoreExecutionTelemetry persists METRIC_RECORDED events', async () =>
   });
 });
 
+test('StateStoreExecutionTelemetry persists histogram metrics for span traces', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'p1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const telemetry = new StateStoreExecutionTelemetry(store, logger);
+  await telemetry.recordHistogram({
+    name: 'span_tool_invocation_duration_ms',
+    value: 25,
+    runId: 'run-1',
+    tags: { toolName: 'file_read', status: 'ok' },
+  });
+  assert.equal(store.events[0]?.eventType, 'METRIC_RECORDED');
+  assert.deepEqual(store.events[0]?.payload, {
+    metricType: 'histogram',
+    name: 'span_tool_invocation_duration_ms',
+    value: 25,
+    tags: { toolName: 'file_read', status: 'ok' },
+  });
+});
+
 test('StateStoreExecutionTelemetry degrades safely when metric persistence fails', async () => {
   const lines: Record<string, unknown>[] = [];
   const logger = createLogger(makeRuntimeConfig(), {

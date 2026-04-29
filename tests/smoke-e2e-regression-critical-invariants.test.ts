@@ -104,7 +104,10 @@ function assertCriticalFlow(
   eventTypes: DomainEventType[],
   expectedOrder: DomainEventType[],
 ): void {
-  assert.deepEqual(eventTypes, expectedOrder);
+  assert.deepEqual(
+    eventTypes.filter((eventType) => eventType !== 'METRIC_RECORDED'),
+    expectedOrder,
+  );
 }
 
 test('smoke/e2e: critical happy path preserves select->execute->review->test->persist invariants', async () => {

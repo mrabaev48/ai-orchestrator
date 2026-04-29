@@ -155,6 +155,27 @@ export interface ApprovalRequestView {
   completedAt?: string;
 }
 
+export interface MetricRollupItemView {
+  name: string;
+  metricType: 'counter' | 'histogram' | 'gauge';
+  total: number;
+  sampleCount: number;
+  lastValue: number;
+  lastSeenAt: string;
+  tags: Record<string, string>;
+}
+
+export interface SpanAuditItemView {
+  spanName: string;
+  runId?: string;
+  taskId?: string;
+  role?: string;
+  toolName?: string;
+  status: 'ok' | 'error';
+  durationMs: number;
+  createdAt: string;
+}
+
 export function toStateSummaryView(state: ProjectState): StateSummaryView {
   return {
     projectId: state.projectId,

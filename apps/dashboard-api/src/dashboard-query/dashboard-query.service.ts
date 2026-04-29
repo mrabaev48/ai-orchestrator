@@ -76,6 +76,20 @@ export class DashboardReadApiService {
     return await this.dashboardQueryService.getApprovals(status ? { status } : {});
   }
 
+  async getMetricsAudit(limit?: number, offset?: number) {
+    return await this.dashboardQueryService.getMetricsAudit({
+      ...(limit === undefined ? {} : { limit }),
+      ...(offset === undefined ? {} : { offset }),
+    });
+  }
+
+  async getTraceAudit(limit?: number, offset?: number) {
+    return await this.dashboardQueryService.getTraceAudit({
+      ...(limit === undefined ? {} : { limit }),
+      ...(offset === undefined ? {} : { offset }),
+    });
+  }
+
   async approve(requestId: string, actor: string) {
     return await this.approvalGateService.approve(requestId, actor);
   }

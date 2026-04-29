@@ -80,6 +80,16 @@ export class DashboardQueryController {
     return await this.dashboardReadApiService.getApprovals(query.status);
   }
 
+  @Get('audit/metrics')
+  async getMetricsAudit(@Query() query: HistoryQueryDto) {
+    return await this.dashboardReadApiService.getMetricsAudit(query.limit, query.offset);
+  }
+
+  @Get('audit/traces')
+  async getTraceAudit(@Query() query: HistoryQueryDto) {
+    return await this.dashboardReadApiService.getTraceAudit(query.limit, query.offset);
+  }
+
   @Post('approvals/:requestId/approve')
   async approve(
     @Param('requestId') requestId: string,
