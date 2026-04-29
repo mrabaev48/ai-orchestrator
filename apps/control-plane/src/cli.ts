@@ -16,7 +16,7 @@ import {
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
 
-type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'run-task' | 'show-state' | 'export-backlog';
+type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'run-task' | 'show-state' | 'export-backlog' | 'resume-failure' | 'replay-failure';
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -104,9 +104,31 @@ async function main(): Promise<void> {
         args.out,
       );
       return;
+    case 'resume-failure':
+      await resumeFailure(controlPlaneService, args['failure-id']);
+      return;
+    case 'replay-failure':
+      await replayFailure(controlPlaneService, args['failure-id']);
+      return;
     default:
       throw new ConfigError(`Unknown command: ${String(command)}`);
   }
+}
+
+async function resumeFailure(service: ControlPlaneService, failureId?: string): Promise<void> {
+  if (!failureId) {
+    throw new ConfigError('Missing --failure-id argument for resume-failure command.');
+  }
+  await service.resumeFailure(failureId);
+  console.log(JSON.stringify({ status: 'ok', failureId }));
+}
+
+async function replayFailure(service: ControlPlaneService, failureId?: string): Promise<void> {
+  if (!failureId) {
+    throw new ConfigError('Missing --failure-id argument for replay-failure command.');
+  }
+  const result = await service.replayFromFailureCheckpoint(failureId);
+  console.log(JSON.stringify(result));
 }
 
 async function showState(service: ControlPlaneService, asJson: boolean): Promise<void> {

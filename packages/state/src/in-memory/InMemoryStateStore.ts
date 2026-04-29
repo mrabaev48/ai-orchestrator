@@ -91,6 +91,10 @@ export class InMemoryStateStore implements StateStore {
       symptoms: input.symptoms ?? [],
       badPatterns: input.badPatterns ?? [],
       retrySuggested: input.retrySuggested ?? true,
+      ...(input.status ? { status: input.status } : {}),
+      ...(input.checkpointRunId ? { checkpointRunId: input.checkpointRunId } : {}),
+      ...(input.checkpointStepId ? { checkpointStepId: input.checkpointStepId } : {}),
+      ...(input.deadLetteredAt ? { deadLetteredAt: input.deadLetteredAt } : {}),
       createdAt: new Date().toISOString(),
     };
 

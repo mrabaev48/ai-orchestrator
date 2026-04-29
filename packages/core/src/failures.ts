@@ -1,5 +1,7 @@
 import type { AgentRoleName } from './roles.ts';
 
+export type FailureStatus = 'retryable' | 'dead_lettered' | 'resumed' | 'replayed';
+
 export interface FailureRecord {
   id: string;
   taskId: string;
@@ -8,6 +10,12 @@ export interface FailureRecord {
   symptoms: string[];
   badPatterns: string[];
   retrySuggested: boolean;
+  status?: FailureStatus;
+  checkpointRunId?: string;
+  checkpointStepId?: string;
+  deadLetteredAt?: string;
+  resumedAt?: string;
+  replayedAt?: string;
   createdAt: string;
 }
 

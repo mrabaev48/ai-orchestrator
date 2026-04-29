@@ -535,12 +535,16 @@ export class Orchestrator {
   ): Promise<RunCycleResult> {
     const retryCount = state.execution.retryCounts[task.id] ?? 0;
     const action = nextFailureAction(task, retryCount, this.config.workflow.maxRetriesPerTask);
+    const now = new Date().toISOString();
 
     const failure = await this.stateStore.recordFailure({
       taskId: task.id,
       role,
       reason,
       retrySuggested: action !== 'block',
+      status: action === 'block' ? 'dead_lettered' : 'retryable',
+      checkpointRunId: runId,
+      ...(action === 'block' ? { deadLetteredAt: now } : {}),
     });
     state.failures.push(failure);
     state.execution.retryCounts[task.id] = (state.execution.retryCounts[task.id] ?? 0) + 1;

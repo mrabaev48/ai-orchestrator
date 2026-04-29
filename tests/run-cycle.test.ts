@@ -238,6 +238,8 @@ test('runCycle blocks task after repeated review failures', async () => {
   assert.equal(loaded.backlog.tasks['task-1']?.status, 'blocked');
   assert.equal(loaded.execution.blockedTaskIds.includes('task-1'), true);
   assert.equal(loaded.failures.length, 1);
+  assert.equal(loaded.failures[0]?.status, 'dead_lettered');
+  assert.equal(loaded.failures[0]?.checkpointRunId, result.runId);
 });
 
 test('runCycle splits parent task after repeated review failures', async () => {
