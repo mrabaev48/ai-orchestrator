@@ -11,6 +11,7 @@ export interface CounterMetricInput {
 
 export interface ExecutionTelemetry {
   incrementCounter: (input: CounterMetricInput) => Promise<void>;
+  recordHistogram: (input: CounterMetricInput) => Promise<void>;
 }
 
 export class StateStoreExecutionTelemetry implements ExecutionTelemetry {
@@ -23,11 +24,19 @@ export class StateStoreExecutionTelemetry implements ExecutionTelemetry {
   }
 
   async incrementCounter(input: CounterMetricInput): Promise<void> {
+    await this.recordMetric('counter', input);
+  }
+
+  async recordHistogram(input: CounterMetricInput): Promise<void> {
+    await this.recordMetric('histogram', input);
+  }
+
+  private async recordMetric(metricType: 'counter' | 'histogram', input: CounterMetricInput): Promise<void> {
     const metricValue = input.value ?? 1;
     const metricEvent = makeEvent(
       'METRIC_RECORDED',
       {
-        metricType: 'counter',
+        metricType,
         name: input.name,
         value: metricValue,
         tags: input.tags ?? {},
@@ -42,6 +51,7 @@ export class StateStoreExecutionTelemetry implements ExecutionTelemetry {
         event: 'telemetry_metric_record_failed',
         ...(input.runId ? { runId: input.runId } : {}),
         data: {
+          metricType,
           metric: input.name,
           value: metricValue,
           tags: input.tags ?? {},

@@ -225,6 +225,7 @@ export class Orchestrator {
     abortSignal?: AbortSignal;
   }): Promise<RunCycleResult> {
     const { state, task, runId, workspace, workspaceTools, abortSignal } = input;
+    const taskStartedAt = Date.now();
     this.tools = workspaceTools;
     this.currentRunStepBuffer = [];
     try {
@@ -368,12 +369,24 @@ export class Orchestrator {
       result: 'ok',
     });
 
-      return {
+      const taskResult: RunCycleResult = {
         runId,
         taskId: task.id,
         status: gitLifecycleStatus === 'approval_pending' ? 'blocked' : 'completed',
         ...(gitLifecycleStatus === 'approval_pending' ? { stopReason: 'approval_pending' } : {}),
       };
+      await this.telemetry.incrementCounter({
+        name: 'task_run_total',
+        runId,
+        tags: { taskId: task.id, status: taskResult.status },
+      });
+      await this.telemetry.recordHistogram({
+        name: 'span_task_run_duration_ms',
+        value: Date.now() - taskStartedAt,
+        runId,
+        tags: { taskId: task.id, status: taskResult.status, span: 'task_run' },
+      });
+      return taskResult;
     } catch (error) {
       await workspace.rollback().catch(() => {});
       throw error;
@@ -806,6 +819,29 @@ export class Orchestrator {
         status: 'succeeded',
         durationMs: Date.now() - startedAt,
       });
+      await this.telemetry.incrementCounter({
+        name: 'tool_invocation_total',
+        runId: context.runId,
+        tags: { toolName: request.toolName, role: roleName, status: 'ok' },
+      });
+      await this.telemetry.recordHistogram({
+        name: 'span_tool_invocation_duration_ms',
+        value: Date.now() - startedAt,
+        runId: context.runId,
+        tags: {
+          taskId: context.taskId ?? 'unknown',
+          role: roleName,
+          toolName: request.toolName,
+          status: 'ok',
+          span: 'tool_invocation',
+        },
+      });
+      await this.telemetry.incrementCounter({
+        name: 'llm_token_estimate_total',
+        value: estimateObservationTokens(output),
+        runId: context.runId,
+        tags: { role: roleName, source: 'tool_output_estimate' },
+      });
       return {
         step,
         toolName: request.toolName,
@@ -824,6 +860,29 @@ export class Orchestrator {
         output: message,
         status: 'failed',
         durationMs: Date.now() - startedAt,
+      });
+      await this.telemetry.incrementCounter({
+        name: 'tool_invocation_total',
+        runId: context.runId,
+        tags: { toolName: request.toolName, role: roleName, status: 'error' },
+      });
+      await this.telemetry.recordHistogram({
+        name: 'span_tool_invocation_duration_ms',
+        value: Date.now() - startedAt,
+        runId: context.runId,
+        tags: {
+          taskId: context.taskId ?? 'unknown',
+          role: roleName,
+          toolName: request.toolName,
+          status: 'error',
+          span: 'tool_invocation',
+        },
+      });
+      await this.telemetry.incrementCounter({
+        name: 'run_cost_usd_micro_total',
+        value: 0,
+        runId: context.runId,
+        tags: { role: roleName, source: 'unavailable' },
       });
       return {
         step,
@@ -1335,6 +1394,11 @@ export class Orchestrator {
     state.execution.runStepLog.push(...this.currentRunStepBuffer);
     this.currentRunStepBuffer = [];
   }
+}
+
+function estimateObservationTokens(value: unknown): number {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return Math.max(1, Math.ceil(text.length / 4));
 }
 
 function rewriteSupersededDependencies(

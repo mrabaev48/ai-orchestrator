@@ -11,6 +11,8 @@ import type {
   MilestoneListItemView,
   PaginatedView,
   ApprovalRequestView,
+  MetricRollupItemView,
+  SpanAuditItemView,
 } from './read-models.ts';
 import {
   toArtifactHistoryView,
@@ -149,6 +151,75 @@ export class DashboardQueryService {
       ? state.approvals.filter((entry) => entry.status === query.status)
       : state.approvals;
     return toApprovalRequestView(approvals);
+  }
+
+  async getMetricsAudit(query: HistoryQueryInput = {}): Promise<PaginatedView<MetricRollupItemView>> {
+    const { limit, offset } = normalizeHistoryQuery(query);
+    const events = await this.stateStore.listEvents({ eventType: 'METRIC_RECORDED' });
+    const buckets = new Map<string, MetricRollupItemView>();
+    for (const event of events) {
+      const payload = event.payload as {
+        metricType?: 'counter' | 'histogram' | 'gauge';
+        name?: string;
+        value?: number;
+        tags?: Record<string, string>;
+      };
+      if (typeof payload.name !== 'string' || typeof payload.value !== 'number') {
+        continue;
+      }
+      const metricType = payload.metricType ?? 'counter';
+      const tags = payload.tags ?? {};
+      const key = `${metricType}:${payload.name}:${JSON.stringify(tags)}`;
+      const existing = buckets.get(key);
+      if (!existing) {
+        buckets.set(key, {
+          name: payload.name,
+          metricType,
+          total: payload.value,
+          sampleCount: 1,
+          lastValue: payload.value,
+          lastSeenAt: event.createdAt,
+          tags,
+        });
+        continue;
+      }
+      existing.total += payload.value;
+      existing.sampleCount += 1;
+      existing.lastValue = payload.value;
+      existing.lastSeenAt = event.createdAt;
+    }
+    const items = applyPagination(
+      [...buckets.values()].sort((l, r) => r.lastSeenAt.localeCompare(l.lastSeenAt)),
+      offset,
+      limit,
+    );
+    return { total: buckets.size, limit, offset, items };
+  }
+
+  async getTraceAudit(query: HistoryQueryInput = {}): Promise<PaginatedView<SpanAuditItemView>> {
+    const { limit, offset } = normalizeHistoryQuery(query);
+    const events = await this.stateStore.listEvents({ eventType: 'METRIC_RECORDED' });
+    const spans = events
+      .map((event) => {
+        const payload = event.payload;
+        const metricName = typeof payload.name === 'string' ? payload.name : null;
+        if (payload.metricType !== 'histogram' || !metricName?.startsWith('span_')) {
+          return null;
+        }
+        return {
+          spanName: metricName,
+          ...(event.runId ? { runId: event.runId } : {}),
+          ...(typeof payload.taskId === 'string' ? { taskId: payload.taskId } : {}),
+          ...(typeof payload.role === 'string' ? { role: payload.role } : {}),
+          ...(typeof payload.toolName === 'string' ? { toolName: payload.toolName } : {}),
+          status: payload.status === 'error' ? 'error' : 'ok',
+          durationMs: typeof payload.value === 'number' ? payload.value : 0,
+          createdAt: event.createdAt,
+        };
+      })
+      .filter((item): item is SpanAuditItemView => item !== null);
+    const items = applyPagination(spans, offset, limit);
+    return { total: spans.length, limit, offset, items };
   }
 }
 

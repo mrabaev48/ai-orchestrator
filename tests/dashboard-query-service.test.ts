@@ -95,3 +95,33 @@ test('DashboardQueryService returns paginated history views and latest run summa
   assert.equal(artifacts.items[0]?.type, 'run_summary');
   assert.equal(latestRun?.taskId, 'task-1');
 });
+
+test('DashboardQueryService returns metrics and trace audit views', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'project-1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  const store = new InMemoryStateStore(state);
+  await store.recordEvent(makeEvent('METRIC_RECORDED', {
+    metricType: 'counter',
+    name: 'task_run_total',
+    value: 1,
+    tags: { taskId: 'task-1', status: 'completed' },
+  }, { runId: 'run-1' }));
+  await store.recordEvent(makeEvent('METRIC_RECORDED', {
+    metricType: 'histogram',
+    name: 'span_tool_invocation_duration_ms',
+    value: 42,
+    tags: { taskId: 'task-1', role: 'coder', toolName: 'file_read', status: 'ok', span: 'tool_invocation' },
+  }, { runId: 'run-1' }));
+
+  const service = new DashboardQueryService(store);
+  const metrics = await service.getMetricsAudit();
+  const traces = await service.getTraceAudit();
+
+  assert.equal(metrics.items.some((item) => item.name === 'span_tool_invocation_duration_ms'), true);
+  assert.equal(metrics.items.some((item) => item.name === 'task_run_total'), true);
+  assert.equal(traces.items[0]?.spanName, 'span_tool_invocation_duration_ms');
+  assert.equal(traces.items[0]?.durationMs, 42);
+});
