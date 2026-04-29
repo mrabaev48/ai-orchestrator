@@ -11,6 +11,10 @@ import { WorkerRunner } from './worker-runner.ts';
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
 const DEFAULT_IDLE_BACKOFF_MS = 2_000;
+const DEFAULT_MAX_IDLE_BACKOFF_MS = 15_000;
+const DEFAULT_CYCLE_TIMEOUT_MS = 120_000;
+const DEFAULT_ERROR_BACKOFF_MS = 1_000;
+const DEFAULT_MAX_ERROR_BACKOFF_MS = 30_000;
 
 async function main(): Promise<void> {
   const runtimeConfig = loadRuntimeConfig();
@@ -30,6 +34,10 @@ async function main(): Promise<void> {
   const runner = new WorkerRunner(application.orchestrator, logger, {
     pollIntervalMs: parseInterval(args['poll-interval-ms'], DEFAULT_POLL_INTERVAL_MS, 'poll-interval-ms'),
     idleBackoffMs: parseInterval(args['idle-backoff-ms'], DEFAULT_IDLE_BACKOFF_MS, 'idle-backoff-ms'),
+    maxIdleBackoffMs: parseInterval(args['max-idle-backoff-ms'], DEFAULT_MAX_IDLE_BACKOFF_MS, 'max-idle-backoff-ms'),
+    cycleTimeoutMs: parseInterval(args['cycle-timeout-ms'], DEFAULT_CYCLE_TIMEOUT_MS, 'cycle-timeout-ms'),
+    errorBackoffMs: parseInterval(args['error-backoff-ms'], DEFAULT_ERROR_BACKOFF_MS, 'error-backoff-ms'),
+    maxErrorBackoffMs: parseInterval(args['max-error-backoff-ms'], DEFAULT_MAX_ERROR_BACKOFF_MS, 'max-error-backoff-ms'),
   });
 
   process.once('SIGINT', () => {
