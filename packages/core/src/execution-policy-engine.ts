@@ -114,6 +114,7 @@ export class ExecutionPolicyEngine {
       stateSummary: input.stateSummary,
       toolProfile: profile.toolProfile,
       toolExecution: profile.toolExecution,
+      policyRules: profile.rules,
       ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
       logger,
     };

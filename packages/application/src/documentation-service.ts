@@ -23,6 +23,7 @@ export class DocumentationService {
   private readonly roleRegistry: RoleRegistry;
   private readonly logger: Logger;
   private readonly toolSet: ReturnType<typeof createLocalToolSet>;
+  private readonly allowedWritePaths: string[];
 
   constructor(
     stateStore: StateStore,
@@ -33,6 +34,7 @@ export class DocumentationService {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
     this.logger = logger;
+    this.allowedWritePaths = config.tools.allowedWritePaths;
     this.toolSet = createLocalToolSet({
       allowedWritePaths: config.tools.allowedWritePaths,
       allowedShellCommands: config.tools.allowedShellCommands,
@@ -71,7 +73,7 @@ export class DocumentationService {
         role: 'docs_writer',
         stateSummary: state.summary,
         workspaceRoot: process.cwd(),
-        allowedWritePaths: this.toolSet.fileSystem ? [process.cwd()] : [],
+        allowedWritePaths: this.allowedWritePaths,
         evidenceSource: 'artifacts',
         logger: this.logger,
       }),

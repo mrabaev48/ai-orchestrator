@@ -264,12 +264,14 @@ export class Orchestrator {
       { changed: boolean; summary: string }
     >(roleName);
 
+      const executionContext = this.makeContext(roleName, runId, state, workspace.rootPath, task.id, abortSignal);
       const executionResponse = await this.executeRole(executor, {
       role: roleName,
       objective: `Execute ${task.id}`,
       input: { task, prompt: promptResponse.output },
       acceptanceCriteria: task.acceptanceCriteria,
-      }, this.makeContext(roleName, runId, state, workspace.rootPath, task.id, abortSignal));
+      }, executionContext);
+    await this.enforceExecutionPolicy(workspace.rootPath, executionContext);
 
     await this.stateStore.recordEvent(makeEvent('ROLE_EXECUTED', { taskId: task.id, role: roleName }, { runId }));
 
@@ -322,6 +324,7 @@ export class Orchestrator {
       }
 
       this.applyRepoHealthFromTestingResult(state, testing.output.qualityStages, true);
+      this.enforceRequiredChecks(this.makeContext('tester', runId, state, workspace.rootPath, task.id, abortSignal), testing.output.qualityStages);
       await this.persistQualityStageArtifacts(state, runId, task.id, testing.output.qualityStages);
       await this.stateStore.recordEvent(makeEvent('TEST_PASSED', { taskId: task.id }, { runId }));
     }
@@ -377,6 +380,58 @@ export class Orchestrator {
     } finally {
       this.currentRunStepBuffer = null;
       await workspace.cleanup().catch(() => {});
+    }
+  }
+
+  private async enforceExecutionPolicy(workspaceRoot: string, context: RoleExecutionContext): Promise<void> {
+    const rules = context.policyRules;
+    if (!rules) {
+      return;
+    }
+    const changedFiles = await this.listWorkspaceChangedFiles(workspaceRoot);
+    if (rules.maxChangedFiles >= 0 && changedFiles.length > rules.maxChangedFiles) {
+      throw new WorkflowPolicyError(
+        `Policy maxChangedFiles exceeded for ${context.role}: ${changedFiles.length} > ${rules.maxChangedFiles}`,
+      );
+    }
+    const forbiddenHit = changedFiles.find((filePath) =>
+      rules.forbiddenDirectories.some((directory) =>
+        filePath === directory || filePath.startsWith(`${directory}/`)
+      )
+    );
+    if (forbiddenHit) {
+      throw new WorkflowPolicyError(`Policy forbiddenDirectories violation for ${context.role}: ${forbiddenHit}`);
+    }
+  }
+
+  private async listWorkspaceChangedFiles(workspaceRoot: string): Promise<string[]> {
+    try {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain'], { cwd: workspaceRoot });
+      return stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 3)
+        .map((line) => line.slice(3).trim())
+        .filter((line) => line.length > 0);
+    } catch {
+      return [];
+    }
+  }
+
+  private enforceRequiredChecks(
+    context: RoleExecutionContext,
+    qualityStages: readonly QualityStageResult[] | undefined,
+  ): void {
+    const requiredChecks = context.policyRules?.requiredChecks ?? [];
+    if (requiredChecks.length === 0 || !qualityStages || qualityStages.length === 0) {
+      return;
+    }
+    const passedStages = new Set(
+      (qualityStages ?? []).filter((stage) => stage.status === 'passing').map((stage) => stage.stage),
+    );
+    const missing = requiredChecks.filter((check) => !passedStages.has(check as QualityStageResult['stage']));
+    if (missing.length > 0) {
+      throw new WorkflowPolicyError(`Policy requiredChecks not satisfied: ${missing.join(', ')}`);
     }
   }
 
