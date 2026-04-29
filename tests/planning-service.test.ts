@@ -83,6 +83,9 @@ test('PlanningService persists backlog and active milestone after discovery and 
     assert.equal(loaded.milestones[plan.milestone.id]?.status, 'in_progress');
     assert.equal(loaded.artifacts.some((artifact) => artifact.type === 'plan'), true);
     assert.equal(store.events.some((event) => event.eventType === 'BACKLOG_PLANNED'), true);
+    assert.equal(plan.dependencyEdges.length > 0, true);
+    assert.equal(plan.assumptions.length > 0, true);
+    assert.equal(plan.mergePreview.batches.length > 0, true);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

@@ -27,5 +27,8 @@ test('buildPlanningPrompt exposes milestone-aware backlog schema', () => {
 
   assert.equal(prompt.role, 'planner');
   assert.match(prompt.taskPrompt, /Architecture findings: 1/);
-  assert.deepEqual(prompt.outputSchema.required, ['milestone', 'backlog', 'summary']);
+  assert.deepEqual(
+    prompt.outputSchema.required,
+    ['milestone', 'backlog', 'summary', 'dependencyEdges', 'assumptions', 'risks', 'mergePreview'],
+  );
 });

@@ -23,6 +23,7 @@ export function buildPlanningPrompt(
     systemPrompt: [
       'Convert architecture findings into milestones, epics, features, and bounded tasks.',
       'Every task must be actionable, have acceptance criteria, and preserve dependency-aware sequencing.',
+      'Return a normalized backlog graph including dependency edges, assumptions, risks, and merge preview batches.',
       'Foundational stabilization work must come before broader feature work.',
     ].join(' '),
     taskPrompt: [

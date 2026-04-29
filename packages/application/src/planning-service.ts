@@ -17,6 +17,29 @@ interface PlanningOutput {
   milestone: Milestone;
   backlog: Backlog;
   summary: string;
+  dependencyEdges: {
+    fromId: string;
+    toId: string;
+    type: 'contains' | 'depends_on';
+    rationale: string;
+  }[];
+  assumptions: string[];
+  risks: {
+    id: string;
+    title: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    description: string;
+    mitigation: string;
+    relatedIds: string[];
+  }[];
+  mergePreview: {
+    batches: {
+      id: string;
+      taskIds: string[];
+      rationale: string;
+    }[];
+    notes: string[];
+  };
 }
 
 export class PlanningService {
@@ -122,6 +145,7 @@ function makePlannerRoleRequest(
     acceptanceCriteria: [
       'Return milestone-aware backlog output',
       'Preserve acceptance criteria and dependency-aware task sequencing',
+      'Include normalized dependency edges, assumptions, risks, and merge preview batches',
     ],
     expectedOutputSchema: outputSchema,
   };
