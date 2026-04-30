@@ -6,6 +6,8 @@ import type {
   FailureRecord,
   ProjectState,
   RunStepLogEntry,
+  ExecutionPolicyActionType,
+  ExecutionPolicyDecision,
 } from '../../core/src/index.ts';
 import type { AgentRoleName } from '../../core/src/roles.ts';
 import type { FailureStatus } from '../../core/src/failures.ts';
@@ -47,5 +49,15 @@ export interface StateStore {
   recordArtifact: (artifact: ArtifactRecord) => Promise<void>;
   recordDecision: (decision: DecisionLogItem) => Promise<void>;
   recordRunStep: (step: RunStepLogEntry) => Promise<void>;
+  recordPolicyDecision: (decision: ExecutionPolicyDecision) => Promise<void>;
+  getPolicyDecision: (query: PolicyDecisionQuery) => Promise<ExecutionPolicyDecision | null>;
   markTaskDone: (taskId: string, summary: string) => Promise<void>;
+}
+
+
+export interface PolicyDecisionQuery {
+  runId: string;
+  stepId: string;
+  attempt: number;
+  actionType: ExecutionPolicyActionType;
 }

@@ -8,6 +8,7 @@ import type { ArtifactRecord } from './artifacts.ts';
 import type { Backlog } from './backlog.ts';
 import { validateBacklogTask } from './backlog.ts';
 import type { DecisionLogItem } from './decisions.ts';
+import type { ExecutionPolicyDecision } from './execution-policy-decision.ts';
 import {
   createEmptyProjectDiscovery,
   type ProjectDiscovery,
@@ -71,6 +72,7 @@ export interface ProjectState {
   failures: FailureRecord[];
   artifacts: ArtifactRecord[];
   approvals: ApprovalRequest[];
+  policyDecisions: ExecutionPolicyDecision[];
 }
 
 export interface ValidationResult {
@@ -204,6 +206,25 @@ const runStepLogEntrySchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
 });
 
+
+const policyDecisionSchema = z.object({
+  decisionId: z.string().min(1),
+  tenantId: z.string().min(1),
+  projectId: z.string().min(1),
+  runId: z.string().min(1),
+  stepId: z.string().min(1),
+  attempt: z.number().int().nonnegative(),
+  actionType: z.enum(['git_commit', 'git_push', 'pr_draft', 'artifact_write', 'external_api']),
+  riskLevel: z.enum(['low', 'medium', 'high']),
+  decision: z.enum(['allow', 'deny', 'error']),
+  reasonCodes: z.array(z.string().min(1)),
+  decidedAt: z.iso.datetime({ offset: true }),
+  decider: z.string().min(1),
+  inputHash: z.string().min(1),
+  traceId: z.string().min(1),
+  policyVersion: z.string().min(1),
+});
+
 const approvalRequestSchema = z.object({
   id: z.string().min(1),
   runId: z.string().min(1),
@@ -256,6 +277,7 @@ const projectStateDeepSchema = z.object({
   failures: z.array(failureSchema),
   artifacts: z.array(artifactSchema),
   approvals: z.array(approvalRequestSchema),
+  policyDecisions: z.array(policyDecisionSchema),
   execution: executionStateSchema,
 });
 
@@ -319,6 +341,7 @@ export function createEmptyProjectState(input: {
     failures: [],
     artifacts: [],
     approvals: [],
+    policyDecisions: [],
   };
 }
 
