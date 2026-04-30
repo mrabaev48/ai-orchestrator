@@ -7,8 +7,9 @@ import {
   type FailureRecord,
   type ProjectState,
   type RunStepLogEntry,
+  type ExecutionPolicyDecision,
 } from '../../../core/src/index.ts';
-import type { ListEventsQuery, ListRunStepsQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
+import type { ListEventsQuery, ListRunStepsQuery, PolicyDecisionQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
 import { StateStoreError } from '../../../shared/src/index.ts';
 
 export class InMemoryStateStore implements StateStore {
@@ -120,6 +121,25 @@ export class InMemoryStateStore implements StateStore {
     const current = await this.load();
     current.decisions.push(structuredClone(decision));
     await this.save(current);
+  }
+
+
+  async recordPolicyDecision(decision: ExecutionPolicyDecision): Promise<void> {
+    const current = await this.load();
+    current.policyDecisions.push(structuredClone(decision));
+    await this.save(current);
+  }
+
+  async getPolicyDecision(query: PolicyDecisionQuery): Promise<ExecutionPolicyDecision | null> {
+    const current = await this.load();
+    const found = current.policyDecisions
+      .slice()
+      .reverse()
+      .find((item) => item.runId === query.runId
+        && item.stepId === query.stepId
+        && item.attempt === query.attempt
+        && item.actionType === query.actionType);
+    return found ? structuredClone(found) : null;
   }
 
   async recordRunStep(step: RunStepLogEntry): Promise<void> {

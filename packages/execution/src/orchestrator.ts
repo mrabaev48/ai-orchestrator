@@ -1,5 +1,5 @@
-import type { ApprovalRequest, ArtifactRecord, BacklogTask, ProjectState } from '../../core/src/index.ts';
-import { assertProjectState, isExecutableTask, makeEvent } from '../../core/src/index.ts';
+import type { ApprovalRequest, ArtifactRecord, BacklogTask, ExecutionPolicyActionType, ProjectState } from '../../core/src/index.ts';
+import { assertProjectState, formatPolicyDecisionError, isExecutableTask, makeEvent } from '../../core/src/index.ts';
 import {
   defaultExecutionPolicyEngine,
   defaultRoleOutputSchemaRegistry,
@@ -1127,6 +1127,65 @@ export class Orchestrator {
     state.artifacts.push(branchArtifact);
   }
 
+
+  private async persistAndRequirePolicyDecision(input: {
+    state: ProjectState;
+    runId: string;
+    taskId: string;
+    stepId: string;
+    attempt: number;
+    actionType: ExecutionPolicyActionType;
+    riskLevel: 'low' | 'medium' | 'high';
+    inputHashSeed: string;
+    reasonCodes: string[];
+  }): Promise<void> {
+    const decision = {
+      decisionId: crypto.randomUUID(),
+      tenantId: input.state.orgId,
+      projectId: input.state.projectId,
+      runId: input.runId,
+      stepId: input.stepId,
+      attempt: input.attempt,
+      actionType: input.actionType,
+      riskLevel: input.riskLevel,
+      decision: 'allow' as const,
+      reasonCodes: input.reasonCodes,
+      decidedAt: new Date().toISOString(),
+      decider: 'orchestrator_policy_gate_v1',
+      inputHash: this.createPolicyInputHash(input.inputHashSeed),
+      traceId: input.runId,
+      policyVersion: 'policyDecisionPersistenceV1',
+    };
+    await this.stateStore.recordPolicyDecision(decision);
+    input.state.policyDecisions.push(decision);
+
+    const persisted = await this.stateStore.getPolicyDecision({
+      runId: input.runId,
+      stepId: input.stepId,
+      attempt: input.attempt,
+      actionType: input.actionType,
+    });
+    if (!persisted) {
+      throw new WorkflowPolicyError(formatPolicyDecisionError('POLICY_DECISION_MISSING', input.actionType), {
+        details: { policyCode: 'POLICY_DECISION_MISSING', runId: input.runId, taskId: input.taskId, stepId: input.stepId },
+      });
+    }
+    if (persisted.policyVersion !== 'policyDecisionPersistenceV1' || persisted.inputHash !== decision.inputHash) {
+      throw new WorkflowPolicyError(formatPolicyDecisionError('POLICY_DECISION_STALE', input.actionType), {
+        details: { policyCode: 'POLICY_DECISION_STALE', runId: input.runId, taskId: input.taskId, stepId: input.stepId },
+      });
+    }
+    if (persisted.decision !== 'allow') {
+      throw new WorkflowPolicyError(formatPolicyDecisionError('POLICY_DENIED', input.actionType), {
+        details: { policyCode: 'POLICY_DENIED', runId: input.runId, taskId: input.taskId, stepId: input.stepId },
+      });
+    }
+  }
+
+  private createPolicyInputHash(seed: string): string {
+    return Buffer.from(seed).toString('base64url').slice(0, 64);
+  }
+
   private async recordGitLifecycleCompletionArtifacts(
     state: ProjectState,
     input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
@@ -1143,6 +1202,11 @@ export class Orchestrator {
     let isWaitingForApproval = false;
 
     if (hasChanges) {
+      await this.persistAndRequirePolicyDecision({
+        state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:git_commit`, attempt: 0,
+        actionType: 'git_commit', riskLevel: 'medium', inputHashSeed: `${input.runId}:${input.taskId}:git_commit:${commitMessage}`,
+        reasonCodes: ['REPO_CHANGES_PRESENT'],
+      });
       const committed = await this.createCommit(input.workspaceRoot, commitMessage);
       commitStatus = committed.ok ? 'created' : 'failed';
       if (committed.ok) {
@@ -1187,6 +1251,11 @@ export class Orchestrator {
           pushStatus = pushGate.status === 'pending' ? 'pending_approval' : 'waiting_resume';
           isWaitingForApproval = true;
         } else {
+          await this.persistAndRequirePolicyDecision({
+            state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:git_push`, attempt: 0,
+            actionType: 'git_push', riskLevel: 'high', inputHashSeed: `${input.runId}:${input.taskId}:git_push:${branchName}:${commitSha}`,
+            reasonCodes: ['APPROVAL_GATE_PASSED'],
+          });
           const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
           pushStatus = isPushed ? 'pushed' : 'failed';
         }
@@ -1237,6 +1306,11 @@ export class Orchestrator {
         prStatus = prGate.status === 'pending' ? 'pending_approval' : 'waiting_resume';
         isWaitingForApproval = true;
       } else {
+        await this.persistAndRequirePolicyDecision({
+          state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:pr_draft`, attempt: 0,
+          actionType: 'pr_draft', riskLevel: 'high', inputHashSeed: `${input.runId}:${input.taskId}:pr_draft:${branchName}:${prTitle}`,
+          reasonCodes: ['PUSH_SUCCESSFUL'],
+        });
         prStatus = await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody)
           ? 'created'
           : 'failed';

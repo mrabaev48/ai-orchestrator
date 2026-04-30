@@ -96,6 +96,8 @@ test('StateIntegrityService persists explainable integrity report for invalid st
       void decision;
     },
     recordRunStep: async () => {},
+    recordPolicyDecision: async () => {},
+    getPolicyDecision: async () => null,
     markTaskDone: async (taskId: string, summary: string) => {
       void taskId;
       void summary;
