@@ -231,6 +231,7 @@ export class Orchestrator {
   }): Promise<RunCycleResult> {
     const { state, task, runId, workspace, workspaceTools, abortSignal } = input;
     const taskStartedAt = Date.now();
+    let runOutcome: 'completed' | 'blocked' | 'failed' = 'failed';
     this.tools = workspaceTools;
     this.currentRunStepBuffer = [];
     this.currentTaskTokenEstimate = 0;
@@ -381,6 +382,7 @@ export class Orchestrator {
         status: gitLifecycleStatus === 'approval_pending' ? 'blocked' : 'completed',
         ...(gitLifecycleStatus === 'approval_pending' ? { stopReason: 'approval_pending' } : {}),
       };
+      runOutcome = taskResult.status === 'blocked' ? 'blocked' : 'completed';
       await this.telemetry.incrementCounter({
         name: 'task_run_total',
         runId,
@@ -397,9 +399,29 @@ export class Orchestrator {
       await workspace.rollback().catch(() => {});
       throw error;
     } finally {
+      await this.recordRunCostSummaryArtifact(state, runId, task.id, runOutcome);
       this.currentRunStepBuffer = null;
       await workspace.cleanup().catch(() => {});
     }
+  }
+
+  private async recordRunCostSummaryArtifact(
+    state: ProjectState,
+    runId: string,
+    taskId: string,
+    status: 'completed' | 'blocked' | 'failed',
+  ): Promise<void> {
+    const artifact = makeArtifact('run_summary', `Run cost summary for ${taskId}`, {
+      runId,
+      taskId,
+      status,
+      estimatedTokensRun: String(this.currentRunTokenEstimate),
+      estimatedTokensTask: String(this.currentTaskTokenEstimate),
+      estimatedCostUsdMicro: String(this.currentRunCostUsdMicro),
+      estimationMethod: 'heuristic_chars_div_4',
+    });
+    await this.stateStore.recordArtifact(artifact).catch(() => {});
+    state.artifacts.push(artifact);
   }
 
   private async enforceExecutionPolicy(workspaceRoot: string, context: RoleExecutionContext): Promise<void> {

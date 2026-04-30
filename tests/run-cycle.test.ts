@@ -143,6 +143,16 @@ test('runCycle happy path completes task and records summary artifact', async ()
   assert.equal(
     state.artifacts.some(
       (artifact) =>
+        artifact.type === 'run_summary'
+        && artifact.metadata.runId === result.runId
+        && artifact.metadata.estimatedCostUsdMicro !== undefined
+        && artifact.metadata.estimationMethod === 'heuristic_chars_div_4',
+    ),
+    true,
+  );
+  assert.equal(
+    state.artifacts.some(
+      (artifact) =>
         artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'pr_draft' && artifact.metadata.taskId === 'task-1',
     ),
     true,
