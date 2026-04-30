@@ -96,5 +96,47 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
           ON ${table('run_step_log')} (org_id, project_id, run_id, created_at DESC)`,
       ],
     },
+    {
+      id: 4,
+      name: 'tenant_backfill_and_guards',
+      statements: [
+        `UPDATE ${table('project_snapshots')}
+         SET org_id = COALESCE(org_id, snapshot_json->>'orgId', 'default-org'),
+             project_id = COALESCE(project_id, snapshot_json->>'projectId', 'ai-orchestrator')
+         WHERE org_id IS NULL OR project_id IS NULL`,
+        `UPDATE ${table('domain_events')}
+         SET org_id = COALESCE(org_id, 'default-org'),
+             project_id = COALESCE(project_id, 'ai-orchestrator')
+         WHERE org_id IS NULL OR project_id IS NULL`,
+        `UPDATE ${table('decision_log')}
+         SET org_id = COALESCE(org_id, 'default-org'),
+             project_id = COALESCE(project_id, 'ai-orchestrator')
+         WHERE org_id IS NULL OR project_id IS NULL`,
+        `UPDATE ${table('failure_log')}
+         SET org_id = COALESCE(org_id, 'default-org'),
+             project_id = COALESCE(project_id, 'ai-orchestrator')
+         WHERE org_id IS NULL OR project_id IS NULL`,
+        `UPDATE ${table('artifact_log')}
+         SET org_id = COALESCE(org_id, 'default-org'),
+             project_id = COALESCE(project_id, 'ai-orchestrator')
+         WHERE org_id IS NULL OR project_id IS NULL`,
+        `UPDATE ${table('run_step_log')}
+         SET org_id = COALESCE(org_id, 'default-org'),
+             project_id = COALESCE(project_id, 'ai-orchestrator')
+         WHERE org_id IS NULL OR project_id IS NULL`,
+        `ALTER TABLE ${table('project_snapshots')} ALTER COLUMN org_id SET NOT NULL`,
+        `ALTER TABLE ${table('project_snapshots')} ALTER COLUMN project_id SET NOT NULL`,
+        `ALTER TABLE ${table('domain_events')} ALTER COLUMN org_id SET NOT NULL`,
+        `ALTER TABLE ${table('domain_events')} ALTER COLUMN project_id SET NOT NULL`,
+        `ALTER TABLE ${table('decision_log')} ALTER COLUMN org_id SET NOT NULL`,
+        `ALTER TABLE ${table('decision_log')} ALTER COLUMN project_id SET NOT NULL`,
+        `ALTER TABLE ${table('failure_log')} ALTER COLUMN org_id SET NOT NULL`,
+        `ALTER TABLE ${table('failure_log')} ALTER COLUMN project_id SET NOT NULL`,
+        `ALTER TABLE ${table('artifact_log')} ALTER COLUMN org_id SET NOT NULL`,
+        `ALTER TABLE ${table('artifact_log')} ALTER COLUMN project_id SET NOT NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN org_id SET NOT NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN project_id SET NOT NULL`,
+      ],
+    },
   ];
 }
