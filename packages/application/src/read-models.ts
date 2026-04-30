@@ -177,6 +177,40 @@ export interface SpanAuditItemView {
   createdAt: string;
 }
 
+export interface RunTimelineItemView {
+  id: string;
+  type: DomainEvent['eventType'];
+  createdAt: string;
+  summary: string;
+  taskId?: string;
+  role?: string;
+}
+
+export interface DiffIntelligenceView {
+  summary: string;
+  filesChanged?: number;
+  additions?: number;
+  deletions?: number;
+}
+
+export interface TestEvidenceItemView {
+  artifactId: string;
+  title: string;
+  createdAt: string;
+  status: 'passed' | 'failed' | 'unknown';
+}
+
+export interface ReviewBundleView {
+  runId: string;
+  timeline: RunTimelineItemView[];
+  diff: DiffIntelligenceView;
+  testEvidence: TestEvidenceItemView[];
+  prBundle: {
+    summary: string;
+    artifacts: ArtifactHistoryItemView[];
+  };
+}
+
 export function toStateSummaryView(state: ProjectState): StateSummaryView {
   return {
     orgId: state.orgId,

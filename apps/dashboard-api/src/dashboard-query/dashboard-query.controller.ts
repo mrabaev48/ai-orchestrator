@@ -90,6 +90,11 @@ export class DashboardQueryController {
     return await this.dashboardReadApiService.getTraceAudit(query.limit, query.offset);
   }
 
+  @Get('runs/review-bundle')
+  async getReviewBundle(@Query('runId') runId?: string) {
+    return await this.dashboardReadApiService.getReviewBundle(runId);
+  }
+
   @Post('approvals/:requestId/approve')
   async approve(
     @Param('requestId') requestId: string,

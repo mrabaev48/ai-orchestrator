@@ -125,3 +125,37 @@ test('DashboardQueryService returns metrics and trace audit views', async () => 
   assert.equal(traces.items[0]?.spanName, 'span_tool_invocation_duration_ms');
   assert.equal(traces.items[0]?.durationMs, 42);
 });
+
+test('DashboardQueryService returns review bundle with timeline, diff intelligence and test evidence', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'project-1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  state.artifacts.push({
+    id: 'artifact-report',
+    type: 'report',
+    title: 'Test report passed',
+    metadata: { summary: '2 files touched', filesChanged: '2', additions: '20', deletions: '4', runId: 'run-9' },
+    createdAt: '2026-03-10T03:00:00.000Z',
+  });
+  state.artifacts.push({
+    id: 'artifact-plan',
+    type: 'test_plan',
+    title: 'Regression plan',
+    metadata: { runId: 'run-9' },
+    createdAt: '2026-03-10T02:00:00.000Z',
+  });
+  const store = new InMemoryStateStore(state);
+  await store.recordEvent(makeEvent('TASK_SELECTED', { taskId: 'task-9', summary: 'Task started' }, { runId: 'run-9' }));
+  await store.recordEvent(makeEvent('TASK_COMPLETED', { taskId: 'task-9', summary: 'Task done' }, { runId: 'run-9' }));
+  const service = new DashboardQueryService(store);
+
+  const bundle = await service.getReviewBundle('run-9');
+
+  assert.equal(bundle?.runId, 'run-9');
+  assert.equal(bundle?.timeline.length, 2);
+  assert.equal(bundle?.diff.filesChanged, 2);
+  assert.equal(bundle?.testEvidence.length, 2);
+  assert.equal(bundle?.prBundle.artifacts.length, 2);
+});
