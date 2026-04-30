@@ -881,3 +881,17 @@ test('runCycle propagates abort signal into role step for cooperative cancellati
   );
   assert.equal(isAbortObserved, true);
 });
+
+test('runCycle enforces token budget before executing role', async () => {
+  const config = makeRuntimeConfig();
+  config.llm.tokenBudgetPerTask = 1;
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(config, { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), config, logger);
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) => error instanceof WorkflowPolicyError
+      && error.message.includes('Token budget exceeded for task'),
+  );
+});
