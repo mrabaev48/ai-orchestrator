@@ -148,9 +148,9 @@ test('smoke/e2e: critical happy path preserves select->execute->review->test->pe
     'successful run persists at least one run summary artifact',
   );
   assert.equal(
-    state.artifacts.filter((artifact) => artifact.type === 'run_summary').length,
-    2,
-    'task and run summaries should both persist',
+    state.artifacts.filter((artifact) => artifact.type === 'run_summary').length >= 2,
+    true,
+    'task and run summaries should persist; additional run-level summaries are allowed',
   );
 });
 

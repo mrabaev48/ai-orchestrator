@@ -143,6 +143,16 @@ test('runCycle happy path completes task and records summary artifact', async ()
   assert.equal(
     state.artifacts.some(
       (artifact) =>
+        artifact.type === 'run_summary'
+        && artifact.metadata.runId === result.runId
+        && artifact.metadata.estimatedCostUsdMicro !== undefined
+        && artifact.metadata.estimationMethod === 'heuristic_chars_div_4',
+    ),
+    true,
+  );
+  assert.equal(
+    state.artifacts.some(
+      (artifact) =>
         artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'pr_draft' && artifact.metadata.taskId === 'task-1',
     ),
     true,
@@ -880,4 +890,18 @@ test('runCycle propagates abort signal into role step for cooperative cancellati
     (error: unknown) => error instanceof WorkflowPolicyError,
   );
   assert.equal(isAbortObserved, true);
+});
+
+test('runCycle enforces token budget before executing role', async () => {
+  const config = makeRuntimeConfig();
+  config.llm.tokenBudgetPerTask = 1;
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(config, { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), config, logger);
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) => error instanceof WorkflowPolicyError
+      && error.message.includes('Token budget exceeded for task'),
+  );
 });

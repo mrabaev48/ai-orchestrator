@@ -37,6 +37,12 @@ const runtimeConfigSchema = z.strictObject({
   llm: z.strictObject({
     provider: llmProviderSchema,
     model: z.string().trim().min(1),
+    roleModels: z.record(z.string(), z.string().trim().min(1)).optional(),
+    fallbackModel: z.string().trim().min(1).optional(),
+    tokenBudgetPerRun: z.number().int().positive().optional(),
+    tokenBudgetPerTask: z.number().int().positive().optional(),
+    maxRunCostUsdMicro: z.number().int().nonnegative().optional(),
+    modelCostPer1kTokensUsdMicro: z.record(z.string(), z.number().int().nonnegative()).optional(),
     apiKey: z.string().trim().min(1).optional(),
     temperature: z.number().min(0).max(2),
     timeoutMs: z.number().int().positive(),
@@ -81,6 +87,12 @@ const runtimeConfigSchema = z.strictObject({
 const envSchema = z.object({
   LLM_PROVIDER: llmProviderSchema.default('mock'),
   LLM_MODEL: z.string().trim().min(1).default('mock-model'),
+  LLM_ROLE_MODELS: z.string().trim().optional(),
+  LLM_FALLBACK_MODEL: z.string().trim().min(1).optional(),
+  LLM_TOKEN_BUDGET_PER_RUN: z.coerce.number().int().positive().optional(),
+  LLM_TOKEN_BUDGET_PER_TASK: z.coerce.number().int().positive().optional(),
+  LLM_MAX_RUN_COST_USD_MICRO: z.coerce.number().int().nonnegative().optional(),
+  LLM_MODEL_COST_PER_1K_TOKENS_USD_MICRO: z.string().trim().optional(),
   LLM_API_KEY: z.string().trim().min(1).optional(),
   LLM_TEMPERATURE: z.coerce.number().default(0.2),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
@@ -142,6 +154,25 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
     llm: {
       provider: env.data.LLM_PROVIDER,
       model: env.data.LLM_MODEL,
+      ...(env.data.LLM_ROLE_MODELS ? { roleModels: parseJsonRecord(env.data.LLM_ROLE_MODELS, 'LLM_ROLE_MODELS') } : {}),
+      ...(env.data.LLM_FALLBACK_MODEL ? { fallbackModel: env.data.LLM_FALLBACK_MODEL } : {}),
+      ...(typeof env.data.LLM_TOKEN_BUDGET_PER_RUN === 'number'
+        ? { tokenBudgetPerRun: env.data.LLM_TOKEN_BUDGET_PER_RUN }
+        : {}),
+      ...(typeof env.data.LLM_TOKEN_BUDGET_PER_TASK === 'number'
+        ? { tokenBudgetPerTask: env.data.LLM_TOKEN_BUDGET_PER_TASK }
+        : {}),
+      ...(typeof env.data.LLM_MAX_RUN_COST_USD_MICRO === 'number'
+        ? { maxRunCostUsdMicro: env.data.LLM_MAX_RUN_COST_USD_MICRO }
+        : {}),
+      ...(env.data.LLM_MODEL_COST_PER_1K_TOKENS_USD_MICRO
+        ? {
+          modelCostPer1kTokensUsdMicro: parseJsonNumberRecord(
+            env.data.LLM_MODEL_COST_PER_1K_TOKENS_USD_MICRO,
+            'LLM_MODEL_COST_PER_1K_TOKENS_USD_MICRO',
+          ),
+        }
+        : {}),
       temperature: env.data.LLM_TEMPERATURE,
       timeoutMs: env.data.LLM_TIMEOUT_MS,
       ...(env.data.LLM_API_KEY ? { apiKey: env.data.LLM_API_KEY } : {}),
@@ -214,6 +245,44 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
   registerRuntimeSecrets(collectSecretValues(parsed.data));
 
   return parsed.data;
+}
+
+function parseJsonRecord(input: string, envName: string): Record<string, string> {
+  const parsed = parseJsonUnknown(input, envName);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new ConfigError(`${envName} must be a JSON object`);
+  }
+  const output: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new ConfigError(`${envName} must map keys to non-empty string values`);
+    }
+    output[key] = value.trim();
+  }
+  return output;
+}
+
+function parseJsonNumberRecord(input: string, envName: string): Record<string, number> {
+  const parsed = parseJsonUnknown(input, envName);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new ConfigError(`${envName} must be a JSON object`);
+  }
+  const output: Record<string, number> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+      throw new ConfigError(`${envName} must map keys to non-negative integer values`);
+    }
+    output[key] = value;
+  }
+  return output;
+}
+
+function parseJsonUnknown(input: string, envName: string): unknown {
+  try {
+    return JSON.parse(input);
+  } catch (error) {
+    throw new ConfigError(`Unable to parse ${envName} as JSON`, { cause: error });
+  }
 }
 
 export function redactSecrets<T>(value: T): T {

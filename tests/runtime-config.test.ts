@@ -50,6 +50,27 @@ test('loadRuntimeConfig normalizes allowlisted shell commands', () => {
   assert.deepEqual(config.tools.allowedShellCommands, ['git', 'pnpm', 'node']);
 });
 
+test('loadRuntimeConfig supports model strategy and cost control settings', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      LLM_ROLE_MODELS: '{"planner":"gpt-4.1-mini","coder":"gpt-4.1"}',
+      LLM_FALLBACK_MODEL: 'gpt-4.1-nano',
+      LLM_TOKEN_BUDGET_PER_RUN: '5000',
+      LLM_TOKEN_BUDGET_PER_TASK: '2500',
+      LLM_MAX_RUN_COST_USD_MICRO: '200000',
+      LLM_MODEL_COST_PER_1K_TOKENS_USD_MICRO: '{"gpt-4.1":3000,"gpt-4.1-mini":1200}',
+    },
+  });
+
+  assert.equal(config.llm.roleModels?.planner, 'gpt-4.1-mini');
+  assert.equal(config.llm.fallbackModel, 'gpt-4.1-nano');
+  assert.equal(config.llm.tokenBudgetPerRun, 5000);
+  assert.equal(config.llm.tokenBudgetPerTask, 2500);
+  assert.equal(config.llm.maxRunCostUsdMicro, 200000);
+  assert.equal(config.llm.modelCostPer1kTokensUsdMicro?.['gpt-4.1'], 3000);
+});
+
 test('loadRuntimeConfig supports safe write mode and guardrail settings', () => {
   const config = loadRuntimeConfig({
     cwd: '/tmp/workspace',

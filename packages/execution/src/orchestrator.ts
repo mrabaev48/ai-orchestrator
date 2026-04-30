@@ -70,6 +70,9 @@ export class Orchestrator {
   private readonly telemetry: ExecutionTelemetry;
   private readonly workspaceManager: WorkspaceManager;
   private currentRunStepBuffer: RunStepLogEntry[] | null = null;
+  private currentRunTokenEstimate = 0;
+  private currentTaskTokenEstimate = 0;
+  private currentRunCostUsdMicro = 0;
   constructor(
     stateStore: StateStore,
     roleRegistry: RoleRegistry,
@@ -102,6 +105,8 @@ export class Orchestrator {
   }
 
   async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {
+    this.currentRunTokenEstimate = 0;
+    this.currentRunCostUsdMicro = 0;
     const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle');
     if (!lockHandle) {
       const runId = crypto.randomUUID();
@@ -226,8 +231,10 @@ export class Orchestrator {
   }): Promise<RunCycleResult> {
     const { state, task, runId, workspace, workspaceTools, abortSignal } = input;
     const taskStartedAt = Date.now();
+    let runOutcome: 'completed' | 'blocked' | 'failed' = 'failed';
     this.tools = workspaceTools;
     this.currentRunStepBuffer = [];
+    this.currentTaskTokenEstimate = 0;
     try {
       state.execution.activeRunId = runId;
       state.execution.activeTaskId = task.id;
@@ -375,6 +382,7 @@ export class Orchestrator {
         status: gitLifecycleStatus === 'approval_pending' ? 'blocked' : 'completed',
         ...(gitLifecycleStatus === 'approval_pending' ? { stopReason: 'approval_pending' } : {}),
       };
+      runOutcome = taskResult.status === 'blocked' ? 'blocked' : 'completed';
       await this.telemetry.incrementCounter({
         name: 'task_run_total',
         runId,
@@ -391,9 +399,29 @@ export class Orchestrator {
       await workspace.rollback().catch(() => {});
       throw error;
     } finally {
+      await this.recordRunCostSummaryArtifact(state, runId, task.id, runOutcome);
       this.currentRunStepBuffer = null;
       await workspace.cleanup().catch(() => {});
     }
+  }
+
+  private async recordRunCostSummaryArtifact(
+    state: ProjectState,
+    runId: string,
+    taskId: string,
+    status: 'completed' | 'blocked' | 'failed',
+  ): Promise<void> {
+    const artifact = makeArtifact('run_summary', `Run cost summary for ${taskId}`, {
+      runId,
+      taskId,
+      status,
+      estimatedTokensRun: String(this.currentRunTokenEstimate),
+      estimatedTokensTask: String(this.currentTaskTokenEstimate),
+      estimatedCostUsdMicro: String(this.currentRunCostUsdMicro),
+      estimationMethod: 'heuristic_chars_div_4',
+    });
+    await this.stateStore.recordArtifact(artifact).catch(() => {});
+    state.artifacts.push(artifact);
   }
 
   private async enforceExecutionPolicy(workspaceRoot: string, context: RoleExecutionContext): Promise<void> {
@@ -643,6 +671,11 @@ export class Orchestrator {
     context: RoleExecutionContext,
   ): Promise<RoleResponse<TOutput>> {
     const startedAt = Date.now();
+    const model = this.resolveModelForRole(request.role);
+    await this.recordModelSelectionMetric(context.runId, request.role, model);
+    this.enforceCostControlBudgets(model, request.role);
+    const estimatedPromptTokens = estimateObservationTokens(request.input);
+    await this.recordTokenAndCostUsage(context.runId, request.role, model, estimatedPromptTokens, 'role_request_estimate');
     const firstAttempt = await this.executeRoleWithLoop(role, request, context);
     try {
       await role.validate?.(firstAttempt);
@@ -657,6 +690,8 @@ export class Orchestrator {
         status: 'succeeded',
         durationMs: Date.now() - startedAt,
       });
+      const estimatedOutputTokens = estimateObservationTokens(firstAttempt.output);
+      await this.recordTokenAndCostUsage(context.runId, request.role, model, estimatedOutputTokens, 'role_output_estimate');
       return firstAttempt;
     } catch {
       context.logger.warn('Role validation failed, retrying once', {
@@ -692,7 +727,75 @@ export class Orchestrator {
         status: 'succeeded',
         durationMs: Date.now() - startedAt,
       });
+      const estimatedOutputTokens = estimateObservationTokens(secondAttempt.output);
+      await this.recordTokenAndCostUsage(context.runId, request.role, model, estimatedOutputTokens, 'role_output_estimate');
       return secondAttempt;
+    }
+  }
+  private resolveModelForRole(role: RoleExecutionContext['role']): string {
+    const roleModel = this.config.llm.roleModels?.[role];
+    if (roleModel) {
+      return roleModel;
+    }
+    return this.config.llm.fallbackModel ?? this.config.llm.model;
+  }
+
+  private async recordModelSelectionMetric(runId: string, role: string, model: string): Promise<void> {
+    await this.telemetry.incrementCounter({
+      name: 'llm_model_selection_total',
+      runId,
+      tags: { role, model },
+    });
+  }
+
+  private async recordTokenAndCostUsage(
+    runId: string,
+    role: string,
+    model: string,
+    tokenEstimate: number,
+    source: string,
+  ): Promise<void> {
+    const safeEstimate = Math.max(0, tokenEstimate);
+    this.currentRunTokenEstimate += safeEstimate;
+    this.currentTaskTokenEstimate += safeEstimate;
+    const modelCostPer1kTokensUsdMicro = this.config.llm.modelCostPer1kTokensUsdMicro?.[model] ?? 0;
+    const estimatedCostUsdMicro = Math.ceil((safeEstimate / 1000) * modelCostPer1kTokensUsdMicro);
+    this.currentRunCostUsdMicro += estimatedCostUsdMicro;
+    await this.telemetry.incrementCounter({
+      name: 'llm_token_estimate_total',
+      value: safeEstimate,
+      runId,
+      tags: { role, model, source },
+    });
+    await this.telemetry.incrementCounter({
+      name: 'run_cost_usd_micro_total',
+      value: estimatedCostUsdMicro,
+      runId,
+      tags: { role, model, source },
+    });
+  }
+
+  private enforceCostControlBudgets(model: string, role: string): void {
+    const maxTaskTokens = this.config.llm.tokenBudgetPerTask;
+    if (typeof maxTaskTokens === 'number' && this.currentTaskTokenEstimate >= maxTaskTokens) {
+      throw new WorkflowPolicyError(`Token budget exceeded for task before role ${role} using model ${model}`, {
+        details: { role, model, budgetType: 'task', tokenBudget: maxTaskTokens, observedTokens: this.currentTaskTokenEstimate },
+        retrySuggested: false,
+      });
+    }
+    const maxRunTokens = this.config.llm.tokenBudgetPerRun;
+    if (typeof maxRunTokens === 'number' && this.currentRunTokenEstimate >= maxRunTokens) {
+      throw new WorkflowPolicyError(`Token budget exceeded for run before role ${role} using model ${model}`, {
+        details: { role, model, budgetType: 'run', tokenBudget: maxRunTokens, observedTokens: this.currentRunTokenEstimate },
+        retrySuggested: false,
+      });
+    }
+    const maxRunCostUsdMicro = this.config.llm.maxRunCostUsdMicro;
+    if (typeof maxRunCostUsdMicro === 'number' && this.currentRunCostUsdMicro >= maxRunCostUsdMicro) {
+      throw new WorkflowPolicyError(`Run cost budget exceeded before role ${role} using model ${model}`, {
+        details: { role, model, budgetType: 'run_cost', costBudgetUsdMicro: maxRunCostUsdMicro, observedCostUsdMicro: this.currentRunCostUsdMicro },
+        retrySuggested: false,
+      });
     }
   }
 
