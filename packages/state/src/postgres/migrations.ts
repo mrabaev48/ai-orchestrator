@@ -72,5 +72,29 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
           ON ${table('run_step_log')} (task_id, created_at DESC)`,
       ],
     },
+    {
+      id: 3,
+      name: 'tenant_scope',
+      statements: [
+        `ALTER TABLE ${table('project_snapshots')} ADD COLUMN IF NOT EXISTS org_id TEXT`,
+        `ALTER TABLE ${table('project_snapshots')} ADD COLUMN IF NOT EXISTS project_id TEXT`,
+        `ALTER TABLE ${table('domain_events')} ADD COLUMN IF NOT EXISTS org_id TEXT`,
+        `ALTER TABLE ${table('domain_events')} ADD COLUMN IF NOT EXISTS project_id TEXT`,
+        `ALTER TABLE ${table('decision_log')} ADD COLUMN IF NOT EXISTS org_id TEXT`,
+        `ALTER TABLE ${table('decision_log')} ADD COLUMN IF NOT EXISTS project_id TEXT`,
+        `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS org_id TEXT`,
+        `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS project_id TEXT`,
+        `ALTER TABLE ${table('artifact_log')} ADD COLUMN IF NOT EXISTS org_id TEXT`,
+        `ALTER TABLE ${table('artifact_log')} ADD COLUMN IF NOT EXISTS project_id TEXT`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS org_id TEXT`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS project_id TEXT`,
+        `CREATE INDEX IF NOT EXISTS project_snapshots_tenant_created_at_idx
+          ON ${table('project_snapshots')} (org_id, project_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS domain_events_tenant_created_at_idx
+          ON ${table('domain_events')} (org_id, project_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS run_step_log_tenant_run_id_created_at_idx
+          ON ${table('run_step_log')} (org_id, project_id, run_id, created_at DESC)`,
+      ],
+    },
   ];
 }

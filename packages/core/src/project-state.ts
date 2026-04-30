@@ -56,6 +56,7 @@ export interface RunStepLogEntry {
 }
 
 export interface ProjectState {
+  orgId: string;
   projectId: string;
   projectName: string;
   summary: string;
@@ -244,6 +245,7 @@ const executionStateSchema = z.object({
 });
 
 const projectStateDeepSchema = z.object({
+  orgId: z.string().min(1),
   backlog: z.object({
     epics: z.record(z.string(), epicSchema),
     features: z.record(z.string(), featureSchema),
@@ -276,11 +278,13 @@ function toPath(path: PropertyKey[]): string {
 }
 
 export function createEmptyProjectState(input: {
+  orgId?: string;
   projectId: string;
   projectName: string;
   summary: string;
 }): ProjectState {
   return {
+    orgId: input.orgId ?? 'default-org',
     projectId: input.projectId,
     projectName: input.projectName,
     summary: input.summary,

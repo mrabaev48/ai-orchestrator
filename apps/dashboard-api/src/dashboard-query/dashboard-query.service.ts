@@ -21,16 +21,16 @@ export class DashboardReadApiService {
     this.approvalGateService = approvalGateService;
   }
 
-  async getStateSummary() {
-    return await this.dashboardQueryService.getStateSummary();
+  async getStateSummary(orgId?: string, projectId?: string) {
+    return await this.dashboardQueryService.getStateSummary({ ...(orgId ? { orgId } : {}), ...(projectId ? { projectId } : {}) });
   }
 
-  async getMilestones() {
-    return await this.dashboardQueryService.getMilestones();
+  async getMilestones(orgId?: string, projectId?: string) {
+    return await this.dashboardQueryService.getMilestones({ ...(orgId ? { orgId } : {}), ...(projectId ? { projectId } : {}) });
   }
 
-  async getBacklog() {
-    return await this.dashboardQueryService.getBacklog();
+  async getBacklog(orgId?: string, projectId?: string) {
+    return await this.dashboardQueryService.getBacklog({ ...(orgId ? { orgId } : {}), ...(projectId ? { projectId } : {}) });
   }
 
   async getBacklogExport() {
@@ -68,8 +68,8 @@ export class DashboardReadApiService {
     });
   }
 
-  async getLatestRunSummary() {
-    return await this.dashboardQueryService.getLatestRunSummary();
+  async getLatestRunSummary(orgId?: string, projectId?: string) {
+    return await this.dashboardQueryService.getLatestRunSummary({ ...(orgId ? { orgId } : {}), ...(projectId ? { projectId } : {}) });
   }
 
   async getApprovals(status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed') {

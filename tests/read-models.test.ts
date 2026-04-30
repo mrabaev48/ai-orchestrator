@@ -25,6 +25,7 @@ test('toStateSummaryView maps raw state into a stable read model', () => {
   const view = toStateSummaryView(state);
 
   assert.deepEqual(view, {
+    orgId: 'default-org',
     projectId: 'project-1',
     projectName: 'Project',
     summary: 'Summary',

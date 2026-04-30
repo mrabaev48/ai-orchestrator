@@ -39,6 +39,10 @@ export class PostgresStateStore implements StateStore {
     this.schema = schema;
   }
 
+  private get tenantScope(): { orgId: string; projectId: string } {
+    return { orgId: this.initialState.orgId, projectId: this.initialState.projectId };
+  }
+
   async load(): Promise<ProjectState> {
     await this.ensureInitialized();
     const pool = await this.poolPromise;
@@ -46,8 +50,10 @@ export class PostgresStateStore implements StateStore {
     const result = (await pool.query(
       `SELECT snapshot_json
        FROM ${this.table('project_snapshots')}
+       WHERE org_id = $1 AND project_id = $2
        ORDER BY created_at DESC
        LIMIT 1`,
+      [this.tenantScope.orgId, this.tenantScope.projectId],
     )) as { rows: { snapshot_json: ProjectState }[] };
 
     const row = result.rows[0];
@@ -88,10 +94,11 @@ export class PostgresStateStore implements StateStore {
     const clauses: string[] = [];
     const params: (string | number)[] = [];
 
-    if (query.eventType) {
-      clauses.push(`event_type = $${params.length + 1}`);
-      params.push(query.eventType);
-    }
+    clauses.push(`org_id = $${params.length + 1}`);
+    params.push(this.tenantScope.orgId);
+    clauses.push(`project_id = $${params.length + 1}`);
+    params.push(this.tenantScope.projectId);
+    if (query.eventType) { clauses.push(`event_type = $${params.length + 1}`); params.push(query.eventType); }
 
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
@@ -131,14 +138,12 @@ export class PostgresStateStore implements StateStore {
     const clauses: string[] = [];
     const params: (string | number)[] = [];
 
-    if (query.runId) {
-      clauses.push(`run_id = $${params.length + 1}`);
-      params.push(query.runId);
-    }
-    if (query.taskId) {
-      clauses.push(`task_id = $${params.length + 1}`);
-      params.push(query.taskId);
-    }
+    clauses.push(`org_id = $${params.length + 1}`);
+    params.push(this.tenantScope.orgId);
+    clauses.push(`project_id = $${params.length + 1}`);
+    params.push(this.tenantScope.projectId);
+    if (query.runId) { clauses.push(`run_id = $${params.length + 1}`); params.push(query.runId); }
+    if (query.taskId) { clauses.push(`task_id = $${params.length + 1}`); params.push(query.taskId); }
 
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
@@ -213,10 +218,12 @@ export class PostgresStateStore implements StateStore {
     await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('failure_log')} (
-          id, task_id, role, reason, symptoms_json, bad_patterns_json, retry_suggested, created_at
-        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
+          id, org_id, project_id, task_id, role, reason, symptoms_json, bad_patterns_json, retry_suggested, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10)`,
         [
           failure.id,
+          this.tenantScope.orgId,
+          this.tenantScope.projectId,
           failure.taskId,
           failure.role,
           failure.reason,
@@ -247,10 +254,12 @@ export class PostgresStateStore implements StateStore {
     await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('artifact_log')} (
-          id, type, title, location, metadata_json, created_at
-        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+          id, org_id, project_id, type, title, location, metadata_json, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
         [
           artifact.id,
+          this.tenantScope.orgId,
+          this.tenantScope.projectId,
           artifact.type,
           artifact.title,
           artifact.location ?? null,
@@ -270,10 +279,12 @@ export class PostgresStateStore implements StateStore {
     await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('decision_log')} (
-          id, created_at, title, decision, rationale, affected_areas_json
-        ) VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+          id, org_id, project_id, created_at, title, decision, rationale, affected_areas_json
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
         [
           decision.id,
+          this.tenantScope.orgId,
+          this.tenantScope.projectId,
           decision.createdAt,
           decision.title,
           decision.decision,
@@ -290,10 +301,12 @@ export class PostgresStateStore implements StateStore {
     await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('run_step_log')} (
-          id, run_id, task_id, role, tool, input_text, output_text, status, duration_ms, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          id, org_id, project_id, run_id, task_id, role, tool, input_text, output_text, status, duration_ms, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           step.id,
+          this.tenantScope.orgId,
+          this.tenantScope.projectId,
           step.runId,
           step.taskId ?? null,
           step.role,
@@ -363,19 +376,21 @@ export class PostgresStateStore implements StateStore {
   private async insertSnapshot(client: PgClientLike, state: ProjectState): Promise<void> {
     assertProjectState(state);
     await client.query(
-      `INSERT INTO ${this.table('project_snapshots')} (id, created_at, snapshot_json)
-       VALUES ($1, $2, $3::jsonb)`,
-      [crypto.randomUUID(), new Date().toISOString(), JSON.stringify(redactSecrets(state))],
+      `INSERT INTO ${this.table('project_snapshots')} (id, org_id, project_id, created_at, snapshot_json)
+       VALUES ($1, $2, $3, $4, $5::jsonb)`,
+      [crypto.randomUUID(), this.tenantScope.orgId, this.tenantScope.projectId, new Date().toISOString(), JSON.stringify(redactSecrets(state))],
     );
   }
 
   private async insertEvent(client: PgClientLike, event: DomainEvent): Promise<void> {
     await client.query(
       `INSERT INTO ${this.table('domain_events')} (
-        id, event_type, created_at, run_id, payload_json
-      ) VALUES ($1, $2, $3, $4, $5::jsonb)`,
+        id, org_id, project_id, event_type, created_at, run_id, payload_json
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
       [
         event.id,
+        this.tenantScope.orgId,
+        this.tenantScope.projectId,
         event.eventType,
         event.createdAt,
         event.runId ?? null,

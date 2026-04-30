@@ -27,7 +27,12 @@ import {
   toApprovalRequestView,
 } from './read-models.ts';
 
-export interface HistoryQueryInput {
+export interface TenantScopeInput {
+  orgId?: string;
+  projectId?: string;
+}
+
+export interface HistoryQueryInput extends TenantScopeInput {
   limit?: number;
   offset?: number;
 }
@@ -51,23 +56,27 @@ export class DashboardQueryService {
     this.stateStore = stateStore;
   }
 
-  async getStateSummary(): Promise<DashboardStateView> {
+  async getStateSummary(query: TenantScopeInput = {}): Promise<DashboardStateView> {
     const state = await this.stateStore.load();
+    assertTenantScope(state, query);
     return toDashboardStateView(state);
   }
 
-  async getMilestones(): Promise<MilestoneListItemView[]> {
+  async getMilestones(query: TenantScopeInput = {}): Promise<MilestoneListItemView[]> {
     const state = await this.stateStore.load();
+    assertTenantScope(state, query);
     return toMilestoneListView(state);
   }
 
-  async getBacklog(): Promise<BacklogView> {
+  async getBacklog(query: TenantScopeInput = {}): Promise<BacklogView> {
     const state = await this.stateStore.load();
+    assertTenantScope(state, query);
     return toBacklogView(state.backlog);
   }
 
-  async getBacklogExport(): Promise<BacklogExportView> {
+  async getBacklogExport(query: TenantScopeInput = {}): Promise<BacklogExportView> {
     const state = await this.stateStore.load();
+    assertTenantScope(state, query);
     return toBacklogExportView(state);
   }
 
@@ -140,8 +149,9 @@ export class DashboardQueryService {
     });
   }
 
-  async getLatestRunSummary(): Promise<LatestRunSummaryView | null> {
+  async getLatestRunSummary(query: TenantScopeInput = {}): Promise<LatestRunSummaryView | null> {
     const state = await this.stateStore.load();
+    assertTenantScope(state, query);
     return toLatestRunSummaryView(state);
   }
 
@@ -223,7 +233,7 @@ export class DashboardQueryService {
   }
 }
 
-function normalizeHistoryQuery(query: HistoryQueryInput): Required<HistoryQueryInput> {
+function normalizeHistoryQuery(query: HistoryQueryInput): { limit: number; offset: number } {
   return {
     limit: query.limit ?? 25,
     offset: query.offset ?? 0,
@@ -232,4 +242,10 @@ function normalizeHistoryQuery(query: HistoryQueryInput): Required<HistoryQueryI
 
 function applyPagination<TItem>(items: TItem[], offset: number, limit: number): TItem[] {
   return items.slice(offset, offset + limit);
+}
+
+
+function assertTenantScope(state: { orgId: string; projectId: string }, scope: TenantScopeInput): void {
+  if (scope.orgId && scope.orgId !== state.orgId) { throw new Error(`Tenant org mismatch: requested ${scope.orgId}`); }
+  if (scope.projectId && scope.projectId !== state.projectId) { throw new Error(`Tenant project mismatch: requested ${scope.projectId}`); }
 }

@@ -6,7 +6,7 @@ import { createLogger } from '../packages/shared/src/index.ts';
 
 const logger = createLogger({
   llm: { provider: 'mock', model: 'm', temperature: 0, timeoutMs: 1000 },
-  state: { backend: 'memory', postgresDsn: '', postgresSchema: 'public', sqlitePath: '/tmp/a', snapshotOnBootstrap: true, snapshotOnTaskCompletion: true, snapshotOnMilestoneCompletion: true },
+  state: { backend: 'memory', postgresDsn: '', postgresSchema: 'public', snapshotOnBootstrap: true, snapshotOnTaskCompletion: true, snapshotOnMilestoneCompletion: true },
   workflow: { maxStepsPerRun: 5, maxRetriesPerTask: 1 },
   tools: { allowedWritePaths: [process.cwd()], typescriptDiagnosticsEnabled: true, allowedShellCommands: ['node'], persistToolEvidence: true },
   logging: { level: 'error', format: 'json' },
