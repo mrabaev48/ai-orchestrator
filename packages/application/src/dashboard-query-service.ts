@@ -13,6 +13,7 @@ import type {
   ApprovalRequestView,
   MetricRollupItemView,
   SpanAuditItemView,
+  ReviewBundleView,
 } from './read-models.ts';
 import {
   toArtifactHistoryView,
@@ -230,6 +231,73 @@ export class DashboardQueryService {
       .filter((item): item is SpanAuditItemView => item !== null);
     const items = applyPagination(spans, offset, limit);
     return { total: spans.length, limit, offset, items };
+  }
+
+  async getReviewBundle(runId?: string): Promise<ReviewBundleView | null> {
+    const state = await this.stateStore.load();
+    const events = await this.stateStore.listEvents();
+    if (events.length === 0) {
+      return null;
+    }
+    const runEvents = runId ? events.filter((event) => event.runId === runId) : events;
+    const resolvedRunId = runId ?? runEvents[0]?.runId;
+    if (!resolvedRunId) {
+      return null;
+    }
+
+    const timeline = runEvents
+      .sort((l, r) => l.createdAt.localeCompare(r.createdAt))
+      .map((event) => ({
+        id: event.id,
+        type: event.eventType,
+        createdAt: event.createdAt,
+        summary: typeof event.payload.summary === 'string' ? event.payload.summary : event.eventType,
+        ...(typeof event.payload.taskId === 'string' ? { taskId: event.payload.taskId } : {}),
+        ...(typeof event.payload.role === 'string' ? { role: event.payload.role } : {}),
+      }));
+
+    const runArtifacts = state.artifacts
+      .filter((artifact) => artifact.metadata.runId === resolvedRunId)
+      .sort((l, r) => r.createdAt.localeCompare(l.createdAt));
+
+    const diffArtifact = runArtifacts.find((artifact) => artifact.type === 'report' || artifact.type === 'integration_export');
+    const diffMetadata = diffArtifact?.metadata;
+    const diff = {
+      summary: diffMetadata?.summary ?? (diffArtifact ? diffArtifact.title : 'No diff artifact captured'),
+      ...(typeof diffMetadata?.filesChanged === 'string' ? { filesChanged: Number(diffMetadata.filesChanged) } : {}),
+      ...(typeof diffMetadata?.additions === 'string' ? { additions: Number(diffMetadata.additions) } : {}),
+      ...(typeof diffMetadata?.deletions === 'string' ? { deletions: Number(diffMetadata.deletions) } : {}),
+    };
+
+    const testEvidence = runArtifacts
+      .filter((artifact) => artifact.type === 'test_plan' || artifact.type === 'report')
+      .map((artifact) => ({
+        artifactId: artifact.id,
+        title: artifact.title,
+        createdAt: artifact.createdAt,
+        status: artifact.type === 'test_plan' ? 'unknown' as const : /fail/i.test(artifact.title) ? 'failed' as const : 'passed' as const,
+      }));
+
+    return {
+      runId: resolvedRunId,
+      timeline,
+      diff,
+      testEvidence,
+      prBundle: {
+        summary: `Review bundle for run ${resolvedRunId}`,
+        artifacts: runArtifacts.map((artifact) => ({
+          id: artifact.id,
+          type: artifact.type,
+          title: artifact.title,
+          ...(artifact.location ? { location: artifact.location } : {}),
+          ...(artifact.metadata.taskId ? { taskId: artifact.metadata.taskId } : {}),
+          ...(artifact.metadata.runId ? { runId: artifact.metadata.runId } : {}),
+          ...(artifact.metadata.milestoneId ? { milestoneId: artifact.metadata.milestoneId } : {}),
+          ...(artifact.metadata.format ? { format: artifact.metadata.format } : {}),
+          createdAt: artifact.createdAt,
+        })),
+      },
+    };
   }
 }
 

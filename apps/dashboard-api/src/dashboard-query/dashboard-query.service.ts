@@ -90,6 +90,10 @@ export class DashboardReadApiService {
     });
   }
 
+  async getReviewBundle(runId?: string) {
+    return await this.dashboardQueryService.getReviewBundle(runId);
+  }
+
   async approve(requestId: string, actor: string) {
     return await this.approvalGateService.approve(requestId, actor);
   }
