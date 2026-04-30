@@ -11,6 +11,7 @@ import type {
 import { redactSecrets } from '../../shared/src/index.ts';
 
 export interface StateSummaryView {
+  orgId: string;
   projectId: string;
   projectName: string;
   summary: string;
@@ -178,6 +179,7 @@ export interface SpanAuditItemView {
 
 export function toStateSummaryView(state: ProjectState): StateSummaryView {
   return {
+    orgId: state.orgId,
     projectId: state.projectId,
     projectName: state.projectName,
     summary: state.summary,

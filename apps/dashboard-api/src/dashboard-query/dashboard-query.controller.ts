@@ -23,18 +23,18 @@ export class DashboardQueryController {
   }
 
   @Get('state')
-  async getStateSummary() {
-    return await this.dashboardReadApiService.getStateSummary();
+  async getStateSummary(@Query() query: HistoryQueryDto) {
+    return await this.dashboardReadApiService.getStateSummary(query.orgId, query.projectId);
   }
 
   @Get('milestones')
-  async getMilestones() {
-    return await this.dashboardReadApiService.getMilestones();
+  async getMilestones(@Query() query: HistoryQueryDto) {
+    return await this.dashboardReadApiService.getMilestones(query.orgId, query.projectId);
   }
 
   @Get('backlog')
-  async getBacklog() {
-    return await this.dashboardReadApiService.getBacklog();
+  async getBacklog(@Query() query: HistoryQueryDto) {
+    return await this.dashboardReadApiService.getBacklog(query.orgId, query.projectId);
   }
 
   @Get('backlog/export')
@@ -71,8 +71,8 @@ export class DashboardQueryController {
   }
 
   @Get('runs/latest')
-  async getLatestRunSummary() {
-    return await this.dashboardReadApiService.getLatestRunSummary();
+  async getLatestRunSummary(@Query() query: HistoryQueryDto) {
+    return await this.dashboardReadApiService.getLatestRunSummary(query.orgId, query.projectId);
   }
 
   @Get('approvals')

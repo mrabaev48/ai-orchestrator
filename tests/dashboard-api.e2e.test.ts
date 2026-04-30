@@ -23,7 +23,6 @@ function makeRuntimeConfig(): RuntimeConfig {
       backend: 'memory',
       postgresDsn: 'postgresql://localhost:5432/test',
       postgresSchema: 'public',
-      sqlitePath: '/tmp/unused.db',
       snapshotOnBootstrap: true,
       snapshotOnTaskCompletion: true,
       snapshotOnMilestoneCompletion: true,
@@ -73,7 +72,7 @@ test('dashboard api health endpoints expose liveness and readiness', async () =>
     const queryController = new DashboardQueryController(app.get(DashboardReadApiService));
     const liveness = healthController.getLiveness();
     const readiness = await healthController.getReadiness();
-    const summary = await queryController.getStateSummary();
+    const summary = await queryController.getStateSummary({});
 
     assert.equal(liveness.status, 'ok');
     assert.equal(readiness.status, 'ok');
@@ -105,14 +104,14 @@ test('dashboard api query endpoints expose read-only dashboard views', async () 
 
   try {
     const queryController = new DashboardQueryController(app.get(DashboardReadApiService));
-    const state = await queryController.getStateSummary();
-    const milestones = await queryController.getMilestones();
-    const backlog = await queryController.getBacklog();
+    const state = await queryController.getStateSummary({});
+    const milestones = await queryController.getMilestones({});
+    const backlog = await queryController.getBacklog({});
     const events = await queryController.getEvents({});
     const failures = await queryController.getFailures({});
     const decisions = await queryController.getDecisions({});
     const artifacts = await queryController.getArtifacts({});
-    const latestRun = await queryController.getLatestRunSummary();
+    const latestRun = await queryController.getLatestRunSummary({});
 
     assert.equal(state.projectId, 'dashboard-api');
     assert.deepEqual(milestones, []);

@@ -11,6 +11,14 @@ export class BacklogExportQueryDto {
 
 export class HistoryQueryDto {
   @IsOptional()
+  @IsString()
+  orgId?: string;
+
+  @IsOptional()
+  @IsString()
+  projectId?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)

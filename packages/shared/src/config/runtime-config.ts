@@ -45,7 +45,6 @@ const runtimeConfigSchema = z.strictObject({
     backend: stateBackendSchema,
     postgresDsn: z.string().trim().min(1),
     postgresSchema: z.string().trim().min(1),
-    sqlitePath: z.string().trim().min(1).optional(),
     snapshotOnBootstrap: z.boolean(),
     snapshotOnTaskCompletion: z.boolean(),
     snapshotOnMilestoneCompletion: z.boolean(),
@@ -88,7 +87,6 @@ const envSchema = z.object({
   STATE_BACKEND: stateBackendSchema.default('postgresql'),
   POSTGRES_DSN: z.string().trim().min(1).default('postgresql://localhost:5432/ai_orchestrator'),
   POSTGRES_SCHEMA: z.string().trim().min(1).default('public'),
-  SQLITE_PATH: z.string().trim().min(1).optional(),
   SNAPSHOT_ON_BOOTSTRAP: z.stringbool().default(true),
   SNAPSHOT_ON_TASK_COMPLETION: z.stringbool().default(true),
   SNAPSHOT_ON_MILESTONE_COMPLETION: z.stringbool().default(true),
@@ -140,9 +138,6 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
   }
 
   const fileConfig = loadConfigFile(cwd, env.data.RUNTIME_CONFIG_FILE);
-  const resolvedLegacySqlitePath = env.data.SQLITE_PATH
-    ? path.resolve(cwd, fileConfig.state?.sqlitePath ?? env.data.SQLITE_PATH)
-    : undefined;
   const merged = {
     llm: {
       provider: env.data.LLM_PROVIDER,
@@ -157,7 +152,6 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       backend: env.data.STATE_BACKEND,
       postgresDsn: env.data.POSTGRES_DSN,
       postgresSchema: env.data.POSTGRES_SCHEMA,
-      ...(resolvedLegacySqlitePath ? { sqlitePath: resolvedLegacySqlitePath } : {}),
       snapshotOnBootstrap: env.data.SNAPSHOT_ON_BOOTSTRAP,
       snapshotOnTaskCompletion: env.data.SNAPSHOT_ON_TASK_COMPLETION,
       snapshotOnMilestoneCompletion: env.data.SNAPSHOT_ON_MILESTONE_COMPLETION,
