@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.3.0
+# AI Orchestrator — Documentation 1.4.0
 
 ## 1. Что это за проект
 
@@ -111,6 +111,16 @@ Run-step evidence теперь поддерживает first-class статус
 
 Это повышает diagnosability post-timeout/post-cancel сценариев и снижает риск некорректного retry-поведения, когда особые исходы теряются в `failed`.
 
+
+### 3.2.4 Non-bypass policy checks in preflight/postflight and side effects
+
+В orchestration flow введены обязательные policy-check точки, которые нельзя обойти:
+
+- preflight check перед основной ролью исполнения (`task:{id}:preflight_policy`);
+- перед каждым side-effectful git действием (`git_commit`, `git_push`, `pr_draft`) с persisted decision verification;
+- postflight check перед финальной фиксацией состояния (`task:{id}:postflight_policy`).
+
+Каждый check записывает `policyDecisionId`-связанное решение и выполняет read-after-write валидацию (`missing/stale/deny` => hard stop). Это закрывает класс обходов governance при прямых переходах control-flow к мутациям.
 
 ### 3.2.4 Baseline invariant regression suite (release gate 1.5)
 
