@@ -12,7 +12,7 @@ import {
   validateRoleResponse,
 } from '../../core/src/index.ts';
 import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
-import { SchemaValidationError, WorkflowPolicyError } from '../../shared/src/index.ts';
+import { SchemaValidationError, StepCancelledError, StepTimeoutError, WorkflowPolicyError } from '../../shared/src/index.ts';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -971,6 +971,7 @@ export class Orchestrator {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const status = this.statusForRunStepFailure(error);
       await this.recordRunStep({
         runId: context.runId,
         ...(context.taskId ? { taskId: context.taskId } : {}),
@@ -978,7 +979,7 @@ export class Orchestrator {
         tool: request.toolName,
         input: request.input,
         output: message,
-        status: 'failed',
+        status,
         durationMs: Date.now() - startedAt,
       });
       await this.telemetry.incrementCounter({
@@ -1014,6 +1015,19 @@ export class Orchestrator {
     }
   }
 
+  private statusForRunStepFailure(error: unknown): RunStepLogEntry['status'] {
+    if (error instanceof StepTimeoutError) {
+      return 'timed_out';
+    }
+    if (error instanceof StepCancelledError) {
+      const details = error.details as { propagationState?: string } | undefined;
+      return details?.propagationState === 'cancellation_requested'
+        ? 'cancellation_requested'
+        : 'cancelled';
+    }
+    return 'failed';
+  }
+
   private async executeTool(request: ToolCallRequest, signal?: AbortSignal): Promise<unknown> {
     try {
       return await this.tools.execute(
@@ -1041,13 +1055,16 @@ export class Orchestrator {
     options: { parentSignal?: AbortSignal } = {},
   ): Promise<T> {
     const timeoutController = new AbortController();
+    const startedAt = Date.now();
     let timeoutId: NodeJS.Timeout | undefined;
     let onParentAbort: (() => void) | undefined;
     try {
       if (options.parentSignal?.aborted) {
-        throw new WorkflowPolicyError('Operation cancelled by parent signal', {
+        throw new StepCancelledError('Operation cancelled by parent signal', {
+          requestedBy: 'parent_signal',
+          requestedAt: new Date().toISOString(),
+          propagationState: 'cancellation_requested',
           details: { reason: 'parent_cancelled' },
-          retrySuggested: true,
         });
       }
 
@@ -1060,14 +1077,16 @@ export class Orchestrator {
 
       const timeout = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
-          timeoutController.abort(new WorkflowPolicyError(timeoutMessage, {
-            details: { timeoutMs },
-            retrySuggested: true,
+          timeoutController.abort(new StepTimeoutError(timeoutMessage, {
+            timeoutMs,
+            boundary: 'workflow_step',
+            elapsedMs: Date.now() - startedAt,
           }));
           reject(
-            new WorkflowPolicyError(timeoutMessage, {
-              details: { timeoutMs },
-              retrySuggested: true,
+            new StepTimeoutError(timeoutMessage, {
+              timeoutMs,
+              boundary: 'workflow_step',
+              elapsedMs: Date.now() - startedAt,
             }),
           );
         }, timeoutMs);
@@ -1076,9 +1095,11 @@ export class Orchestrator {
       return await Promise.race([execute(timeoutController.signal), timeout]);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new WorkflowPolicyError('Operation aborted', {
+        throw new StepCancelledError('Operation aborted', {
+          requestedBy: 'system',
+          requestedAt: new Date().toISOString(),
+          propagationState: 'cancelled',
           cause: error,
-          retrySuggested: true,
         });
       }
       throw error;

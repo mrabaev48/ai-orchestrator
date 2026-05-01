@@ -67,7 +67,14 @@ export interface RunStepLogEntry {
   tool?: string;
   input: string;
   output: string;
-  status: 'succeeded' | 'failed';
+  status:
+    | 'succeeded'
+    | 'failed'
+    | 'timed_out'
+    | 'cancelled'
+    | 'cancellation_requested'
+    | 'compensation_pending'
+    | 'compensated';
   policyDecisionId?: string;
   idempotencyKey: string;
   payloadRef?: string;
@@ -227,7 +234,15 @@ const runStepLogEntrySchema = z.object({
   tool: z.string().min(1).optional(),
   input: z.string(),
   output: z.string(),
-  status: z.enum(['succeeded', 'failed']),
+  status: z.enum([
+    'succeeded',
+    'failed',
+    'timed_out',
+    'cancelled',
+    'cancellation_requested',
+    'compensation_pending',
+    'compensated',
+  ]),
   policyDecisionId: z.string().min(1).optional(),
   idempotencyKey: z.string().min(1),
   payloadRef: z.string().min(1).optional(),
