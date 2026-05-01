@@ -916,7 +916,7 @@ test('runWithTimeout surfaces STEP_TIMEOUT details', async () => {
 
   await assert.rejects(
     async () => internals.runWithTimeout(async () => new Promise((resolve) => { setTimeout(() => { resolve('ok'); }, 50); }), 10, 'timeout expected'),
-    async (error: unknown) => {
+    (error: unknown) => {
       assert.equal(error instanceof WorkflowPolicyError, true);
       const details = (error as WorkflowPolicyError).details as Record<string, unknown>;
       assert.equal(details.code, 'STEP_TIMEOUT');
@@ -939,7 +939,7 @@ test('runWithTimeout surfaces STEP_CANCELLED details for parent cancellation', a
 
   await assert.rejects(
     async () => internals.runWithTimeout(async () => 'ok', 20, 'cancel expected', { parentSignal: controller.signal }),
-    async (error: unknown) => {
+    (error: unknown) => {
       assert.equal(error instanceof WorkflowPolicyError, true);
       const details = (error as WorkflowPolicyError).details as Record<string, unknown>;
       assert.equal(details.code, 'STEP_CANCELLED');
