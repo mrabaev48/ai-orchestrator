@@ -45,13 +45,23 @@ export interface ExecutionState {
 
 export interface RunStepLogEntry {
   id: string;
+  tenantId: string;
+  projectId: string;
   runId: string;
+  stepId: string;
+  attempt: number;
   taskId?: string;
   role: string;
   tool?: string;
   input: string;
   output: string;
   status: 'succeeded' | 'failed';
+  policyDecisionId?: string;
+  idempotencyKey: string;
+  payloadRef?: string;
+  checksum: string;
+  prevChecksum?: string;
+  traceId: string;
   durationMs: number;
   createdAt: string;
 }
@@ -195,13 +205,23 @@ const artifactSchema = z.object({
 
 const runStepLogEntrySchema = z.object({
   id: z.string().min(1),
+  tenantId: z.string().min(1),
+  projectId: z.string().min(1),
   runId: z.string().min(1),
+  stepId: z.string().min(1),
+  attempt: z.number().int().nonnegative(),
   taskId: z.string().min(1).optional(),
   role: z.string().min(1),
   tool: z.string().min(1).optional(),
   input: z.string(),
   output: z.string(),
   status: z.enum(['succeeded', 'failed']),
+  policyDecisionId: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1),
+  payloadRef: z.string().min(1).optional(),
+  checksum: z.string().min(1),
+  prevChecksum: z.string().min(1).optional(),
+  traceId: z.string().min(1),
   durationMs: z.number().int().nonnegative(),
   createdAt: z.iso.datetime({ offset: true }),
 });

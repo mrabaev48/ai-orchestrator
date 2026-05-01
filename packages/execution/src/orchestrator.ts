@@ -1,5 +1,11 @@
 import type { ApprovalRequest, ArtifactRecord, BacklogTask, ExecutionPolicyActionType, ProjectState } from '../../core/src/index.ts';
-import { assertProjectState, formatPolicyDecisionError, isExecutableTask, makeEvent } from '../../core/src/index.ts';
+import {
+  assertProjectState,
+  computeRunStepChecksum,
+  formatPolicyDecisionError,
+  isExecutableTask,
+  makeEvent,
+} from '../../core/src/index.ts';
 import {
   defaultExecutionPolicyEngine,
   defaultRoleOutputSchemaRegistry,
@@ -70,6 +76,9 @@ export class Orchestrator {
   private readonly telemetry: ExecutionTelemetry;
   private readonly workspaceManager: WorkspaceManager;
   private currentRunStepBuffer: RunStepLogEntry[] | null = null;
+  private currentRunChecksumByRunId = new Map<string, string>();
+  private currentEvidenceTenantId: string | null = null;
+  private currentEvidenceProjectId: string | null = null;
   private currentRunTokenEstimate = 0;
   private currentTaskTokenEstimate = 0;
   private currentRunCostUsdMicro = 0;
@@ -230,6 +239,9 @@ export class Orchestrator {
     abortSignal?: AbortSignal;
   }): Promise<RunCycleResult> {
     const { state, task, runId, workspace, workspaceTools, abortSignal } = input;
+    this.currentRunChecksumByRunId.delete(runId);
+    this.currentEvidenceTenantId = state.orgId;
+    this.currentEvidenceProjectId = state.projectId;
     const taskStartedAt = Date.now();
     let runOutcome: 'completed' | 'blocked' | 'failed' = 'failed';
     this.tools = workspaceTools;
@@ -1551,18 +1563,43 @@ export class Orchestrator {
     status: RunStepLogEntry['status'];
     durationMs: number;
   }): Promise<void> {
+    const stepId = crypto.randomUUID();
+    const attempt = 0;
+    const prevChecksum = this.currentRunChecksumByRunId.get(input.runId);
     const step: RunStepLogEntry = {
-      id: crypto.randomUUID(),
+      id: stepId,
+      tenantId: this.currentEvidenceTenantId ?? 'default-org',
+      projectId: this.currentEvidenceProjectId ?? 'ai-orchestrator',
       runId: input.runId,
+      stepId,
+      attempt,
       ...(input.taskId ? { taskId: input.taskId } : {}),
       role: input.role,
       ...(input.tool ? { tool: input.tool } : {}),
       input: truncateText(safeStringify(input.input)),
       output: truncateText(safeStringify(input.output)),
       status: input.status,
+      idempotencyKey: `${input.runId}:${stepId}:${attempt}`,
+      checksum: '',
+      ...(prevChecksum ? { prevChecksum } : {}),
+      traceId: input.runId,
       durationMs: Math.max(0, input.durationMs),
       createdAt: new Date().toISOString(),
     };
+    step.checksum = computeRunStepChecksum({
+      evidenceId: step.id,
+      tenantId: step.tenantId,
+      projectId: step.projectId,
+      runId: step.runId,
+      stepId: step.stepId,
+      attempt: step.attempt,
+      status: step.status,
+      idempotencyKey: step.idempotencyKey,
+      createdAt: step.createdAt,
+      ...(step.prevChecksum ? { prevChecksum: step.prevChecksum } : {}),
+      traceId: step.traceId,
+    });
+    this.currentRunChecksumByRunId.set(input.runId, step.checksum);
     await this.stateStore.recordRunStep(step);
     this.currentRunStepBuffer?.push(step);
   }

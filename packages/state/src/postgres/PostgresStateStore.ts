@@ -1,6 +1,7 @@
 import {
   assertProjectState,
   defaultArtifactSchemaRegistry,
+  verifyRunStepEvidenceChain,
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
@@ -152,7 +153,7 @@ export class PostgresStateStore implements StateStore {
 
     const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
     const result = (await pool.query(
-      `SELECT id, run_id, task_id, role, tool, input_text, output_text, status, duration_ms, created_at
+      `SELECT id, tenant_id, project_scope_id, run_id, step_id, attempt, task_id, role, tool, input_text, output_text, status, policy_decision_id, idempotency_key, payload_ref, checksum, prev_checksum, trace_id, duration_ms, created_at
        FROM ${this.table('run_step_log')}
        ${whereClause}
        ORDER BY created_at DESC
@@ -162,30 +163,61 @@ export class PostgresStateStore implements StateStore {
     )) as {
       rows: {
         id: string;
+        tenant_id: string;
+        project_scope_id: string;
         run_id: string;
+        step_id: string;
+        attempt: number;
         task_id: string | null;
         role: string;
         tool: string | null;
         input_text: string;
         output_text: string;
         status: RunStepLogEntry['status'];
+        policy_decision_id: string | null;
+        idempotency_key: string;
+        payload_ref: string | null;
+        checksum: string;
+        prev_checksum: string | null;
+        trace_id: string;
         duration_ms: number;
         created_at: string;
       }[];
     };
 
-    return result.rows.map((row) => ({
+    const mapped = result.rows.map((row) => ({
       id: row.id,
+      tenantId: row.tenant_id,
+      projectId: row.project_scope_id,
       runId: row.run_id,
+      stepId: row.step_id,
+      attempt: row.attempt,
       ...(row.task_id ? { taskId: row.task_id } : {}),
       role: row.role,
       ...(row.tool ? { tool: row.tool } : {}),
       input: row.input_text,
       output: row.output_text,
       status: row.status,
+      ...(row.policy_decision_id ? { policyDecisionId: row.policy_decision_id } : {}),
+      idempotencyKey: row.idempotency_key,
+      ...(row.payload_ref ? { payloadRef: row.payload_ref } : {}),
+      checksum: row.checksum,
+      ...(row.prev_checksum ? { prevChecksum: row.prev_checksum } : {}),
+      traceId: row.trace_id,
       durationMs: row.duration_ms,
       createdAt: row.created_at,
     }));
+
+    if (query.runId) {
+      const issues = verifyRunStepEvidenceChain(mapped);
+      if (issues.length > 0) {
+        throw new StateStoreError('EVIDENCE_INTEGRITY_VIOLATION', {
+          details: { runId: query.runId, issues },
+        });
+      }
+    }
+
+    return mapped;
   }
 
   async recordEvent(event: DomainEvent): Promise<void> {
@@ -325,19 +357,29 @@ export class PostgresStateStore implements StateStore {
     await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('run_step_log')} (
-          id, org_id, project_id, run_id, task_id, role, tool, input_text, output_text, status, duration_ms, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          id, org_id, project_id, run_id, tenant_id, project_scope_id, step_id, attempt, task_id, role, tool, input_text, output_text, status, policy_decision_id, idempotency_key, payload_ref, checksum, prev_checksum, trace_id, duration_ms, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
         [
           step.id,
           this.tenantScope.orgId,
           this.tenantScope.projectId,
           step.runId,
+          step.tenantId,
+          step.projectId,
+          step.stepId,
+          step.attempt,
           step.taskId ?? null,
           step.role,
           step.tool ?? null,
           step.input,
           step.output,
           step.status,
+          step.policyDecisionId ?? null,
+          step.idempotencyKey,
+          step.payloadRef ?? null,
+          step.checksum,
+          step.prevChecksum ?? null,
+          step.traceId,
           step.durationMs,
           step.createdAt,
         ],

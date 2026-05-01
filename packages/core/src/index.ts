@@ -19,3 +19,4 @@ export * from './release-assessment.ts';
 export * from './role-output-schema-registry.ts';
 export * from './state-integrity.ts';
 export * from './testing.ts';
+export * from './evidence/run-step-evidence.ts';

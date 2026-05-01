@@ -62,9 +62,27 @@ Execution-слой включает:
 - timeout/cancellation через `AbortSignal`;
 - telemetry counters/histograms;
 - structured error propagation;
-- run-step logging;
+- append-only run-step logging с checksum-chain;
 - workflow policy guards;
 - git lifecycle automation (branch/commit/push/pr-draft) с approval gating.
+
+### 3.2.1 Run-step evidence integrity
+
+Начиная с текущей реализации, записи run-step имеют расширенный evidence-контракт:
+
+- `tenantId`, `projectId` (scope/изоляция арендатора и проекта);
+- `stepId`, `attempt`, `idempotencyKey` (детерминизм и replay/повторные попытки);
+- `traceId`, `policyDecisionId`, `payloadRef` (трассировка и связка с policy/артефактами);
+- `checksum`, `prevChecksum` (криптографическая цепочка целостности).
+
+Для checksum используется детерминированная canonical serialization + SHA-256.
+
+Поведение read-path:
+
+- при чтении истории через `listRunSteps({ runId })` выполняется проверка checksum-chain;
+- при несоответствии выбрасывается ошибка `EVIDENCE_INTEGRITY_VIOLATION` (через `StateStoreError`) с деталями нарушений.
+
+Это позволяет выявлять tampering и поддерживать forensic-grade реконструкцию последовательности шагов в рамках конкретного `runId`.
 
 ## 3.3 Worker mode
 
@@ -176,6 +194,7 @@ npm run dashboard-api:start
 - Секреты редактируются (redaction) в runtime-config/logging pipeline.
 - Dashboard API имеет liveness/readiness probes.
 - Orchestrator пишет run-step log и telemetry-метрики/трейсоподобные записи.
+- Для run-step log включена integrity-проверка цепочки на read-path (`listRunSteps` по `runId`) и сигнализация `EVIDENCE_INTEGRITY_VIOLATION`.
 - Есть механизмы failure handling: dead-letter, resume, replay checkpoint.
 
 ---

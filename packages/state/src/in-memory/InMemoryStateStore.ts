@@ -1,6 +1,7 @@
 import {
   assertProjectState,
   defaultArtifactSchemaRegistry,
+  verifyRunStepEvidenceChain,
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
@@ -65,6 +66,13 @@ export class InMemoryStateStore implements StateStore {
       }
       return true;
     });
+
+    if (query.runId) {
+      const issues = verifyRunStepEvidenceChain(filtered);
+      if (issues.length > 0) {
+        throw new StateStoreError('EVIDENCE_INTEGRITY_VIOLATION', { details: { runId: query.runId, issues } });
+      }
+    }
 
     const offset = query.offset ?? 0;
     const limit = query.limit ?? 50;
