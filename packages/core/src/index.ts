@@ -20,3 +20,4 @@ export * from './role-output-schema-registry.ts';
 export * from './state-integrity.ts';
 export * from './testing.ts';
 export * from './evidence/run-step-evidence.ts';
+export * from './idempotency/build-idempotency-key.ts';

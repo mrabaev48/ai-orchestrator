@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.0.0
+# AI Orchestrator — Documentation 1.1.0
 
 ## 1. Что это за проект
 
@@ -83,6 +83,17 @@ Execution-слой включает:
 - при несоответствии выбрасывается ошибка `EVIDENCE_INTEGRITY_VIOLATION` (через `StateStoreError`) с деталями нарушений.
 
 Это позволяет выявлять tampering и поддерживать forensic-grade реконструкцию последовательности шагов в рамках конкретного `runId`.
+
+
+### 3.2.2 Idempotency key flow for non-idempotent side effects
+
+Для non-idempotent действий git lifecycle (commit/push/pr-draft) введен сквозной dedup-контур:
+- canonical idempotency key строится из `tenantId/projectId/runId/stepId/sideEffectType/normalizedInputHash`;
+- в `execution.dedupRegistry` сохраняется состояние ключа: `pending|succeeded|failed|expired` и lease/TTL;
+- перед side effect выполняется reserve, при duplicate выполняется deterministic short-circuit (`*_status=skipped_duplicate`);
+- успешные/ошибочные завершения side effect фиксируются с policy/evidence linkage (`policyDecisionId`, `evidenceId`).
+
+Это снижает риск повторного внешнего эффекта при retry/replay и улучшает диагностику причин suppression.
 
 ## 3.3 Worker mode
 

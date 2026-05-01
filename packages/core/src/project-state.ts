@@ -41,6 +41,18 @@ export interface ExecutionState {
   retryCounts: Record<string, number>;
   stepCount: number;
   runStepLog: RunStepLogEntry[];
+  dedupRegistry: Record<string, DedupRegistryRecord>;
+}
+
+export interface DedupRegistryRecord {
+  key: string;
+  status: 'pending' | 'succeeded' | 'failed' | 'expired';
+  leaseOwner: string;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  policyDecisionId?: string;
+  evidenceId?: string;
 }
 
 export interface RunStepLogEntry {
@@ -283,6 +295,16 @@ const executionStateSchema = z.object({
   retryCounts: z.record(z.string(), z.number().int().nonnegative()),
   stepCount: z.number().int().nonnegative(),
   runStepLog: z.array(runStepLogEntrySchema),
+  dedupRegistry: z.record(z.string(), z.object({
+    key: z.string().min(1),
+    status: z.enum(['pending', 'succeeded', 'failed', 'expired']),
+    leaseOwner: z.string().min(1),
+    createdAt: z.iso.datetime({ offset: true }),
+    updatedAt: z.iso.datetime({ offset: true }),
+    expiresAt: z.iso.datetime({ offset: true }),
+    policyDecisionId: z.string().min(1).optional(),
+    evidenceId: z.string().min(1).optional(),
+  })),
 });
 
 const projectStateDeepSchema = z.object({
@@ -355,6 +377,7 @@ export function createEmptyProjectState(input: {
       retryCounts: {},
       stepCount: 0,
       runStepLog: [],
+      dedupRegistry: {},
     },
     milestones: {},
     decisions: [],
@@ -367,6 +390,7 @@ export function createEmptyProjectState(input: {
 
 export function withProjectStateDefaults(state: ProjectState): ProjectState {
   state.execution.runStepLog ??= [];
+  state.execution.dedupRegistry ??= {};
   state.approvals ??= [];
   return state;
 }
