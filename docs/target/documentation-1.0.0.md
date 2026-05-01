@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.2.0
+# AI Orchestrator — Documentation 1.3.0
 
 ## 1. Что это за проект
 
@@ -110,6 +110,20 @@ Run-step evidence теперь поддерживает first-class статус
 - `STEP_CANCELLED` (`requestedBy`, `requestedAt`, `propagationState`).
 
 Это повышает diagnosability post-timeout/post-cancel сценариев и снижает риск некорректного retry-поведения, когда особые исходы теряются в `failed`.
+
+
+### 3.2.4 Baseline invariant regression suite (release gate 1.5)
+
+Добавлен детерминированный regression-набор `baseline-invariants` как обязательный release gate для baseline-среза 1.1–1.4/1.5:
+
+- success path: фиксированный policy-профиль и required checks;
+- policy deny path: запрет write-доступа для read-only ролей;
+- dedup suppression regression: подавление duplicate side effect после `succeeded`;
+- timeout invariant: структурированный `STEP_TIMEOUT` с retry-safe семантикой;
+- cancellation invariant: структурированный `STEP_CANCELLED` с propagation state;
+- evidence integrity invariant: детект tampering checksum-chain через `EVIDENCE_INTEGRITY_VIOLATION`.
+
+Suite запускается через `npm run test:baseline-invariants`; в turbo-пайплайне добавлена задача `baseline-invariants`, и `build` теперь зависит от нее (blocking gate).
 
 ## 3.3 Worker mode
 

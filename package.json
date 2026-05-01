@@ -27,7 +27,8 @@
     "turbo:test": "node scripts/turbo-runner.mjs run test",
     "turbo:typecheck": "node scripts/turbo-runner.mjs run typecheck",
     "turbo:build": "node scripts/turbo-runner.mjs run build",
-    "worker:start": "tsx apps/worker/src/main.ts"
+    "worker:start": "tsx apps/worker/src/main.ts",
+    "test:baseline-invariants": "node --import tsx --test tests/baseline-invariants-regression.test.ts"
   },
   "keywords": [],
   "author": "",
