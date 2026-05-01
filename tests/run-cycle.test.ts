@@ -905,3 +905,46 @@ test('runCycle enforces token budget before executing role', async () => {
       && error.message.includes('Token budget exceeded for task'),
   );
 });
+
+test('runWithTimeout surfaces STEP_TIMEOUT details', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+  const internals = orchestrator as unknown as {
+    runWithTimeout: <T>(execute: (signal: AbortSignal) => Promise<T>, timeoutMs: number, timeoutMessage: string) => Promise<T>;
+  };
+
+  await assert.rejects(
+    async () => internals.runWithTimeout(async () => new Promise((resolve) => { setTimeout(() => { resolve('ok'); }, 50); }), 10, 'timeout expected'),
+    (error: unknown) => {
+      assert.equal(error instanceof WorkflowPolicyError, true);
+      const details = (error as WorkflowPolicyError).details as Record<string, unknown>;
+      assert.equal(details.code, 'STEP_TIMEOUT');
+      assert.equal(details.boundary, 'workflow_step');
+      assert.equal(typeof details.timeoutMs, 'number');
+      return true;
+    },
+  );
+});
+
+test('runWithTimeout surfaces STEP_CANCELLED details for parent cancellation', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+  const internals = orchestrator as unknown as {
+    runWithTimeout: <T>(execute: (signal: AbortSignal) => Promise<T>, timeoutMs: number, timeoutMessage: string, options?: { parentSignal?: AbortSignal }) => Promise<T>;
+  };
+  const controller = new AbortController();
+  controller.abort(new Error('stop'));
+
+  await assert.rejects(
+    async () => internals.runWithTimeout(async () => 'ok', 20, 'cancel expected', { parentSignal: controller.signal }),
+    (error: unknown) => {
+      assert.equal(error instanceof WorkflowPolicyError, true);
+      const details = (error as WorkflowPolicyError).details as Record<string, unknown>;
+      assert.equal(details.code, 'STEP_CANCELLED');
+      assert.equal(details.propagationState, 'cancellation_requested');
+      return true;
+    },
+  );
+});

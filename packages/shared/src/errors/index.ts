@@ -8,6 +8,8 @@ export type ErrorCode =
   | 'SAFETY_VIOLATION_ERROR'
   | 'STATE_INTEGRITY_ERROR';
 
+export type StepBoundary = 'role_execution' | 'tool_invocation' | 'workflow_step';
+
 export interface ErrorOptions {
   cause?: unknown;
   details?: unknown;
@@ -65,6 +67,48 @@ export class WorkflowPolicyError extends OrchestratorError {
       ...options,
       exitCode: 4,
       needsHumanDecision: options.needsHumanDecision ?? true,
+    });
+  }
+}
+
+export class StepTimeoutError extends WorkflowPolicyError {
+  constructor(
+    message: string,
+    options: ErrorOptions & { timeoutMs: number; boundary: StepBoundary; elapsedMs: number },
+  ) {
+    super(message, {
+      ...options,
+      details: {
+        code: 'STEP_TIMEOUT',
+        timeoutMs: options.timeoutMs,
+        boundary: options.boundary,
+        elapsedMs: options.elapsedMs,
+        ...(options.details && typeof options.details === 'object' ? options.details : {}),
+      },
+      retrySuggested: options.retrySuggested ?? true,
+    });
+  }
+}
+
+export class StepCancelledError extends WorkflowPolicyError {
+  constructor(
+    message: string,
+    options: ErrorOptions & {
+      requestedBy: 'parent_signal' | 'operator' | 'system';
+      requestedAt: string;
+      propagationState: 'cancellation_requested' | 'cancelled';
+    },
+  ) {
+    super(message, {
+      ...options,
+      details: {
+        code: 'STEP_CANCELLED',
+        requestedBy: options.requestedBy,
+        requestedAt: options.requestedAt,
+        propagationState: options.propagationState,
+        ...(options.details && typeof options.details === 'object' ? options.details : {}),
+      },
+      retrySuggested: options.retrySuggested ?? true,
     });
   }
 }

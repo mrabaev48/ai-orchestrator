@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.1.0
+# AI Orchestrator — Documentation 1.2.0
 
 ## 1. Что это за проект
 
@@ -94,6 +94,22 @@ Execution-слой включает:
 - успешные/ошибочные завершения side effect фиксируются с policy/evidence linkage (`policyDecisionId`, `evidenceId`).
 
 Это снижает риск повторного внешнего эффекта при retry/replay и улучшает диагностику причин suppression.
+
+
+### 3.2.3 Explicit timeout/cancellation evidence states
+
+Run-step evidence теперь поддерживает first-class статусы исполнения и восстановления:
+
+- `timed_out` — шаг завершён по timeout, не сводится к generic failure;
+- `cancellation_requested` — получен parent cancellation signal и начато распространение отмены;
+- `cancelled` — шаг завершился отменой после propagation;
+- `compensation_pending` / `compensated` — зарезервированы для явной фиксации компенсационных фаз после partial-failure.
+
+Для timeout/cancel добавлены структурированные ошибки:
+- `STEP_TIMEOUT` (`timeoutMs`, `boundary`, `elapsedMs`);
+- `STEP_CANCELLED` (`requestedBy`, `requestedAt`, `propagationState`).
+
+Это повышает diagnosability post-timeout/post-cancel сценариев и снижает риск некорректного retry-поведения, когда особые исходы теряются в `failed`.
 
 ## 3.3 Worker mode
 
