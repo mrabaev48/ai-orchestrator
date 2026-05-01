@@ -5,15 +5,28 @@
       "outputs": []
     },
     "typecheck": {
-      "dependsOn": ["lint"],
+      "dependsOn": [
+        "lint"
+      ],
       "outputs": []
     },
     "test": {
-      "dependsOn": ["typecheck"],
+      "dependsOn": [
+        "typecheck"
+      ],
       "outputs": []
     },
     "build": {
-      "dependsOn": ["test"],
+      "dependsOn": [
+        "test",
+        "baseline-invariants"
+      ],
+      "outputs": []
+    },
+    "baseline-invariants": {
+      "dependsOn": [
+        "typecheck"
+      ],
       "outputs": []
     }
   }
