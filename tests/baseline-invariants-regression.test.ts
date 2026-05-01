@@ -28,7 +28,6 @@ function makeRunStep(overrides: Partial<RunStepLogEntry>): RunStepLogEntry {
     attempt: 1,
     idempotencyKey: 'key-1',
     traceId: 'trace-1',
-    prevChecksum: undefined,
     checksum: '',
     input: '{}',
     output: '{}',
@@ -36,7 +35,21 @@ function makeRunStep(overrides: Partial<RunStepLogEntry>): RunStepLogEntry {
   };
 
   const step = { ...base, ...overrides };
-  step.checksum = computeRunStepChecksum(step);
+  step.checksum = computeRunStepChecksum({
+    evidenceId: step.id,
+    tenantId: step.tenantId,
+    projectId: step.projectId,
+    runId: step.runId,
+    stepId: step.stepId,
+    attempt: step.attempt,
+    status: step.status,
+    ...(step.policyDecisionId ? { policyDecisionId: step.policyDecisionId } : {}),
+    idempotencyKey: step.idempotencyKey,
+    createdAt: step.createdAt,
+    ...(step.payloadRef ? { payloadRef: step.payloadRef } : {}),
+    ...(step.prevChecksum ? { prevChecksum: step.prevChecksum } : {}),
+    traceId: step.traceId,
+  });
   return step;
 }
 
@@ -137,7 +150,7 @@ test('baseline-invariants: cancellation mid-step preserves explicit propagation 
 
 test('baseline-invariants: evidence checksum integrity violations are detected', async () => {
   const state = createEmptyProjectState({ projectId: 'project-1', projectName: 'P', summary: 'S' });
-  const step1 = makeRunStep({ stepId: 'step-1', prevChecksum: undefined });
+  const step1 = makeRunStep({ stepId: 'step-1' });
   const step2 = makeRunStep({ stepId: 'step-2', prevChecksum: step1.checksum });
   state.execution.runStepLog = [step1, { ...step2, prevChecksum: 'tampered-checksum' }];
 

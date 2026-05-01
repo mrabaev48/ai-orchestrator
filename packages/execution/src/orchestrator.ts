@@ -1268,7 +1268,7 @@ export class Orchestrator {
         key: commitDedupKey,
         nowIso: new Date().toISOString(),
         status: committed.ok ? 'succeeded' : 'failed',
-        policyDecisionId: commitPolicyDecisionId,
+        ...(commitPolicyDecisionId ? { policyDecisionId: commitPolicyDecisionId } : {}),
       });
       if (committed.ok) {
         commitSha = committed.commitSha;
@@ -1341,7 +1341,7 @@ export class Orchestrator {
             key: pushDedupKey,
             nowIso: new Date().toISOString(),
             status: isPushed ? 'succeeded' : 'failed',
-            policyDecisionId: pushPolicyDecisionId,
+            ...(pushPolicyDecisionId ? { policyDecisionId: pushPolicyDecisionId } : {}),
           });
           }
         }
@@ -1422,7 +1422,7 @@ export class Orchestrator {
           key: prDedupKey,
           nowIso: new Date().toISOString(),
           status: isPrCreated ? 'succeeded' : 'failed',
-          policyDecisionId: prPolicyDecisionId,
+          ...(prPolicyDecisionId ? { policyDecisionId: prPolicyDecisionId } : {}),
         });
         }
       }
