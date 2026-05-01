@@ -252,6 +252,17 @@ export class Orchestrator {
       state.execution.activeRunId = runId;
       state.execution.activeTaskId = task.id;
       await this.stateStore.recordEvent(makeEvent('TASK_SELECTED', { taskId: task.id }, { runId }));
+      await this.persistAndRequirePolicyDecision({
+        state,
+        runId,
+        taskId: task.id,
+        stepId: `${task.id}:preflight_policy`,
+        attempt: 0,
+        actionType: 'artifact_write',
+        riskLevel: 'low',
+        inputHashSeed: `${runId}:${task.id}:preflight`,
+        reasonCodes: ['NON_BYPASS_PREFLIGHT_CHECK'],
+      });
 
     const failures = state.failures.filter((failure) => failure.taskId === task.id);
     const promptEngineer = this.roleRegistry.get<
@@ -376,6 +387,18 @@ export class Orchestrator {
       taskTitle: task.title,
       workspaceRoot: workspace.rootPath,
       ...(workspace.branchName ? { branchName: workspace.branchName } : {}),
+    });
+
+    await this.persistAndRequirePolicyDecision({
+      state,
+      runId,
+      taskId: task.id,
+      stepId: `${task.id}:postflight_policy`,
+      attempt: 0,
+      actionType: 'artifact_write',
+      riskLevel: 'low',
+      inputHashSeed: `${runId}:${task.id}:postflight`,
+      reasonCodes: ['NON_BYPASS_POSTFLIGHT_CHECK'],
     });
 
     const stateCommittedEvent = makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId });
