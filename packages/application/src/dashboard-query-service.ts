@@ -14,6 +14,7 @@ import type {
   MetricRollupItemView,
   SpanAuditItemView,
   ReviewBundleView,
+  ReadinessScorecardView,
 } from './read-models.ts';
 import {
   toArtifactHistoryView,
@@ -26,6 +27,7 @@ import {
   toLatestRunSummaryView,
   toMilestoneListView,
   toApprovalRequestView,
+  toReadinessScorecardView,
 } from './read-models.ts';
 
 export interface TenantScopeInput {
@@ -154,6 +156,12 @@ export class DashboardQueryService {
     const state = await this.stateStore.load();
     assertTenantScope(state, query);
     return toLatestRunSummaryView(state);
+  }
+
+  async getReadinessScorecard(query: TenantScopeInput = {}): Promise<ReadinessScorecardView> {
+    const state = await this.stateStore.load();
+    assertTenantScope(state, query);
+    return toReadinessScorecardView(state);
   }
 
   async getApprovals(query: { status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed' } = {}): Promise<ApprovalRequestView[]> {

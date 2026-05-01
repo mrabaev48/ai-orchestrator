@@ -211,6 +211,24 @@ export interface ReviewBundleView {
   };
 }
 
+export interface ReadinessScorecardCriterionView {
+  id: string;
+  description: string;
+  status: 'pass' | 'fail';
+  evidence: string;
+}
+
+export interface ReadinessScorecardView {
+  generatedAt: string;
+  verdict: 'ready' | 'blocked';
+  score: {
+    passed: number;
+    total: number;
+    percentage: number;
+  };
+  criteria: ReadinessScorecardCriterionView[];
+}
+
 export function toStateSummaryView(state: ProjectState): StateSummaryView {
   return {
     orgId: state.orgId,
@@ -235,6 +253,60 @@ export function toDashboardStateView(state: ProjectState): DashboardStateView {
   return {
     ...toStateSummaryView(state),
     ...(state.execution.activeTaskId ? { activeTaskId: state.execution.activeTaskId } : {}),
+  };
+}
+
+export function toReadinessScorecardView(state: ProjectState): ReadinessScorecardView {
+  const criteria: ReadinessScorecardCriterionView[] = [
+    {
+      id: 'repo-lint',
+      description: 'Repository lint status is passing',
+      status: state.repoHealth.lint === 'passing' ? 'pass' : 'fail',
+      evidence: `repoHealth.lint=${state.repoHealth.lint}`,
+    },
+    {
+      id: 'repo-tests',
+      description: 'Repository tests status is passing',
+      status: state.repoHealth.tests === 'passing' ? 'pass' : 'fail',
+      evidence: `repoHealth.tests=${state.repoHealth.tests}`,
+    },
+    {
+      id: 'repo-typecheck',
+      description: 'Repository typecheck status is passing',
+      status: state.repoHealth.typecheck === 'passing' ? 'pass' : 'fail',
+      evidence: `repoHealth.typecheck=${state.repoHealth.typecheck}`,
+    },
+    {
+      id: 'execution-blockers',
+      description: 'No blocked tasks remain',
+      status: state.execution.blockedTaskIds.length === 0 ? 'pass' : 'fail',
+      evidence: `blockedTaskIds=${state.execution.blockedTaskIds.length}`,
+    },
+    {
+      id: 'failure-queue',
+      description: 'No unresolved failures remain',
+      status: state.failures.length === 0 ? 'pass' : 'fail',
+      evidence: `failures=${state.failures.length}`,
+    },
+    {
+      id: 'documentation-artifact',
+      description: 'Documentation artifact is present',
+      status: state.artifacts.some((artifact) => artifact.type === 'documentation') ? 'pass' : 'fail',
+      evidence: `documentationArtifacts=${state.artifacts.filter((artifact) => artifact.type === 'documentation').length}`,
+    },
+  ];
+  const passed = criteria.filter((item) => item.status === 'pass').length;
+  const total = criteria.length;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    verdict: passed === total ? 'ready' : 'blocked',
+    score: {
+      passed,
+      total,
+      percentage: Math.round((passed / total) * 100),
+    },
+    criteria,
   };
 }
 

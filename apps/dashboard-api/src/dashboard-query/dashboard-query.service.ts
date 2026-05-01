@@ -72,6 +72,10 @@ export class DashboardReadApiService {
     return await this.dashboardQueryService.getLatestRunSummary({ ...(orgId ? { orgId } : {}), ...(projectId ? { projectId } : {}) });
   }
 
+  async getReadinessScorecard(orgId?: string, projectId?: string) {
+    return await this.dashboardQueryService.getReadinessScorecard({ ...(orgId ? { orgId } : {}), ...(projectId ? { projectId } : {}) });
+  }
+
   async getApprovals(status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed') {
     return await this.dashboardQueryService.getApprovals(status ? { status } : {});
   }

@@ -112,6 +112,7 @@ test('dashboard api query endpoints expose read-only dashboard views', async () 
     const decisions = await queryController.getDecisions({});
     const artifacts = await queryController.getArtifacts({});
     const latestRun = await queryController.getLatestRunSummary({});
+    const readinessScorecard = await queryController.getReadinessScorecard({});
 
     assert.equal(state.projectId, 'dashboard-api');
     assert.deepEqual(milestones, []);
@@ -121,6 +122,8 @@ test('dashboard api query endpoints expose read-only dashboard views', async () 
     assert.equal(Array.isArray(decisions.items), true);
     assert.equal(Array.isArray(artifacts.items), true);
     assert.equal(latestRun, null);
+    assert.equal(readinessScorecard.verdict, 'blocked');
+    assert.equal(Array.isArray(readinessScorecard.criteria), true);
   } finally {
     await app.close();
   }
