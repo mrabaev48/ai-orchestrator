@@ -52,6 +52,11 @@ export interface ArtifactHistoryQueryInput extends HistoryQueryInput {
   type?: string;
 }
 
+export interface ReadinessScorecardAuditContext {
+  runId?: string;
+  correlationId?: string;
+}
+
 export class DashboardQueryService {
   private readonly stateStore: StateStore;
 
@@ -158,10 +163,17 @@ export class DashboardQueryService {
     return toLatestRunSummaryView(state);
   }
 
-  async getReadinessScorecard(query: TenantScopeInput = {}): Promise<ReadinessScorecardView> {
+  async getReadinessScorecard(
+    query: TenantScopeInput = {},
+    auditContext: ReadinessScorecardAuditContext = {},
+  ): Promise<ReadinessScorecardView> {
     const state = await this.stateStore.load();
     assertTenantScope(state, query);
-    return toReadinessScorecardView(state);
+        ...(auditContext.correlationId ? { correlationId: auditContext.correlationId } : {}),
+        ...(auditContext.runId ? { runId: auditContext.runId } : {}),
+      ...(auditContext.correlationId ? { correlationId: auditContext.correlationId } : {}),
+      ...(auditContext.runId ? { runId: auditContext.runId } : {}),
+    }, auditContext.runId ? { runId: auditContext.runId } : {}));
   }
 
   async getApprovals(query: { status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed' } = {}): Promise<ApprovalRequestView[]> {

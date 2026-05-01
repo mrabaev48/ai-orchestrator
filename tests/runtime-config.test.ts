@@ -144,6 +144,24 @@ test('loadRuntimeConfig supports configurable approval required actions', () => 
   assert.equal(config.workflow.approvalBulkFileThreshold, 15);
 });
 
+test('loadRuntimeConfig supports configurable readiness scorecard policy', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      WORKFLOW_READINESS_SCORECARD_POLICY:
+        '{"id":"prod-v2","passThresholdPercent":80,"enabledCriteria":["repo-tests","repo-typecheck","execution-blockers"]}',
+    },
+  });
+
+  assert.equal(config.workflow.readinessScorecardPolicy?.id, 'prod-v2');
+  assert.equal(config.workflow.readinessScorecardPolicy?.passThresholdPercent, 80);
+  assert.deepEqual(config.workflow.readinessScorecardPolicy?.enabledCriteria, [
+    'repo-tests',
+    'repo-typecheck',
+    'execution-blockers',
+  ]);
+});
+
 test('loadRuntimeConfig rejects multi-worker mode without shared run lock dsn', () => {
   const error = assertConfigError(() =>
     loadRuntimeConfig({

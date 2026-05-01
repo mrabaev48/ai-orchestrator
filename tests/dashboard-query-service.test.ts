@@ -178,10 +178,11 @@ test('DashboardQueryService returns readiness scorecard with go/no-go verdict', 
   });
 
   const service = new DashboardQueryService(new InMemoryStateStore(state));
-  const scorecard = await service.getReadinessScorecard();
+  const scorecard = await service.getReadinessScorecard({}, { runId: 'run-score-1', correlationId: 'corr-1' });
 
   assert.equal(scorecard.verdict, 'ready');
   assert.equal(scorecard.score.total, 6);
   assert.equal(scorecard.score.passed, 6);
   assert.equal(scorecard.criteria.some((criterion) => criterion.status === 'fail'), false);
+  assert.equal(events.items[0]?.runId, 'run-score-1');
 });

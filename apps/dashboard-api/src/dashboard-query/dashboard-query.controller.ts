@@ -77,7 +77,12 @@ export class DashboardQueryController {
 
   @Get('readiness/scorecard')
   async getReadinessScorecard(@Query() query: HistoryQueryDto) {
-    return await this.dashboardReadApiService.getReadinessScorecard(query.orgId, query.projectId);
+    return await this.dashboardReadApiService.getReadinessScorecard(
+      query.orgId,
+      query.projectId,
+      query.runId,
+      query.correlationId,
+    );
   }
 
   @Get('approvals')
