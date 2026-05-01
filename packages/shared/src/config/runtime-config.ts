@@ -14,6 +14,14 @@ const runLockProviderSchema = z.enum(['noop', 'postgresql', 'redis', 'etcd']);
 const workspaceManagerModeSchema = z.enum(['git-worktree', 'static']);
 const qualityGateModeSchema = z.enum(['tooling', 'synthetic']);
 const approvalGateModeSchema = z.enum(['disabled', 'enabled']);
+const readinessCriterionIdSchema = z.enum([
+  'repo-lint',
+  'repo-tests',
+  'repo-typecheck',
+  'execution-blockers',
+  'failure-queue',
+  'documentation-artifact',
+]);
 const approvalRequestedActionSchema = z.enum([
   'git_push',
   'pr_draft',
@@ -68,6 +76,11 @@ const runtimeConfigSchema = z.strictObject({
     approvalGateMode: approvalGateModeSchema.optional(),
     approvalRequiredActions: z.array(approvalRequestedActionSchema).min(1).optional(),
     approvalBulkFileThreshold: z.number().int().positive().optional(),
+    readinessScorecardPolicy: z.strictObject({
+      id: z.string().trim().min(1),
+      passThresholdPercent: z.number().int().min(0).max(100),
+      enabledCriteria: z.array(readinessCriterionIdSchema).min(1),
+    }).optional(),
   }),
   tools: z.strictObject({
     allowedWritePaths: z.array(z.string().trim().min(1)).min(1),
@@ -114,6 +127,7 @@ const envSchema = z.object({
   WORKFLOW_APPROVAL_GATE_MODE: approvalGateModeSchema.default('disabled'),
   WORKFLOW_APPROVAL_REQUIRED_ACTIONS: z.string().trim().min(1).default('git_push,pr_draft'),
   WORKFLOW_APPROVAL_BULK_FILE_THRESHOLD: z.coerce.number().int().positive().default(25),
+  WORKFLOW_READINESS_SCORECARD_POLICY: z.string().trim().optional(),
   TOOL_ALLOWED_WRITE_PATHS: z.string().trim().min(1).default('.'),
   TOOL_ALLOWED_SHELL_COMMANDS: z.string().trim().min(1).default('node,npm,pnpm,git,rg,tsx,tsc'),
   TOOL_WRITE_MODE: safeWriteModeSchema.default('workspace-write'),
@@ -205,6 +219,14 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       ) as z.infer<typeof approvalRequestedActionSchema>[],
       approvalBulkFileThreshold:
         fileConfig.workflow?.approvalBulkFileThreshold ?? env.data.WORKFLOW_APPROVAL_BULK_FILE_THRESHOLD,
+      ...(env.data.WORKFLOW_READINESS_SCORECARD_POLICY
+        ? {
+          readinessScorecardPolicy: parseReadinessScorecardPolicy(
+            env.data.WORKFLOW_READINESS_SCORECARD_POLICY,
+            'WORKFLOW_READINESS_SCORECARD_POLICY',
+          ),
+        }
+        : {}),
       ...fileConfig.workflow,
     },
     tools: {
@@ -245,6 +267,25 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
   registerRuntimeSecrets(collectSecretValues(parsed.data));
 
   return parsed.data;
+}
+
+function parseReadinessScorecardPolicy(
+  input: string,
+  envName: string,
+): { id: string; passThresholdPercent: number; enabledCriteria: z.infer<typeof readinessCriterionIdSchema>[] } {
+  const parsed = parseJsonUnknown(input, envName);
+  const schema = z.strictObject({
+    id: z.string().trim().min(1),
+    passThresholdPercent: z.number().int().min(0).max(100),
+    enabledCriteria: z.array(readinessCriterionIdSchema).min(1),
+  });
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    throw new ConfigError(`${envName} must be a valid readiness policy JSON object`, {
+      details: result.error.issues,
+    });
+  }
+  return result.data;
 }
 
 function parseJsonRecord(input: string, envName: string): Record<string, string> {

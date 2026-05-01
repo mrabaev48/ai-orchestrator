@@ -19,6 +19,14 @@ export class HistoryQueryDto {
   projectId?: string;
 
   @IsOptional()
+  @IsString()
+  runId?: string;
+
+  @IsOptional()
+  @IsString()
+  correlationId?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)

@@ -159,3 +159,30 @@ test('DashboardQueryService returns review bundle with timeline, diff intelligen
   assert.equal(bundle?.testEvidence.length, 2);
   assert.equal(bundle?.prBundle.artifacts.length, 2);
 });
+
+test('DashboardQueryService returns readiness scorecard with go/no-go verdict', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'project-1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  state.repoHealth.lint = 'passing';
+  state.repoHealth.tests = 'passing';
+  state.repoHealth.typecheck = 'passing';
+  state.artifacts.push({
+    id: 'doc-1',
+    type: 'documentation',
+    title: 'System docs',
+    metadata: {},
+    createdAt: '2026-04-01T00:00:00.000Z',
+  });
+
+  const service = new DashboardQueryService(new InMemoryStateStore(state));
+  const scorecard = await service.getReadinessScorecard({}, { runId: 'run-score-1', correlationId: 'corr-1' });
+
+  assert.equal(scorecard.verdict, 'ready');
+  assert.equal(scorecard.score.total, 6);
+  assert.equal(scorecard.score.passed, 6);
+  assert.equal(scorecard.criteria.some((criterion) => criterion.status === 'fail'), false);
+  assert.equal(events.items[0]?.runId, 'run-score-1');
+});

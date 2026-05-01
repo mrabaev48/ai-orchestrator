@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.4.0
+# AI Orchestrator — Documentation 1.7.0
 
 ## 1. Что это за проект
 
@@ -151,6 +151,9 @@ NestJS API предоставляет:
 - экспорт backlog;
 - историю событий, failures, decisions, artifacts;
 - latest run summary;
+- production readiness scorecard (`GET /api/readiness/scorecard`) с измеримыми go/no-go критериями;
+  - policy profile может задаваться через runtime config (`workflow.readinessScorecardPolicy`) или env `WORKFLOW_READINESS_SCORECARD_POLICY`;
+  - audit trail поддерживает correlation/run context (`correlationId`, `runId`) для агрегирования трендов по релизным окнам;
 - approvals (list + approve/reject/resume);
 - audit endpoints (metrics, traces);
 - review bundle по run;

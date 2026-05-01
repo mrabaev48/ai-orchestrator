@@ -14,6 +14,7 @@ import type {
   MetricRollupItemView,
   SpanAuditItemView,
   ReviewBundleView,
+  ReadinessScorecardView,
 } from './read-models.ts';
 import {
   toArtifactHistoryView,
@@ -26,6 +27,7 @@ import {
   toLatestRunSummaryView,
   toMilestoneListView,
   toApprovalRequestView,
+  toReadinessScorecardView,
 } from './read-models.ts';
 
 export interface TenantScopeInput {
@@ -48,6 +50,11 @@ export interface FailureHistoryQueryInput extends HistoryQueryInput {
 
 export interface ArtifactHistoryQueryInput extends HistoryQueryInput {
   type?: string;
+}
+
+export interface ReadinessScorecardAuditContext {
+  runId?: string;
+  correlationId?: string;
 }
 
 export class DashboardQueryService {
@@ -154,6 +161,19 @@ export class DashboardQueryService {
     const state = await this.stateStore.load();
     assertTenantScope(state, query);
     return toLatestRunSummaryView(state);
+  }
+
+  async getReadinessScorecard(
+    query: TenantScopeInput = {},
+    auditContext: ReadinessScorecardAuditContext = {},
+  ): Promise<ReadinessScorecardView> {
+    const state = await this.stateStore.load();
+    assertTenantScope(state, query);
+        ...(auditContext.correlationId ? { correlationId: auditContext.correlationId } : {}),
+        ...(auditContext.runId ? { runId: auditContext.runId } : {}),
+      ...(auditContext.correlationId ? { correlationId: auditContext.correlationId } : {}),
+      ...(auditContext.runId ? { runId: auditContext.runId } : {}),
+    }, auditContext.runId ? { runId: auditContext.runId } : {}));
   }
 
   async getApprovals(query: { status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed' } = {}): Promise<ApprovalRequestView[]> {

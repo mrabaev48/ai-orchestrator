@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import {
   ApprovalGateService,
+  DEFAULT_READINESS_SCORECARD_POLICY,
   DashboardQueryService,
   createStateStore,
 } from '../../../../packages/application/src/index.ts';
@@ -27,9 +28,15 @@ import type { DashboardApiConfig } from '../config/dashboard-config.ts';
     },
     {
       provide: DashboardQueryService,
-      inject: [STATE_STORE],
-      useFactory: (stateStore: StateStore): DashboardQueryService =>
-        new DashboardQueryService(stateStore),
+      inject: [STATE_STORE, DASHBOARD_CONFIG],
+      useFactory: (stateStore: StateStore, config: DashboardApiConfig): DashboardQueryService =>
+        new DashboardQueryService(stateStore, config.runtime.workflow.readinessScorecardPolicy
+          ? {
+            id: config.runtime.workflow.readinessScorecardPolicy.id,
+            passThresholdPercent: config.runtime.workflow.readinessScorecardPolicy.passThresholdPercent,
+            enabledCriteria: new Set(config.runtime.workflow.readinessScorecardPolicy.enabledCriteria),
+          }
+          : DEFAULT_READINESS_SCORECARD_POLICY),
     },
     {
       provide: ApprovalGateService,

@@ -75,6 +75,16 @@ export class DashboardQueryController {
     return await this.dashboardReadApiService.getLatestRunSummary(query.orgId, query.projectId);
   }
 
+  @Get('readiness/scorecard')
+  async getReadinessScorecard(@Query() query: HistoryQueryDto) {
+    return await this.dashboardReadApiService.getReadinessScorecard(
+      query.orgId,
+      query.projectId,
+      query.runId,
+      query.correlationId,
+    );
+  }
+
   @Get('approvals')
   async getApprovals(@Query() query: ApprovalHistoryQueryDto) {
     return await this.dashboardReadApiService.getApprovals(query.status);
