@@ -138,5 +138,38 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
         `ALTER TABLE ${table('run_step_log')} ALTER COLUMN project_id SET NOT NULL`,
       ],
     },
+
+    {
+      id: 5,
+      name: 'run_step_evidence_v2',
+      statements: [
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS tenant_id TEXT`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS project_scope_id TEXT`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS step_id UUID`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS attempt INTEGER`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS policy_decision_id UUID`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS idempotency_key TEXT`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS payload_ref TEXT`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS checksum TEXT`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS prev_checksum TEXT`,
+        `ALTER TABLE ${table('run_step_log')} ADD COLUMN IF NOT EXISTS trace_id TEXT`,
+        `UPDATE ${table('run_step_log')}
+         SET tenant_id = COALESCE(tenant_id, org_id, 'default-org'),
+             project_scope_id = COALESCE(project_scope_id, project_id, 'ai-orchestrator'),
+             step_id = COALESCE(step_id, id),
+             attempt = COALESCE(attempt, 0),
+             idempotency_key = COALESCE(idempotency_key, run_id::text || ':' || id::text || ':0'),
+             checksum = COALESCE(checksum, md5(run_id::text || ':' || id::text || ':' || created_at::text)),
+             trace_id = COALESCE(trace_id, run_id::text)
+         WHERE tenant_id IS NULL OR project_scope_id IS NULL OR step_id IS NULL OR attempt IS NULL OR idempotency_key IS NULL OR checksum IS NULL OR trace_id IS NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN tenant_id SET NOT NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN project_scope_id SET NOT NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN step_id SET NOT NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN attempt SET NOT NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN idempotency_key SET NOT NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN checksum SET NOT NULL`,
+        `ALTER TABLE ${table('run_step_log')} ALTER COLUMN trace_id SET NOT NULL`
+      ],
+    },
   ];
 }
