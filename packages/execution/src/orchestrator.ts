@@ -1,4 +1,4 @@
-import type { ApprovalRequest, ArtifactRecord, BacklogTask, ExecutionPolicyActionType, ProjectState } from '../../core/src/index.ts';
+import { buildIdempotencyKey, type ApprovalRequest, type ArtifactRecord, type BacklogTask, type ExecutionPolicyActionType, type ProjectState } from '../../core/src/index.ts';
 import {
   assertProjectState,
   computeRunStepChecksum,
@@ -26,6 +26,7 @@ import {
   type ManagedWorkspace,
   type WorkspaceManager,
 } from './workspace-manager.ts';
+import { completeSideEffect, reserveSideEffect } from './idempotency/side-effect-dedup-guard.ts';
 import {
   nextFailureAction,
   requiresReview,
@@ -1214,6 +1215,26 @@ export class Orchestrator {
     let isWaitingForApproval = false;
 
     if (hasChanges) {
+      const dedupTtlMs = 30 * 60 * 1000;
+      const nowIso = new Date().toISOString();
+      const commitDedupKey = buildIdempotencyKey({
+        tenantId: state.orgId,
+        projectId: state.projectId,
+        runId: input.runId,
+        stepId: `${input.taskId}:git_commit`,
+        sideEffectType: 'git_commit',
+        normalizedInput: `${commitMessage}|${branchName}`,
+      });
+      const commitReserve = reserveSideEffect(state.execution.dedupRegistry, {
+        key: commitDedupKey,
+        leaseOwner: input.runId,
+        nowIso,
+        ttlMs: dedupTtlMs,
+      });
+      if (commitReserve.dedupSuppressed) {
+        commitStatus = 'skipped_duplicate';
+        pushStatus = 'skipped_duplicate';
+      } else {
       await this.persistAndRequirePolicyDecision({
         state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:git_commit`, attempt: 0,
         actionType: 'git_commit', riskLevel: 'medium', inputHashSeed: `${input.runId}:${input.taskId}:git_commit:${commitMessage}`,
@@ -1221,6 +1242,13 @@ export class Orchestrator {
       });
       const committed = await this.createCommit(input.workspaceRoot, commitMessage);
       commitStatus = committed.ok ? 'created' : 'failed';
+      const commitPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;
+      completeSideEffect(state.execution.dedupRegistry, {
+        key: commitDedupKey,
+        nowIso: new Date().toISOString(),
+        status: committed.ok ? 'succeeded' : 'failed',
+        policyDecisionId: commitPolicyDecisionId,
+      });
       if (committed.ok) {
         commitSha = committed.commitSha;
         if (isApprovalGateEnabled) {
@@ -1263,6 +1291,23 @@ export class Orchestrator {
           pushStatus = pushGate.status === 'pending' ? 'pending_approval' : 'waiting_resume';
           isWaitingForApproval = true;
         } else {
+          const pushDedupKey = buildIdempotencyKey({
+            tenantId: state.orgId,
+            projectId: state.projectId,
+            runId: input.runId,
+            stepId: `${input.taskId}:git_push`,
+            sideEffectType: 'git_push',
+            normalizedInput: `${branchName}|${commitSha}`,
+          });
+          const pushReserve = reserveSideEffect(state.execution.dedupRegistry, {
+            key: pushDedupKey,
+            leaseOwner: input.runId,
+            nowIso: new Date().toISOString(),
+            ttlMs: dedupTtlMs,
+          });
+          if (pushReserve.dedupSuppressed) {
+            pushStatus = 'skipped_duplicate';
+          } else {
           await this.persistAndRequirePolicyDecision({
             state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:git_push`, attempt: 0,
             actionType: 'git_push', riskLevel: 'high', inputHashSeed: `${input.runId}:${input.taskId}:git_push:${branchName}:${commitSha}`,
@@ -1270,9 +1315,18 @@ export class Orchestrator {
           });
           const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
           pushStatus = isPushed ? 'pushed' : 'failed';
+          const pushPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;
+          completeSideEffect(state.execution.dedupRegistry, {
+            key: pushDedupKey,
+            nowIso: new Date().toISOString(),
+            status: isPushed ? 'succeeded' : 'failed',
+            policyDecisionId: pushPolicyDecisionId,
+          });
+          }
         }
       } else {
         pushStatus = 'skipped_commit_failed';
+      }
       }
     }
 
@@ -1318,14 +1372,38 @@ export class Orchestrator {
         prStatus = prGate.status === 'pending' ? 'pending_approval' : 'waiting_resume';
         isWaitingForApproval = true;
       } else {
+        const prDedupKey = buildIdempotencyKey({
+          tenantId: state.orgId,
+          projectId: state.projectId,
+          runId: input.runId,
+          stepId: `${input.taskId}:pr_draft`,
+          sideEffectType: 'pr_draft',
+          normalizedInput: `${branchName}|${prTitle}`,
+        });
+        const prReserve = reserveSideEffect(state.execution.dedupRegistry, {
+          key: prDedupKey,
+          leaseOwner: input.runId,
+          nowIso: new Date().toISOString(),
+          ttlMs: 30 * 60 * 1000,
+        });
+        if (prReserve.dedupSuppressed) {
+          prStatus = 'skipped_duplicate';
+        } else {
         await this.persistAndRequirePolicyDecision({
           state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:pr_draft`, attempt: 0,
           actionType: 'pr_draft', riskLevel: 'high', inputHashSeed: `${input.runId}:${input.taskId}:pr_draft:${branchName}:${prTitle}`,
           reasonCodes: ['PUSH_SUCCESSFUL'],
         });
-        prStatus = await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody)
-          ? 'created'
-          : 'failed';
+        const isPrCreated = await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody);
+        prStatus = isPrCreated ? 'created' : 'failed';
+        const prPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;
+        completeSideEffect(state.execution.dedupRegistry, {
+          key: prDedupKey,
+          nowIso: new Date().toISOString(),
+          status: isPrCreated ? 'succeeded' : 'failed',
+          policyDecisionId: prPolicyDecisionId,
+        });
+        }
       }
     }
     const prArtifact = makeArtifact('git_lifecycle', `PR draft metadata for ${input.taskId}`, {
