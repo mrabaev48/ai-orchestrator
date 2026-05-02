@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.9.0
+# AI Orchestrator — Documentation 1.10.0
 
 ## 1. Что это за проект
 
@@ -144,6 +144,17 @@ Suite запускается через `npm run test:baseline-invariants`; в t
 - deterministic assessment output с verdict `healthy|at_risk`, criterion-level evidence и budget status `healthy|burn_warning|exhausted`.
 
 Этот слой является минимальным инкрементом для Phase 6 (Observability/SLO) и может расширяться per-tenant/per-tier без breaking изменений текущих контрактов.
+
+
+### 3.2.6 ExecutionPolicyDecision domain contract and validators
+
+Для policy-decision слоя формализован единый доменный контракт и централизованные валидаторы:
+- в `packages/core` введен schema-first контракт `executionPolicyDecisionSchema` + `validateExecutionPolicyDecision`; 
+- валидация покрывает shape/типы, ISO timestamp, enum-ограничения, а также semantic rule: для `deny|error` обязателен минимум один `reasonCode`;
+- в `validateProjectState` добавлена доменная проверка соответствия `policyDecisions` текущему tenant/project context;
+- в `packages/application` добавлен `assertPolicyDecisionForAction` для детерминированной проверки missing/stale/deny перед side-effectful действиями.
+
+Это снижает риск неявных/частично валидированных policy-решений и делает ошибки policy-layer воспроизводимыми для эксплуатационной диагностики.
 
 ## 3.3 Worker mode
 

@@ -8,7 +8,11 @@ import type { ArtifactRecord } from './artifacts.ts';
 import type { Backlog } from './backlog.ts';
 import { validateBacklogTask } from './backlog.ts';
 import type { DecisionLogItem } from './decisions.ts';
-import type { ExecutionPolicyDecision } from './execution-policy-decision.ts';
+import {
+  executionPolicyDecisionSchema,
+  validateExecutionPolicyDecision,
+  type ExecutionPolicyDecision,
+} from './execution-policy-decision.ts';
 import {
   createEmptyProjectDiscovery,
   type ProjectDiscovery,
@@ -254,23 +258,8 @@ const runStepLogEntrySchema = z.object({
 });
 
 
-const policyDecisionSchema = z.object({
-  decisionId: z.string().min(1),
-  tenantId: z.string().min(1),
-  projectId: z.string().min(1),
-  runId: z.string().min(1),
-  stepId: z.string().min(1),
-  attempt: z.number().int().nonnegative(),
-  actionType: z.enum(['git_commit', 'git_push', 'pr_draft', 'artifact_write', 'external_api']),
-  riskLevel: z.enum(['low', 'medium', 'high']),
-  decision: z.enum(['allow', 'deny', 'error']),
-  reasonCodes: z.array(z.string().min(1)),
-  decidedAt: z.iso.datetime({ offset: true }),
-  decider: z.string().min(1),
-  inputHash: z.string().min(1),
-  traceId: z.string().min(1),
-  policyVersion: z.string().min(1),
-});
+const policyDecisionSchema = executionPolicyDecisionSchema;
+
 
 const approvalRequestSchema = z.object({
   id: z.string().min(1),
@@ -426,6 +415,14 @@ export function validateProjectState(state: ProjectState): ValidationResult {
 
   issues.push(...validateProjectDiscovery(state.discovery));
   issues.push(...state.architecture.findings.flatMap((finding) => validateArchitectureFinding(finding)));
+
+  issues.push(...state.policyDecisions.flatMap((decision) =>
+    validateExecutionPolicyDecision(decision, {
+      tenantId: state.orgId,
+      projectId: state.projectId,
+      runId: decision.runId,
+    }),
+  ));
 
   if (state.architecture.analysisSummary != null && !state.architecture.analysisSummary.trim()) {
     issues.push('Architecture analysisSummary must not be empty when present');
