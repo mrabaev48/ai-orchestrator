@@ -12,3 +12,4 @@ export * from './state-integrity-service.ts';
 export * from './runtime-factory.ts';
 
 export * from './slo/slo-policy.ts';
+export * from './policy-decision-contract.ts';
