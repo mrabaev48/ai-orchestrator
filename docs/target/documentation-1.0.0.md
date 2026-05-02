@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.7.0
+# AI Orchestrator — Documentation 1.8.0
 
 ## 1. Что это за проект
 
@@ -88,7 +88,7 @@ Execution-слой включает:
 ### 3.2.2 Idempotency key flow for non-idempotent side effects
 
 Для non-idempotent действий git lifecycle (commit/push/pr-draft) введен сквозной dedup-контур:
-- canonical idempotency key строится из `tenantId/projectId/runId/stepId/sideEffectType/normalizedInputHash`;
+- canonical idempotency key строится в формате `{tenant}:{project}:{run}:{task}:{stage}:{attempt}:{actionType-actionHash}`;
 - в `execution.dedupRegistry` сохраняется состояние ключа: `pending|succeeded|failed|expired` и lease/TTL;
 - перед side effect выполняется reserve, при duplicate выполняется deterministic short-circuit (`*_status=skipped_duplicate`);
 - успешные/ошибочные завершения side effect фиксируются с policy/evidence linkage (`policyDecisionId`, `evidenceId`).

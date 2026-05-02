@@ -1265,7 +1265,9 @@ export class Orchestrator {
         tenantId: state.orgId,
         projectId: state.projectId,
         runId: input.runId,
-        stepId: `${input.taskId}:git_commit`,
+        taskId: input.taskId,
+        stage: 'git_commit',
+        attempt: 0,
         sideEffectType: 'git_commit',
         normalizedInput: `${commitMessage}|${branchName}`,
       });
@@ -1339,7 +1341,9 @@ export class Orchestrator {
             tenantId: state.orgId,
             projectId: state.projectId,
             runId: input.runId,
-            stepId: `${input.taskId}:git_push`,
+            taskId: input.taskId,
+            stage: 'git_push',
+            attempt: 0,
             sideEffectType: 'git_push',
             normalizedInput: `${branchName}|${commitSha}`,
           });

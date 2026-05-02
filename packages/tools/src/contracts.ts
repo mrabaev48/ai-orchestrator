@@ -9,8 +9,16 @@ export type ToolAdapterName =
   | 'policy'
   | 'evidence';
 
+export interface ToolIdempotencyMetadata {
+  key: string;
+  dedupScope: 'worker' | 'run';
+  isRetriable: boolean;
+  isIdempotent: boolean;
+}
+
 export interface ToolExecutionOptions {
   signal?: AbortSignal;
+  idempotency?: ToolIdempotencyMetadata;
 }
 
 export interface UnifiedToolRequest {
