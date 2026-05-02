@@ -9,7 +9,7 @@ import {
   TaskManagerRole,
   TesterRole,
 } from '../packages/agents/src/index.ts';
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
+import { classifyExecutionPolicyActionRisk, createEmptyProjectState } from '../packages/core/src/index.ts';
 import { Orchestrator } from '../packages/execution/src/index.ts';
 import { SchemaValidationError, WorkflowPolicyError } from '../packages/shared/src/errors/index.ts';
 import { InMemoryStateStore } from '../packages/state/src/index.ts';
@@ -220,6 +220,33 @@ test('runCycle requests approval for risky git lifecycle actions when approval g
   assert.equal(state.approvals[0]?.status, 'pending');
 });
 
+
+
+test('runCycle persists policy decisions with risk levels from classification matrix for git side effects', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+  const internals = orchestrator as unknown as {
+    workspaceHasGitChanges: () => Promise<boolean>;
+    createCommit: () => Promise<{ ok: true; commitSha: string }>;
+    pushBranch: () => Promise<boolean>;
+    createPullRequestDraft: () => Promise<boolean>;
+  };
+  internals.workspaceHasGitChanges = async () => true;
+  internals.createCommit = async () => ({ ok: true, commitSha: 'abc123' });
+  internals.pushBranch = async () => true;
+  internals.createPullRequestDraft = async () => true;
+
+  await orchestrator.runCycle();
+  const state = await store.load();
+
+  const expectedActions = ['git_commit', 'git_push', 'pr_draft'] as const;
+  for (const actionType of expectedActions) {
+    const decision = state.policyDecisions.find((entry) => entry.actionType === actionType);
+    assert.ok(decision, `policy decision for ${actionType} must be persisted`);
+    assert.equal(decision?.riskLevel, classifyExecutionPolicyActionRisk(actionType).riskLevel);
+  }
+});
 test('runCycle blocks task after repeated review failures', async () => {
   const state = makeState(['[reject] review should fail']);
   state.backlog.tasks['task-1']!.splitFromTaskId = 'parent-task';

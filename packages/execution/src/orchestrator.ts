@@ -5,6 +5,8 @@ import {
   formatPolicyDecisionError,
   isExecutableTask,
   makeEvent,
+  classifyExecutionPolicyActionRisk,
+  classifyApprovalRequestedActionRisk,
 } from '../../core/src/index.ts';
 import {
   defaultExecutionPolicyEngine,
@@ -36,7 +38,6 @@ import {
   shouldStopRun,
 } from '../../workflow/src/index.ts';
 import type { RoleRegistry } from '../../agents/src/index.ts';
-import { mapApprovalRequestedActionRisk, mapExecutionPolicyActionRisk } from '../../application/src/index.ts';
 import type {
   AgentRole,
   RoleObservation,
@@ -1224,7 +1225,7 @@ export class Orchestrator {
       stepId: input.stepId,
       attempt: input.attempt,
       actionType: input.actionType,
-      riskLevel: input.riskLevel ?? mapExecutionPolicyActionRisk(input.actionType).riskLevel,
+      riskLevel: input.riskLevel ?? classifyExecutionPolicyActionRisk(input.actionType).riskLevel,
       decision: 'allow' as const,
       reasonCodes: input.reasonCodes,
       decidedAt: new Date().toISOString(),
@@ -1616,7 +1617,7 @@ export class Orchestrator {
       taskId: input.taskId,
       reason: input.reason,
       requestedAction: input.requestedAction,
-      riskLevel: mapApprovalRequestedActionRisk(input.requestedAction).riskLevel as 'medium' | 'high',
+      riskLevel: classifyApprovalRequestedActionRisk(input.requestedAction).riskLevel as 'medium' | 'high',
       status: 'pending',
       metadata: input.metadata,
       createdAt: new Date().toISOString(),
