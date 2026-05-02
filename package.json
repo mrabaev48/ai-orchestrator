@@ -20,7 +20,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm test",
+    "check": "pnpm run lint && pnpm run typecheck && pnpm test",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "turbo": "node scripts/turbo-runner.mjs",
     "turbo:lint": "node scripts/turbo-runner.mjs run lint",
