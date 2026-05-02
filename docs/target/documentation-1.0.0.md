@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.11.0
+# AI Orchestrator — Documentation 1.12.0
 
 ## 1. Что это за проект
 
@@ -257,7 +257,7 @@ npm run dashboard-api:start
 
 - `llm.*` — provider/model/timeout/temperature/budget/cost controls.
 - `state.*` — backend (`memory|postgresql`), DSN, schema, snapshot flags.
-- `workflow.*` — step/retry limits, workerCount, run lock provider/DSN, workspace mode, approval policy.
+- `workflow.*` — step/retry limits, `maxRoleWallTimeMs` budget для action loop, workerCount, run lock provider/DSN, workspace mode, approval policy.
 - `tools.*` — write-path и shell-allowlist policy, protected paths, evidence persistence.
 - `logging.*` — уровень и формат логирования.
 

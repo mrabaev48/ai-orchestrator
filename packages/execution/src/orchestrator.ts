@@ -855,8 +855,24 @@ export class Orchestrator {
       1,
       this.config.workflow.maxRoleStepsPerTask ?? this.config.workflow.maxStepsPerRun,
     );
+    const roleStartedAt = Date.now();
+    const roleWallTimeBudgetMs = this.config.workflow.maxRoleWallTimeMs;
 
     for (let step = 1; step <= stepLimit; step += 1) {
+      const elapsedMs = Date.now() - roleStartedAt;
+      if (typeof roleWallTimeBudgetMs === 'number' && elapsedMs >= roleWallTimeBudgetMs) {
+        throw new WorkflowPolicyError(`Role ${role.name} exhausted action loop wall-time budget`, {
+          details: {
+            role: role.name,
+            step,
+            stopCondition: 'budget_exhausted',
+            budgetType: 'wall_time_ms',
+            elapsedMs,
+            maxWallTimeMs: roleWallTimeBudgetMs,
+          },
+          retrySuggested: true,
+        });
+      }
       if (context.abortSignal?.aborted) {
         throw new WorkflowPolicyError(`Role ${role.name} cancelled before step ${step}`, {
           details: {
@@ -868,9 +884,12 @@ export class Orchestrator {
         });
       }
 
+      const stepTimeoutMs = typeof roleWallTimeBudgetMs === 'number'
+        ? Math.max(1, Math.min(this.config.llm.timeoutMs, roleWallTimeBudgetMs - elapsedMs))
+        : this.config.llm.timeoutMs;
       const stepResult: RoleStepResult<TOutput> = await this.runWithTimeout(
         async (signal) => executeStep(request, { ...context, abortSignal: signal }, observations),
-        this.config.llm.timeoutMs,
+        stepTimeoutMs,
         `Role ${role.name} timed out at step ${step}`,
         withParentSignal(context.abortSignal),
       );

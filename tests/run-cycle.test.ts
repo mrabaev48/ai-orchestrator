@@ -733,6 +733,52 @@ test('runCycle fails when role action loop exceeds max step limit', async () => 
   );
 });
 
+
+test('runCycle fails when role action loop exceeds wall-time budget', async () => {
+  class SlowToolRequesterRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+      throw new Error('execute should not be called when executeStep is available');
+    }
+
+    async executeStep(): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return {
+        type: 'tool_request',
+        request: {
+          toolName: 'git_status',
+          input: {},
+          rationale: 'Collect workspace status with bounded budget',
+        },
+      };
+    }
+  }
+
+  const registry = new RoleRegistry();
+  registry.register(new TaskManagerRole());
+  registry.register(new PromptEngineerRole());
+  registry.register(new SlowToolRequesterRole());
+  registry.register(new ReviewerRole());
+  registry.register(new TesterRole());
+
+  const config = makeRuntimeConfig();
+  config.workflow.maxStepsPerRun = 10;
+  config.workflow.maxRoleStepsPerTask = 10;
+  config.workflow.maxRoleWallTimeMs = 25;
+
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(config, { sink: () => {} });
+  const orchestrator = new Orchestrator(store, registry, config, logger);
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) =>
+      error instanceof WorkflowPolicyError &&
+      error.message.includes('exhausted action loop wall-time budget'),
+  );
+});
+
 test('runCycle skips tool evidence artifacts when persistToolEvidence is disabled', async () => {
   class LoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
     readonly name = 'coder' as const;
