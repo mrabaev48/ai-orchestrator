@@ -1,4 +1,12 @@
-import type { ToolEvidenceStore, UnifiedToolAdapter, UnifiedToolRequest } from './contracts.ts';
+import {
+  ToolExecutionContractError,
+  normalizeToolError,
+  type ToolDeterminismMetadata,
+  type ToolEvidenceStore,
+  type UnifiedToolAdapter,
+  type UnifiedToolRequest,
+  type UnifiedToolResult,
+} from './contracts.ts';
 import path from 'node:path';
 import { createEvidenceToolAdapter } from './evidence/adapter.ts';
 import {
@@ -21,9 +29,25 @@ export interface ToolSet {
   fileSystem: FileSystemTool;
   git: GitTool;
   typeScript: TypeScriptTool;
-  execute: (request: UnifiedToolRequest, options?: { signal?: AbortSignal }) => Promise<unknown>;
+  execute: (request: UnifiedToolRequest, options?: { signal?: AbortSignal }) => Promise<UnifiedToolResult>;
   evidence: ToolEvidenceStore;
 }
+
+const TOOL_METADATA: Record<string, ToolDeterminismMetadata> = {
+  file_read: { deterministic: true, sideEffectRisk: 'none' },
+  file_list: { deterministic: true, sideEffectRisk: 'none' },
+  file_exists: { deterministic: true, sideEffectRisk: 'none' },
+  file_write: { deterministic: false, sideEffectRisk: 'high' },
+  git_status: { deterministic: false, sideEffectRisk: 'none' },
+  git_diff: { deterministic: false, sideEffectRisk: 'none' },
+  git_current_branch: { deterministic: false, sideEffectRisk: 'none' },
+  typescript_check: { deterministic: false, sideEffectRisk: 'none' },
+  typescript_diagnostics: { deterministic: false, sideEffectRisk: 'none' },
+  shell_exec: { deterministic: false, sideEffectRisk: 'high' },
+  testing_run: { deterministic: false, sideEffectRisk: 'low' },
+  diff_workspace: { deterministic: false, sideEffectRisk: 'none' },
+  search_repo: { deterministic: true, sideEffectRisk: 'none' },
+};
 
 const DEFAULT_ALLOWED_SHELL_COMMANDS = ['node', 'npm', 'pnpm', 'git', 'rg', 'tsx', 'tsc'] as const;
 const DEFAULT_PROTECTED_WRITE_PATHS = [
@@ -80,11 +104,18 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
   const execute = async (
     request: UnifiedToolRequest,
     options?: { signal?: AbortSignal },
-  ): Promise<unknown> => {
+  ): Promise<UnifiedToolResult> => {
     const adapter = adapters.find((candidate) => candidate.canHandle(request.toolName));
     if (!adapter) {
-      throw new Error(`Unsupported tool request: ${request.toolName}`);
+      throw new ToolExecutionContractError({
+        category: 'unsupported',
+        retriable: false,
+        code: 'TOOL_UNSUPPORTED',
+        message: `Unsupported tool request: ${request.toolName}`,
+        details: { toolName: request.toolName },
+      });
     }
+    const determinism = TOOL_METADATA[request.toolName] ?? { deterministic: false, sideEffectRisk: 'low' };
 
     const start = Date.now();
     try {
@@ -96,17 +127,18 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
         durationMs: Date.now() - start,
         createdAt: new Date().toISOString(),
       });
-      return result;
+      return { ok: true, toolName: request.toolName, output: result, determinism };
     } catch (error) {
+      const envelope = normalizeToolError(error, 'TOOL_EXECUTION_FAILED');
       evidenceAdapter.store.add({
         adapter: adapter.name,
         toolName: request.toolName,
         success: false,
         durationMs: Date.now() - start,
         createdAt: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error),
+        error: envelope.message,
       });
-      throw error;
+      return { ok: false, toolName: request.toolName, error: envelope, determinism };
     }
   };
 

@@ -1073,23 +1073,29 @@ export class Orchestrator {
   }
 
   private async executeTool(request: ToolCallRequest, signal?: AbortSignal): Promise<unknown> {
-    try {
-      return await this.tools.execute(
-        {
-          toolName: request.toolName,
-          input: request.input,
-        },
-        withSignal(signal),
-      );
-    } catch (error) {
-      throw new WorkflowPolicyError(
-        `Unsupported tool request: ${request.toolName}`,
-        {
-          cause: error,
-          retrySuggested: false,
-        },
-      );
+    const result = await this.tools.execute(
+      {
+        toolName: request.toolName,
+        input: request.input,
+      },
+      withSignal(signal),
+    );
+
+    if (result.ok) {
+      return result;
     }
+
+    throw new WorkflowPolicyError(result.error.message, {
+      cause: new Error(result.error.code),
+      retrySuggested: result.error.retriable,
+      details: {
+        code: 'TOOL_ERROR_ENVELOPE',
+        category: result.error.category,
+        toolCode: result.error.code,
+        toolName: request.toolName,
+        ...(result.error.details ? { errorDetails: result.error.details } : {}),
+      },
+    });
   }
 
   private async runWithTimeout<T>(
