@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.12.1
+# AI Orchestrator — Documentation 1.13.0
 
 ## 1. Что это за проект
 
@@ -163,6 +163,18 @@ Suite запускается через `npm run test:baseline-invariants`; в t
 - в `packages/application` добавлен `assertPolicyDecisionForAction` для детерминированной проверки missing/stale/deny перед side-effectful действиями.
 
 Это снижает риск неявных/частично валидированных policy-решений и делает ошибки policy-layer воспроизводимыми для эксплуатационной диагностики.
+
+
+### 3.2.7 Action-to-risk classification matrix with explicit ownership
+
+Добавлена централизованная matrix-классификация рисков действий с явным ownership:
+- execution policy actions (`artifact_write`, `external_api`, `git_commit`, `git_push`, `pr_draft`) классифицируются через единый typed matrix;
+- approval actions (`db_migration`, `security_auth_change`, `production_config_change` и др.) классифицируются через отдельный typed matrix;
+- каждое действие теперь имеет не только `riskLevel`, но и `owner` (`orchestration|release|security|platform`), что делает ответственность и эскалацию явными;
+- orchestration-path перестал использовать hardcoded risk-level строки для git side effects, и использует матрицу как единственный source of truth;
+- application-слой использует thin mapper-адаптер для чтения core matrix без дублирования правил.
+
+Это снижает риск drift между policy-check, approval-flow и runtime side effects, а также улучшает diagnosability при инцидентном разборе.
 
 ## 3.3 Worker mode
 

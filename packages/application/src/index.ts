@@ -13,3 +13,5 @@ export * from './runtime-factory.ts';
 
 export * from './slo/slo-policy.ts';
 export * from './policy-decision-contract.ts';
+
+export * from './policy/risk-mapper.ts';

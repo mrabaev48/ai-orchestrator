@@ -36,6 +36,7 @@ import {
   shouldStopRun,
 } from '../../workflow/src/index.ts';
 import type { RoleRegistry } from '../../agents/src/index.ts';
+import { mapApprovalRequestedActionRisk, mapExecutionPolicyActionRisk } from '../../application/src/index.ts';
 import type {
   AgentRole,
   RoleObservation,
@@ -1211,7 +1212,7 @@ export class Orchestrator {
     stepId: string;
     attempt: number;
     actionType: ExecutionPolicyActionType;
-    riskLevel: 'low' | 'medium' | 'high';
+    riskLevel?: 'low' | 'medium' | 'high';
     inputHashSeed: string;
     reasonCodes: string[];
   }): Promise<void> {
@@ -1223,7 +1224,7 @@ export class Orchestrator {
       stepId: input.stepId,
       attempt: input.attempt,
       actionType: input.actionType,
-      riskLevel: input.riskLevel,
+      riskLevel: input.riskLevel ?? mapExecutionPolicyActionRisk(input.actionType).riskLevel,
       decision: 'allow' as const,
       reasonCodes: input.reasonCodes,
       decidedAt: new Date().toISOString(),
@@ -1302,7 +1303,7 @@ export class Orchestrator {
       } else {
       await this.persistAndRequirePolicyDecision({
         state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:git_commit`, attempt: 0,
-        actionType: 'git_commit', riskLevel: 'medium', inputHashSeed: `${input.runId}:${input.taskId}:git_commit:${commitMessage}`,
+        actionType: 'git_commit', inputHashSeed: `${input.runId}:${input.taskId}:git_commit:${commitMessage}`,
         reasonCodes: ['REPO_CHANGES_PRESENT'],
       });
       const committed = await this.createCommit(input.workspaceRoot, commitMessage);
@@ -1377,7 +1378,7 @@ export class Orchestrator {
           } else {
           await this.persistAndRequirePolicyDecision({
             state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:git_push`, attempt: 0,
-            actionType: 'git_push', riskLevel: 'high', inputHashSeed: `${input.runId}:${input.taskId}:git_push:${branchName}:${commitSha}`,
+            actionType: 'git_push', inputHashSeed: `${input.runId}:${input.taskId}:git_push:${branchName}:${commitSha}`,
             reasonCodes: ['APPROVAL_GATE_PASSED'],
           });
           const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
@@ -1460,7 +1461,7 @@ export class Orchestrator {
         } else {
         await this.persistAndRequirePolicyDecision({
           state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:pr_draft`, attempt: 0,
-          actionType: 'pr_draft', riskLevel: 'high', inputHashSeed: `${input.runId}:${input.taskId}:pr_draft:${branchName}:${prTitle}`,
+          actionType: 'pr_draft', inputHashSeed: `${input.runId}:${input.taskId}:pr_draft:${branchName}:${prTitle}`,
           reasonCodes: ['PUSH_SUCCESSFUL'],
         });
         const isPrCreated = await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody);
@@ -1615,7 +1616,7 @@ export class Orchestrator {
       taskId: input.taskId,
       reason: input.reason,
       requestedAction: input.requestedAction,
-      riskLevel: 'high',
+      riskLevel: mapApprovalRequestedActionRisk(input.requestedAction).riskLevel as 'medium' | 'high',
       status: 'pending',
       metadata: input.metadata,
       createdAt: new Date().toISOString(),
