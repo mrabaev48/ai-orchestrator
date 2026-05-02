@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.20.0
+# AI Orchestrator — Documentation 1.21.0
 
 ## 1. Что это за проект
 
@@ -233,6 +233,18 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 
 В execution-слое (`Orchestrator.executeTool`) нормализованные ошибки теперь переводятся в структурированный `WorkflowPolicyError` с явным retry сигналом и контекстом категории/кода инструмента, что улучшает diagnosability и безопасность retry решений.
 
+
+
+### 3.2.9 Approval routing and SLA escalation hooks
+
+Добавлен production-ready baseline для approval routing/SLA на уровне application-слоя:
+
+- `ApprovalRoutingService` ( `packages/application/src/approval/routing.ts` ) выполняет deterministic маршрутизацию approval request по `requestedAction` в `approverGroup` и optional `escalationGroup`;
+- routing использует явные typed rules без provider-specific leakage и возвращает `usedFallbackRule` для diagnosability нестандартных кейсов;
+- `ApprovalSlaEscalationService` ( `packages/application/src/approval/sla-escalation.ts` ) вычисляет SLA-возраст заявок и формирует due-срезы для `reminders` и `escalations`;
+- SLA-вычисления поддерживают инъекцию clock (`now`) для детерминированных тестов и безопасного replay в orchestration-flow.
+
+Покрытие тестами включает success-path routing и regression-проверку SLA reminder/escalation классификации.
 
 ## 3.3 Worker mode
 

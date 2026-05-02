@@ -19,3 +19,6 @@ export * from './policy/risk-mapper.ts';
 export * from './policy-engine/evaluate-policy.ts';
 
 export * from './run/preflight.ts';
+
+export * from './approval/routing.ts';
+export * from './approval/sla-escalation.ts';
