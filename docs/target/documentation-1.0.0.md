@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.22.0
+# AI Orchestrator — Documentation 1.23.0
 
 ## 1. Что это за проект
 
@@ -222,6 +222,16 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 - orchestration-path использует этот модуль перед финальным `STATE_COMMITTED`, что устраняет inline-конструирование postflight-policy payload и снижает риск bypass/дрейфа.
 
 Это выравнивает preflight/postflight архитектурный паттерн и повышает maintainability без изменения публичных контрактов.
+
+
+### 3.2.14 Canonical idempotency key builder for run actions
+
+Усилен доменный builder idempotency key:
+- `buildIdempotencyKey(...)` поддерживает canonical serialization для object/array payload, что исключает hash drift из-за порядка ключей;
+- добавлена явная валидация key-part полей (`tenantId/projectId/runId/taskId/stage/sideEffectType`) и запрет `:` внутри сегментов формата;
+- `attempt` валидируется как целое `>= 0`, чтобы убрать неявные ключи для некорректных retry-сценариев.
+
+Это повышает детерминизм dedup suppression и уменьшает риск коллизий/неконсистентности ключей между retry/replay попытками.
 
 ### 3.2.9 Unified tool contracts and normalized error envelope
 

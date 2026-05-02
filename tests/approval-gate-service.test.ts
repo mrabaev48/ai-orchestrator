@@ -86,14 +86,8 @@ test('ApprovalGateService links approval outcomes to policy decision and evidenc
   assert.equal(approved.decisionPolicyDecisionId, 'policy-1');
   assert.equal(approved.decisionEvidenceId, 'evidence-1');
 
-  const saved = await store.load();
-  let event: { payload: Record<string, unknown> } | undefined;
-  for (const entry of saved.events) {
-    if (entry.type === 'APPROVAL_APPROVED') {
-      event = { payload: entry.payload as Record<string, unknown> };
-      break;
-    }
-  }
+  const events = await store.listEvents({ eventType: 'APPROVAL_APPROVED' });
+  const event = events.at(0);
   assert.ok(event);
   assert.equal(event?.payload.policyDecisionId, 'policy-1');
   assert.equal(event?.payload.evidenceId, 'evidence-1');
