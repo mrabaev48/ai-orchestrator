@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.14.0
+# AI Orchestrator — Documentation 1.15.0
 
 ## 1. Что это за проект
 
@@ -184,6 +184,16 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 - non-allow outcomes всегда сопровождаются reason-кодами, а `allow` остается без reasonCodes для предсказуемой downstream-обработки.
 
 Это формирует базовый contract для дальнейшей интеграции evaluator в execution preflight/postflight и side-effect checkpoints без breaking изменений в существующих runtime контрактах.
+
+### 3.2.9 Unified tool contracts and normalized error envelope
+
+Добавлен унифицированный контракт исполнения инструментов для orchestration path:
+- `ToolSet.execute` теперь возвращает typed result envelope (`ok`, `toolName`, `determinism`, `output|error`) вместо неструктурированного значения/исключения;
+- для ошибок введён `ToolErrorEnvelope` с обязательными полями `category`, `retriable`, `code`, `message`, `details`;
+- добавлена нормализация ошибок адаптеров в единый формат (`normalizeToolError`), чтобы исключить leakage raw provider errors в orchestration layer;
+- в descriptor-информацию инструмента добавлены metadata-поля `deterministic` и `sideEffectRisk`, чтобы поддерживать deterministic-first диагностику и риск-классификацию на runtime.
+
+В execution-слое (`Orchestrator.executeTool`) нормализованные ошибки теперь переводятся в структурированный `WorkflowPolicyError` с явным retry сигналом и контекстом категории/кода инструмента, что улучшает diagnosability и безопасность retry решений.
 
 
 ## 3.3 Worker mode

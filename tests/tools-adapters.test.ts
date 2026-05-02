@@ -4,7 +4,6 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { SafetyViolationError } from '../packages/shared/src/index.ts';
 import { createLocalToolSet } from '../packages/tools/src/index.ts';
 
 test('tools adapter executes legacy file operations via unified contract', async () => {
@@ -22,7 +21,9 @@ test('tools adapter executes legacy file operations via unified contract', async
     input: { filePath },
   });
 
-  assert.equal(content, 'hello');
+  assert.equal(content.ok, true);
+  assert.equal(content.determinism.deterministic, true);
+  assert.equal((content.ok ? content.output : ''), 'hello');
 
   const evidence = tools.evidence.list();
   assert.equal(evidence.length >= 2, true);
@@ -36,14 +37,12 @@ test('tools adapter enforces write policy', async () => {
   const outsidePath = path.join(os.tmpdir(), `outside-${Date.now()}.txt`);
   const tools = createLocalToolSet([workspace]);
 
-  await assert.rejects(
-    async () =>
-      tools.execute({
-        toolName: 'file_write',
-        input: { filePath: outsidePath, content: 'forbidden' },
-      }),
-    (error: unknown) => error instanceof SafetyViolationError,
-  );
+  const writeOutside = await tools.execute({
+    toolName: 'file_write',
+    input: { filePath: outsidePath, content: 'forbidden' },
+  });
+  assert.equal(writeOutside.ok, false);
+  assert.equal(writeOutside.error.message.length > 0, true);
 
   const evidence = tools.evidence.list();
   assert.equal(evidence.length, 1);
@@ -60,25 +59,25 @@ test('tools adapter supports shell, testing, diff and search adapters', async ()
     input: { command: 'node', args: ['--version'], timeoutMs: 5_000 },
   });
 
-  assert.equal(typeof (shellResult as { ok: boolean }).ok, 'boolean');
+  assert.equal(shellResult.ok, true);
 
   const testingResult = await tools.execute({
     toolName: 'testing_run',
     input: { command: 'node', args: ['-e', 'console.log("ok")'] },
   });
-  assert.equal((testingResult as { ok: boolean }).ok, true);
+  assert.equal(testingResult.ok, true);
 
   const diffResult = await tools.execute({
     toolName: 'diff_workspace',
     input: {},
   });
-  assert.equal(typeof diffResult, 'string');
+  assert.equal(diffResult.ok, true);
 
   const searchResult = await tools.execute({
     toolName: 'search_repo',
     input: { pattern: 'createLocalToolSet', cwd: path.join(process.cwd(), 'packages/tools/src') },
   });
-  assert.equal(Array.isArray(searchResult), true);
+  assert.equal(searchResult.ok, true);
 
   const resultFile = path.join(process.cwd(), 'package.json');
   const hasFile = await tools.fileSystem.exists(resultFile);
@@ -93,16 +92,12 @@ test('tools adapter blocks non-allowlisted shell command', async () => {
     allowedShellCommands: ['node'],
   });
 
-  await assert.rejects(
-    async () =>
-      tools.execute({
-        toolName: 'shell_exec',
-        input: { command: 'git', args: ['status'] },
-      }),
-    (error: unknown) =>
-      error instanceof SafetyViolationError &&
-      error.message.includes('not allowlisted'),
-  );
+  const result = await tools.execute({
+    toolName: 'shell_exec',
+    input: { command: 'git', args: ['status'] },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error.message.includes('not allowlisted'), true);
 });
 
 test('tools adapter blocks writes in read-only and propose-only modes', async () => {
@@ -116,16 +111,12 @@ test('tools adapter blocks writes in read-only and propose-only modes', async ()
       writeMode: mode,
     });
 
-    await assert.rejects(
-      async () =>
-        tools.execute({
-          toolName: 'file_write',
-          input: { filePath: path.join(workspace, `${mode}.txt`), content: 'blocked' },
-        }),
-      (error: unknown) =>
-        error instanceof SafetyViolationError &&
-        error.message.includes(`Write is forbidden in ${mode} mode`),
-    );
+    const result = await tools.execute({
+      toolName: 'file_write',
+      input: { filePath: path.join(workspace, `${mode}.txt`), content: 'blocked' },
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.error.message.includes(`Write is forbidden in ${mode} mode`), true);
   }
 
   await rm(workspace, { recursive: true, force: true });
@@ -142,16 +133,12 @@ test('tools adapter requires protected-write mode for protected paths', async ()
     protectedWritePaths: [protectedPath],
   });
 
-  await assert.rejects(
-    async () =>
-      workspaceTools.execute({
-        toolName: 'file_write',
-        input: { filePath: protectedPath, content: '{}' },
-      }),
-    (error: unknown) =>
-      error instanceof SafetyViolationError &&
-      error.message.includes('requires protected-write mode'),
-  );
+  const protectedWriteBlocked = await workspaceTools.execute({
+    toolName: 'file_write',
+    input: { filePath: protectedPath, content: '{}' },
+  });
+  assert.equal(protectedWriteBlocked.ok, false);
+  assert.equal(protectedWriteBlocked.error.message.includes('requires protected-write mode'), true);
 
   const protectedTools = createLocalToolSet({
     allowedWritePaths: [workspace],
@@ -160,10 +147,11 @@ test('tools adapter requires protected-write mode for protected paths', async ()
     protectedWritePaths: [protectedPath],
   });
 
-  await protectedTools.execute({
+  const protectedWriteAllowed = await protectedTools.execute({
     toolName: 'file_write',
     input: { filePath: protectedPath, content: '{"name":"ok"}' },
   });
+  assert.equal(protectedWriteAllowed.ok, true);
   const saved = await readFile(protectedPath, 'utf8');
   assert.equal(saved, '{"name":"ok"}');
 
@@ -184,16 +172,12 @@ test('tools adapter enforces maximum modified files threshold', async () => {
     input: { filePath: path.join(workspace, 'one.txt'), content: '1' },
   });
 
-  await assert.rejects(
-    async () =>
-      tools.execute({
-        toolName: 'file_write',
-        input: { filePath: path.join(workspace, 'two.txt'), content: '2' },
-      }),
-    (error: unknown) =>
-      error instanceof SafetyViolationError &&
-      error.message.includes('Maximum modified files threshold exceeded'),
-  );
+  const overLimitWrite = await tools.execute({
+    toolName: 'file_write',
+    input: { filePath: path.join(workspace, 'two.txt'), content: '2' },
+  });
+  assert.equal(overLimitWrite.ok, false);
+  assert.equal(overLimitWrite.error.message.includes('Maximum modified files threshold exceeded'), true);
 
   await rm(workspace, { recursive: true, force: true });
 });

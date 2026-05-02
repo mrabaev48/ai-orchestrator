@@ -88,7 +88,7 @@ async function runQualityStagesWithFixture(workspaceRoot: string): Promise<RoleO
   const observations: RoleObservation[] = [];
 
   for (const stage of stages) {
-    const output = await tools.execute({
+    const toolResult = await tools.execute({
       toolName: 'testing_run',
       input: {
         command: 'npm',
@@ -96,7 +96,10 @@ async function runQualityStagesWithFixture(workspaceRoot: string): Promise<RoleO
         cwd: workspaceRoot,
         timeoutMs: 30_000,
       },
-    }) as { ok: boolean; stderr?: string };
+    });
+    const output = toolResult.ok
+      ? (toolResult.output as { ok: boolean; stderr?: string })
+      : { ok: false, stderr: toolResult.error.message };
 
     const observation: RoleObservation = {
       step: observations.length + 1,
