@@ -9,7 +9,7 @@ import {
   TaskManagerRole,
   TesterRole,
 } from '../packages/agents/src/index.ts';
-import { classifyExecutionPolicyActionRisk, createEmptyProjectState } from '../packages/core/src/index.ts';
+import { buildIdempotencyKey, classifyExecutionPolicyActionRisk, createEmptyProjectState } from '../packages/core/src/index.ts';
 import { Orchestrator } from '../packages/execution/src/index.ts';
 import { SchemaValidationError, WorkflowPolicyError } from '../packages/shared/src/errors/index.ts';
 import { InMemoryStateStore } from '../packages/state/src/index.ts';
@@ -246,6 +246,139 @@ test('runCycle persists policy decisions with risk levels from classification ma
     assert.ok(decision, `policy decision for ${actionType} must be persisted`);
     assert.equal(decision?.riskLevel, classifyExecutionPolicyActionRisk(actionType).riskLevel);
   }
+});
+
+test('runCycle skips git push side effect when dedup registry already has succeeded push entry', async () => {
+  const state = makeState();
+  const runId = '11111111-1111-1111-1111-111111111111';
+  const branchName = 'task-1-run-test';
+  const commitSha = 'abc123';
+  const pushDedupKey = buildIdempotencyKey({
+    tenantId: state.orgId,
+    projectId: state.projectId,
+    runId,
+    taskId: 'task-1',
+    stage: 'git_push',
+    attempt: 0,
+    sideEffectType: 'git_push',
+    normalizedInput: `${branchName}|${commitSha}`,
+  });
+  state.execution.dedupRegistry[pushDedupKey] = {
+    key: pushDedupKey,
+    status: 'succeeded',
+    leaseOwner: runId,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+  };
+
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+  const internals = orchestrator as unknown as {
+    recordGitLifecycleCompletionArtifacts: (
+      state: ReturnType<typeof createEmptyProjectState>,
+      input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
+    ) => Promise<'ok' | 'approval_pending'>;
+    workspaceHasGitChanges: () => Promise<boolean>;
+    currentGitBranch: () => Promise<string>;
+    createCommit: () => Promise<{ ok: true; commitSha: string }>;
+    pushBranch: () => Promise<boolean>;
+  };
+  internals.workspaceHasGitChanges = async () => true;
+  internals.currentGitBranch = async () => branchName;
+  internals.createCommit = async () => ({ ok: true, commitSha });
+  let pushCalls = 0;
+  internals.pushBranch = async () => {
+    pushCalls += 1;
+    return true;
+  };
+
+  const resultStatus = await internals.recordGitLifecycleCompletionArtifacts(state, {
+    runId,
+    taskId: 'task-1',
+    taskTitle: state.backlog.tasks['task-1']?.title ?? 'task',
+    branchName,
+    workspaceRoot: process.cwd(),
+  });
+  const loaded = await store.load();
+  const commitArtifact = loaded.artifacts.find(
+    (artifact) => artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'commit',
+  );
+  const prArtifact = loaded.artifacts.find(
+    (artifact) => artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'pr_draft',
+  );
+
+  assert.equal(pushCalls, 0);
+  assert.equal(resultStatus, 'ok');
+  assert.equal(commitArtifact?.metadata.pushStatus, 'skipped_duplicate');
+  assert.equal(prArtifact?.metadata.prStatus, 'skipped_push_not_successful');
+});
+
+test('runCycle skips PR draft side effect when dedup registry already has succeeded PR entry', async () => {
+  const state = makeState();
+  const runId = '11111111-1111-1111-1111-111111111111';
+  const branchName = 'task-1-run-test';
+  const commitSha = 'abc123';
+  const prTitle = '[task-1] Implement runtime block';
+  const prDedupKey = buildIdempotencyKey({
+    tenantId: state.orgId,
+    projectId: state.projectId,
+    runId,
+    taskId: 'task-1',
+    stage: 'pr_draft',
+    attempt: 0,
+    sideEffectType: 'pr_draft',
+    normalizedInput: `${branchName}|${prTitle}`,
+  });
+  state.execution.dedupRegistry[prDedupKey] = {
+    key: prDedupKey,
+    status: 'succeeded',
+    leaseOwner: runId,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+  };
+
+  const store = new InMemoryStateStore(state);
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
+  const internals = orchestrator as unknown as {
+    recordGitLifecycleCompletionArtifacts: (
+      state: ReturnType<typeof createEmptyProjectState>,
+      input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
+    ) => Promise<'ok' | 'approval_pending'>;
+    workspaceHasGitChanges: () => Promise<boolean>;
+    currentGitBranch: () => Promise<string>;
+    createCommit: () => Promise<{ ok: true; commitSha: string }>;
+    pushBranch: () => Promise<boolean>;
+    createPullRequestDraft: () => Promise<boolean>;
+  };
+  internals.workspaceHasGitChanges = async () => true;
+  internals.currentGitBranch = async () => branchName;
+  internals.createCommit = async () => ({ ok: true, commitSha });
+  internals.pushBranch = async () => true;
+  let prCalls = 0;
+  internals.createPullRequestDraft = async () => {
+    prCalls += 1;
+    return true;
+  };
+
+  const resultStatus = await internals.recordGitLifecycleCompletionArtifacts(state, {
+    runId,
+    taskId: 'task-1',
+    taskTitle: state.backlog.tasks['task-1']?.title ?? 'task',
+    branchName,
+    workspaceRoot: process.cwd(),
+  });
+  const loaded = await store.load();
+  const prArtifact = loaded.artifacts.find(
+    (artifact) => artifact.type === 'git_lifecycle' && artifact.metadata.stage === 'pr_draft',
+  );
+
+  assert.equal(prCalls, 0);
+  assert.equal(resultStatus, 'ok');
+  assert.equal(prArtifact?.metadata.prStatus, 'skipped_duplicate');
 });
 test('runCycle blocks task after repeated review failures', async () => {
   const state = makeState(['[reject] review should fail']);
