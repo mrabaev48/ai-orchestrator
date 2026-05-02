@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.12.0
+# AI Orchestrator — Documentation 1.12.1
 
 ## 1. Что это за проект
 
@@ -287,10 +287,10 @@ npm run dashboard-api:start
 В репозитории используется Turbo pipeline:
 
 ```bash
-turbo run lint
-turbo run test
-turbo run typecheck
-turbo run build
+pnpm turbo run lint
+pnpm turbo run test
+pnpm turbo run typecheck
+pnpm turbo run build
 ```
 
 Также доступны npm-скрипты:
