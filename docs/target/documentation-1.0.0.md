@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.16.0
+# AI Orchestrator — Documentation 1.17.0
 
 ## 1. Что это за проект
 
@@ -193,6 +193,18 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 - orchestration-path использует этот модуль перед любым role execution, что исключает неявный bypass preflight-проверки при дальнейших изменениях control flow.
 
 Это уменьшает риск drift между документированным требованием non-bypass preflight и фактической реализацией в runtime.
+
+### 3.2.11 RepoMutationPipeline with recoverable stages and compensation
+
+В execution-слой добавлен выделенный `RepoMutationPipeline` как typed stage-runner для мутации репозитория:
+- фиксированный порядок стадий `workspace_prepare -> branch_prepare -> change_apply -> verification -> commit_prepare -> push_prepare -> pr_draft_prepare -> finalize`;
+- для каждой стадии задаются явные `timeoutMs`, `maxAttempts`, `execute(...)` и опциональная `compensate(...)`;
+- stage evidence сохраняет `attempt`, `status`, `durationMs`, `errorCode/errorMessage`, metadata для postmortem и audit;
+- retriable ошибки обрабатываются bounded retry, non-retriable/исчерпание попыток переводит pipeline в fail-fast;
+- при fail на стадии с компенсацией выполняется explicit compensation record (`compensated`), что закрывает partial-success сценарии без silent corruption.
+
+Это формирует production-ready фундамент для безопасного branch/apply/verify/commit/push/pr-draft цикла с детерминированной диагностикой.
+
 
 ### 3.2.9 Unified tool contracts and normalized error envelope
 
