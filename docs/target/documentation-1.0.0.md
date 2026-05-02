@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.10.0
+# AI Orchestrator — Documentation 1.11.0
 
 ## 1. Что это за проект
 
@@ -110,6 +110,14 @@ Run-step evidence теперь поддерживает first-class статус
 - `STEP_CANCELLED` (`requestedBy`, `requestedAt`, `propagationState`).
 
 Это повышает diagnosability post-timeout/post-cancel сценариев и снижает риск некорректного retry-поведения, когда особые исходы теряются в `failed`.
+
+Дополнительно введена **closed transition table** для run-step lifecycle и guard-проверка перед записью каждого нового evidence-события:
+- начальный статус допускается только при первом событии attempt;
+- переходы `cancellation_requested -> cancelled|compensation_pending` и `compensation_pending -> compensated|failed` разрешены явно;
+- любые переходы из terminal-статусов (`succeeded|failed|timed_out|cancelled|compensated`) блокируются;
+- при illegal transition выбрасывается `StateIntegrityError` с кодом `ILLEGAL_RUN_STEP_TRANSITION` и контекстом (`runId`, `stepId`, `attempt`, `evidenceId`).
+
+Это устраняет неявные/двусмысленные state transitions и делает replay/forensics детерминированными.
 
 
 ### 3.2.4 Non-bypass policy checks in preflight/postflight and side effects
