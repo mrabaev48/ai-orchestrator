@@ -141,7 +141,7 @@ Run-step evidence теперь поддерживает first-class статус
 - cancellation invariant: структурированный `STEP_CANCELLED` с propagation state;
 - evidence integrity invariant: детект tampering checksum-chain через `EVIDENCE_INTEGRITY_VIOLATION`.
 
-Suite запускается через `npm run test:baseline-invariants`; в turbo-пайплайне добавлена задача `baseline-invariants`, и `build` теперь зависит от нее (blocking gate).
+Suite запускается через `pnpm run test:baseline-invariants`; в turbo-пайплайне добавлена задача `baseline-invariants`, и `build` теперь зависит от нее (blocking gate).
 
 ### 3.2.5 Initial autonomous SLI/SLO and error budget policy
 
@@ -219,33 +219,33 @@ API защищается через API key и/или JWT. Без настрое
 ## 4.1 Требования
 
 - Node.js (совместимый с текущим toolchain TS/NestJS).
-- npm (в репозитории есть `package-lock.json`).
+- pnpm (единственный поддерживаемый package manager).
 - Доступ к PostgreSQL (если выбран `state.backend=postgresql`).
 - Опционально: `gh` CLI для draft PR lifecycle, если используете соответствующие execution-фичи.
 
 ## 4.2 Установка
 
 ```bash
-npm install
+pnpm install
 ```
 
 ## 4.3 Базовые команды
 
 ```bash
-npm run bootstrap
-npm run show-state
-npm run run-cycle
-npm run run-task -- --task-id TASK-001
-npm run export-backlog -- --format md --out artifacts/backlog.md
-npm run generate-docs -- --out artifacts/generated-docs.md
-npm run assess-release
-npm run check-state
+pnpm run bootstrap
+pnpm run show-state
+pnpm run run-cycle
+pnpm run run-task -- --task-id TASK-001
+pnpm run export-backlog -- --format md --out artifacts/backlog.md
+pnpm run generate-docs -- --out artifacts/generated-docs.md
+pnpm run assess-release
+pnpm run check-state
 ```
 
 ## 4.4 Запуск worker
 
 ```bash
-npm run worker:start -- \
+pnpm run worker:start -- \
   --poll-interval-ms 250 \
   --idle-backoff-ms 2000 \
   --max-idle-backoff-ms 15000 \
@@ -257,7 +257,7 @@ npm run worker:start -- \
 ## 4.5 Запуск Dashboard API
 
 ```bash
-npm run dashboard-api:start
+pnpm run dashboard-api:start
 ```
 
 Пример минимальной auth-конфигурации через API key:
@@ -266,7 +266,7 @@ npm run dashboard-api:start
 export DASHBOARD_API_KEYS="ops:super-secret@admin|operator"
 export DASHBOARD_API_HOST="127.0.0.1"
 export DASHBOARD_API_PORT="3100"
-npm run dashboard-api:start
+pnpm run dashboard-api:start
 ```
 
 ---
@@ -315,13 +315,13 @@ pnpm turbo run typecheck
 pnpm turbo run build
 ```
 
-Также доступны npm-скрипты:
+Также доступны скрипты через pnpm:
 
 ```bash
-npm run lint
-npm run test
-npm run typecheck
-npm run build
+pnpm run lint
+pnpm run test
+pnpm run typecheck
+pnpm run build
 ```
 
 ---
@@ -329,8 +329,8 @@ npm run build
 ## 8. Типовой операционный сценарий
 
 1. Настроить env/runtime config.
-2. Выполнить `npm run bootstrap`.
-3. Проверить состояние `npm run show-state`.
+2. Выполнить `pnpm run bootstrap`.
+3. Проверить состояние `pnpm run show-state`.
 4. Запускать `run-cycle` вручную или поднять `worker:start`.
 5. Наблюдать систему через Dashboard API.
 6. При сбоях использовать `resume-failure`/`replay-failure`.
