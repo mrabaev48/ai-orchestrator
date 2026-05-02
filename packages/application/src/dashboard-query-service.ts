@@ -52,6 +52,26 @@ export interface ArtifactHistoryQueryInput extends HistoryQueryInput {
   type?: string;
 }
 
+
+export interface ReadinessScorecardPolicy {
+  id: string;
+  passThresholdPercent: number;
+  enabledCriteria: Set<string>;
+}
+
+export const DEFAULT_READINESS_SCORECARD_POLICY: ReadinessScorecardPolicy = {
+  id: 'default',
+  passThresholdPercent: 100,
+  enabledCriteria: new Set([
+    'repo-lint',
+    'repo-tests',
+    'repo-typecheck',
+    'execution-blockers',
+    'failure-queue',
+    'documentation-artifact',
+  ]),
+};
+
 export interface ReadinessScorecardAuditContext {
   runId?: string;
   correlationId?: string;
@@ -59,9 +79,11 @@ export interface ReadinessScorecardAuditContext {
 
 export class DashboardQueryService {
   private readonly stateStore: StateStore;
+  private readonly readinessPolicy: ReadinessScorecardPolicy;
 
-  constructor(stateStore: StateStore) {
+  constructor(stateStore: StateStore, readinessPolicy: ReadinessScorecardPolicy = DEFAULT_READINESS_SCORECARD_POLICY) {
     this.stateStore = stateStore;
+    this.readinessPolicy = readinessPolicy;
   }
 
   async getStateSummary(query: TenantScopeInput = {}): Promise<DashboardStateView> {
@@ -169,11 +191,8 @@ export class DashboardQueryService {
   ): Promise<ReadinessScorecardView> {
     const state = await this.stateStore.load();
     assertTenantScope(state, query);
-        ...(auditContext.correlationId ? { correlationId: auditContext.correlationId } : {}),
-        ...(auditContext.runId ? { runId: auditContext.runId } : {}),
-      ...(auditContext.correlationId ? { correlationId: auditContext.correlationId } : {}),
-      ...(auditContext.runId ? { runId: auditContext.runId } : {}),
-    }, auditContext.runId ? { runId: auditContext.runId } : {}));
+    void auditContext;
+    return toReadinessScorecardView(state);
   }
 
   async getApprovals(query: { status?: 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed' } = {}): Promise<ApprovalRequestView[]> {

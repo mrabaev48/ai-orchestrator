@@ -9,12 +9,16 @@ test('buildIdempotencyKey is stable for canonical input', () => {
     tenantId: 'tenant-1',
     projectId: 'project-1',
     runId: 'run-1',
-    stepId: 'task-1:git_push',
+    taskId: 'task-1',
+    stage: 'git_push',
+    attempt: 2,
     sideEffectType: 'git_push',
     normalizedInput: 'branch=feature/x|sha=abc',
   };
 
-  assert.equal(buildIdempotencyKey(input), buildIdempotencyKey(input));
+  const key = buildIdempotencyKey(input);
+  assert.equal(key, buildIdempotencyKey(input));
+  assert.match(key, /^tenant-1:project-1:run-1:task-1:git_push:2:git_push-[a-f0-9]{64}$/);
 });
 
 test('reserveSideEffect suppresses duplicates once key succeeded', () => {
@@ -23,7 +27,9 @@ test('reserveSideEffect suppresses duplicates once key succeeded', () => {
     tenantId: state.orgId,
     projectId: state.projectId,
     runId: 'run-1',
-    stepId: 'task-1:git_commit',
+    taskId: 'task-1',
+    stage: 'git_commit',
+    attempt: 0,
     sideEffectType: 'git_commit',
     normalizedInput: 'message=x',
   });
