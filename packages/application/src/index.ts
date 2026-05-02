@@ -22,3 +22,5 @@ export * from './run/preflight.ts';
 
 export * from './approval/routing.ts';
 export * from './approval/sla-escalation.ts';
+
+export * from './idempotency/dedup-registry-service.ts';

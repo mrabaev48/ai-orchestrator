@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.23.0
+# AI Orchestrator — Documentation 1.24.0
 
 ## 1. Что это за проект
 
@@ -305,6 +305,16 @@ API защищается через API key и/или JWT. Без настрое
 - события `APPROVAL_APPROVED|APPROVAL_REJECTED|APPROVAL_RESUMED` публикуют те же link-поля в payload для корреляции audit trail с execution evidence.
 
 Это снижает риск потери трассировки между manual approval outcome и governance/evidence слоями при incident-forensics и runtime replay.
+
+### 3.2.4 Strongly consistent dedup registry port
+
+Для state-layer добавлен typed порт `DedupRegistryPort` и in-memory адаптер `InMemoryDedupRegistryPort` с явными результатами операций:
+- `reserve()` возвращает детерминированные причины отказа (`duplicate_pending|duplicate_succeeded`);
+- `finalize()` поддерживает lease ownership check (`lease_owner_mismatch`) и не допускает подтверждение чужого lease;
+- прикладной слой использует `DedupRegistryService` как тонкий use-case фасад над портом, сохраняя boundary между application и state.
+
+Это делает dedup-контракт более строгим и диагностируемым для retry/replay и partial-failure сценариев.
+
 
 ## 4. Как пользоваться
 
