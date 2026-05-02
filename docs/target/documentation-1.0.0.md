@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.15.0
+# AI Orchestrator — Documentation 1.16.0
 
 ## 1. Что это за проект
 
@@ -184,6 +184,15 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 - non-allow outcomes всегда сопровождаются reason-кодами, а `allow` остается без reasonCodes для предсказуемой downstream-обработки.
 
 Это формирует базовый contract для дальнейшей интеграции evaluator в execution preflight/postflight и side-effect checkpoints без breaking изменений в существующих runtime контрактах.
+
+### 3.2.10 Preflight policy gate module as explicit non-bypass startup contract
+
+Добавлен выделенный preflight policy gate модуль для старта исполнения задачи:
+- `buildPreflightPolicyGateDecisionRequest(...)` формирует детерминированный payload для обязательного preflight check;
+- payload фиксирует `task:{id}:preflight_policy`, `artifact_write`, `NON_BYPASS_PREFLIGHT_CHECK`, а также стабильный `inputHashSeed`;
+- orchestration-path использует этот модуль перед любым role execution, что исключает неявный bypass preflight-проверки при дальнейших изменениях control flow.
+
+Это уменьшает риск drift между документированным требованием non-bypass preflight и фактической реализацией в runtime.
 
 ### 3.2.9 Unified tool contracts and normalized error envelope
 

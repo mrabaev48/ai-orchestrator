@@ -17,3 +17,5 @@ export * from './policy-decision-contract.ts';
 export * from './policy/risk-mapper.ts';
 
 export * from './policy-engine/evaluate-policy.ts';
+
+export * from './run/preflight.ts';

@@ -23,6 +23,7 @@ import type { ToolSet } from '../../tools/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
 import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
 import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.ts';
+import { buildPreflightPolicyGateDecisionRequest } from './gates/preflight-policy-gate.ts';
 import {
   createWorkspaceManager,
   type ManagedWorkspace,
@@ -254,17 +255,13 @@ export class Orchestrator {
       state.execution.activeRunId = runId;
       state.execution.activeTaskId = task.id;
       await this.stateStore.recordEvent(makeEvent('TASK_SELECTED', { taskId: task.id }, { runId }));
-      await this.persistAndRequirePolicyDecision({
-        state,
-        runId,
-        taskId: task.id,
-        stepId: `${task.id}:preflight_policy`,
-        attempt: 0,
-        actionType: 'artifact_write',
-        riskLevel: 'low',
-        inputHashSeed: `${runId}:${task.id}:preflight`,
-        reasonCodes: ['NON_BYPASS_PREFLIGHT_CHECK'],
-      });
+      await this.persistAndRequirePolicyDecision(
+        buildPreflightPolicyGateDecisionRequest({
+          state,
+          runId,
+          task,
+        }),
+      );
 
     const failures = state.failures.filter((failure) => failure.taskId === task.id);
     const promptEngineer = this.roleRegistry.get<
