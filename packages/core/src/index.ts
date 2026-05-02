@@ -26,3 +26,4 @@ export * from './evidence/run-step-evidence.ts';
 export * from './idempotency/build-idempotency-key.ts';
 
 export * from './transition-guards.ts';
+export * from './run-step-transition-table.ts';

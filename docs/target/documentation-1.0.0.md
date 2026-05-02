@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.25.0
+# AI Orchestrator — Documentation 1.26.0
 
 ## 1. Что это за проект
 
@@ -118,6 +118,8 @@ Run-step evidence теперь поддерживает first-class статус
 - при illegal transition выбрасывается `StateIntegrityError` с кодом `ILLEGAL_RUN_STEP_TRANSITION` и контекстом (`runId`, `stepId`, `attempt`, `evidenceId`).
 
 Это устраняет неявные/двусмысленные state transitions и делает replay/forensics детерминированными.
+
+Дополнительно доменный transition contract вынесен в отдельный модуль `run-step-transition-table` с API `getAllowedRunStepTransitions(...)`, что позволяет переиспользовать closed таблицу переходов в guard-слое и в тестах без дублирования правил.
 
 
 ### 3.2.4 Non-bypass policy checks in preflight/postflight and side effects
