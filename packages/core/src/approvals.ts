@@ -29,4 +29,13 @@ export interface ApprovalRequest {
   resumedAt?: string;
   resumedBy?: string;
   completedAt?: string;
+  /**
+   * Политическое решение, на основании которого был зафиксирован outcome approval.
+   * Нужен для audit и детерминированной реконструкции decision flow.
+   */
+  decisionPolicyDecisionId?: string;
+  /**
+   * Ссылка на evidence-запись (run-step/artifact/event) для связки outcome с исполнением.
+   */
+  decisionEvidenceId?: string;
 }

@@ -58,3 +58,43 @@ test('ApprovalGateService supports reject lifecycle for pending request', async 
   assert.equal(rejected.status, 'rejected');
   assert.equal(rejected.rejectionReason, 'Need more review');
 });
+
+test('ApprovalGateService links approval outcomes to policy decision and evidence', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'project-1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  state.approvals.push({
+    id: 'approval-3',
+    runId: 'run-9',
+    taskId: 'task-9',
+    reason: 'Push branch',
+    requestedAction: 'git_push',
+    riskLevel: 'high',
+    status: 'pending',
+    metadata: { branchName: 'feature/task-9' },
+    createdAt: '2026-03-10T00:00:00.000Z',
+  });
+  const store = new InMemoryStateStore(state);
+  const service = new ApprovalGateService(store);
+
+  const approved = await service.approve('approval-3', 'carol', {
+    policyDecisionId: 'policy-1',
+    evidenceId: 'evidence-1',
+  });
+  assert.equal(approved.decisionPolicyDecisionId, 'policy-1');
+  assert.equal(approved.decisionEvidenceId, 'evidence-1');
+
+  const saved = await store.load();
+  let event: { payload: Record<string, unknown> } | undefined;
+  for (const entry of saved.events) {
+    if (entry.type === 'APPROVAL_APPROVED') {
+      event = { payload: entry.payload as Record<string, unknown> };
+      break;
+    }
+  }
+  assert.ok(event);
+  assert.equal(event?.payload.policyDecisionId, 'policy-1');
+  assert.equal(event?.payload.evidenceId, 'evidence-1');
+});
