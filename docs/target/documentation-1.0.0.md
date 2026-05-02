@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.11.0
+# AI Orchestrator — Documentation 1.12.1
 
 ## 1. Что это за проект
 
@@ -257,7 +257,7 @@ npm run dashboard-api:start
 
 - `llm.*` — provider/model/timeout/temperature/budget/cost controls.
 - `state.*` — backend (`memory|postgresql`), DSN, schema, snapshot flags.
-- `workflow.*` — step/retry limits, workerCount, run lock provider/DSN, workspace mode, approval policy.
+- `workflow.*` — step/retry limits, `maxRoleWallTimeMs` budget для action loop, workerCount, run lock provider/DSN, workspace mode, approval policy.
 - `tools.*` — write-path и shell-allowlist policy, protected paths, evidence persistence.
 - `logging.*` — уровень и формат логирования.
 
@@ -287,10 +287,10 @@ npm run dashboard-api:start
 В репозитории используется Turbo pipeline:
 
 ```bash
-turbo run lint
-turbo run test
-turbo run typecheck
-turbo run build
+pnpm turbo run lint
+pnpm turbo run test
+pnpm turbo run typecheck
+pnpm turbo run build
 ```
 
 Также доступны npm-скрипты:

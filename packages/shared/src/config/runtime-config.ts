@@ -66,6 +66,7 @@ const runtimeConfigSchema = z.strictObject({
   workflow: z.strictObject({
     maxStepsPerRun: z.number().int().positive(),
     maxRoleStepsPerTask: z.number().int().positive().optional(),
+    maxRoleWallTimeMs: z.number().int().positive().optional(),
     maxRetriesPerTask: z.number().int().nonnegative(),
     workerCount: z.number().int().positive().optional(),
     runLockProvider: runLockProviderSchema.optional(),
@@ -117,6 +118,7 @@ const envSchema = z.object({
   SNAPSHOT_ON_MILESTONE_COMPLETION: z.stringbool().default(true),
   MAX_STEPS_PER_RUN: z.coerce.number().int().positive().default(8),
   MAX_ROLE_STEPS_PER_TASK: z.coerce.number().int().positive().optional(),
+  MAX_ROLE_WALL_TIME_MS: z.coerce.number().int().positive().optional(),
   MAX_RETRIES_PER_TASK: z.coerce.number().int().nonnegative().default(3),
   WORKFLOW_WORKER_COUNT: z.coerce.number().int().positive().default(1),
   WORKFLOW_RUN_LOCK_PROVIDER: runLockProviderSchema.default('noop'),
@@ -205,6 +207,9 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       maxStepsPerRun: env.data.MAX_STEPS_PER_RUN,
       ...(typeof env.data.MAX_ROLE_STEPS_PER_TASK === 'number'
         ? { maxRoleStepsPerTask: env.data.MAX_ROLE_STEPS_PER_TASK }
+        : {}),
+      ...(typeof env.data.MAX_ROLE_WALL_TIME_MS === 'number'
+        ? { maxRoleWallTimeMs: env.data.MAX_ROLE_WALL_TIME_MS }
         : {}),
       maxRetriesPerTask: env.data.MAX_RETRIES_PER_TASK,
       workerCount: env.data.WORKFLOW_WORKER_COUNT,

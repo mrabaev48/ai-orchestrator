@@ -293,6 +293,19 @@ test('loadRuntimeConfig accepts explicit role-step budget', () => {
   assert.equal(config.workflow.maxRoleStepsPerTask, 4);
 });
 
+
+test('loadRuntimeConfig accepts explicit role wall-time budget', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      MAX_STEPS_PER_RUN: '12',
+      MAX_ROLE_WALL_TIME_MS: '15000',
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+    },
+  });
+
+  assert.equal(config.workflow.maxRoleWallTimeMs, 15000);
+});
+
 test('loadRuntimeConfig rejects role-step budget larger than run-step budget', () => {
   assert.throws(
     () =>
