@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.19.0
+# AI Orchestrator — Documentation 1.20.0
 
 ## 1. Что это за проект
 
@@ -261,6 +261,17 @@ NestJS API предоставляет:
 API защищается через API key и/или JWT. Без настроенной auth-конфигурации сервис не стартует.
 
 ---
+
+
+### 3.2.14 Immutable Approval Request model and persistence port
+
+Добавлен базовый production-ready срез для approval request domain/persistence контракта:
+- в `packages/core` введён schema-first immutable контракт `ImmutableApprovalRequest` + `createImmutableApprovalRequest(...)`;
+- валидатор контролирует lifecycle-инварианты по статусам (`approved/rejected/resumed/completed`) и обязательные audit-поля для каждого терминального/переходного состояния;
+- объект заявки и `metadata` принудительно `Object.freeze(...)`, что устраняет неявные мутации в runtime flow;
+- в `packages/state` выделен persistence port `ApprovalStore` (`append/getById/listByRunId`) для явной границы между domain-моделью approval и адаптерами хранения.
+
+Это делает approval request поток более детерминированным, типобезопасным и удобным для последующей интеграции SLA/routing/task-linking этапов без breaking изменений публичных контрактов.
 
 ## 4. Как пользоваться
 
