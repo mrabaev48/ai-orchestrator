@@ -2,6 +2,7 @@ export * from './artifacts.ts';
 export * from './artifact-schema-registry.ts';
 export * from './architecture-findings.ts';
 export * from './approvals.ts';
+export * from './approval/approval-request.ts';
 export * from './backlog.ts';
 export * from './decisions.ts';
 export * from './discovery.ts';
