@@ -24,6 +24,7 @@ import { createLocalToolSet } from '../../tools/src/index.ts';
 import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
 import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.ts';
 import { buildPreflightPolicyGateDecisionRequest } from './gates/preflight-policy-gate.ts';
+import { buildPostflightPolicyGateDecisionRequest } from './finalize/postflight-policy.ts';
 import { buildStepPolicyGateRequest } from './steps/step-policy-gate.ts';
 import {
   createWorkspaceManager,
@@ -389,17 +390,13 @@ export class Orchestrator {
       ...(workspace.branchName ? { branchName: workspace.branchName } : {}),
     });
 
-    await this.persistAndRequirePolicyDecision({
-      state,
-      runId,
-      taskId: task.id,
-      stepId: `${task.id}:postflight_policy`,
-      attempt: 0,
-      actionType: 'artifact_write',
-      riskLevel: 'low',
-      inputHashSeed: `${runId}:${task.id}:postflight`,
-      reasonCodes: ['NON_BYPASS_POSTFLIGHT_CHECK'],
-    });
+    await this.persistAndRequirePolicyDecision(
+      buildPostflightPolicyGateDecisionRequest({
+        state,
+        runId,
+        task,
+      }),
+    );
 
     const stateCommittedEvent = makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId });
     this.flushRunStepBufferToState(state);

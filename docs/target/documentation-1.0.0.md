@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.18.0
+# AI Orchestrator — Documentation 1.19.0
 
 ## 1. Что это за проект
 
@@ -213,6 +213,15 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 - orchestration-path использует его перед `git_commit`, `git_push`, `pr_draft`;
 - risk-level заполняется только через централизованную classification matrix, без локальных hardcoded fallback;
 - это делает per-step governance contract явным и снижает риск bypass/дрейфа при эволюции control flow.
+
+### 3.2.13 Postflight policy gate module as explicit finalization contract
+
+Добавлен выделенный postflight policy gate модуль для финализации исполнения задачи:
+- `buildPostflightPolicyGateDecisionRequest(...)` формирует детерминированный payload для обязательной postflight check-точки;
+- payload фиксирует `task:{id}:postflight_policy`, `artifact_write`, `NON_BYPASS_POSTFLIGHT_CHECK`, а также стабильный `inputHashSeed`;
+- orchestration-path использует этот модуль перед финальным `STATE_COMMITTED`, что устраняет inline-конструирование postflight-policy payload и снижает риск bypass/дрейфа.
+
+Это выравнивает preflight/postflight архитектурный паттерн и повышает maintainability без изменения публичных контрактов.
 
 ### 3.2.9 Unified tool contracts and normalized error envelope
 
