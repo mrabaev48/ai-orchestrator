@@ -1,25 +1,9 @@
 import { StateIntegrityError } from '../../shared/src/index.ts';
-import type { RunStepLogEntry } from './project-state.ts';
-
-export type RunStepStatus = RunStepLogEntry['status'];
-
-const TERMINAL_RUN_STEP_STATUSES: ReadonlySet<RunStepStatus> = new Set([
-  'succeeded',
-  'failed',
-  'timed_out',
-  'cancelled',
-  'compensated',
-]);
-
-const RUN_STEP_TRANSITIONS: Readonly<Record<RunStepStatus, readonly RunStepStatus[]>> = {
-  succeeded: [],
-  failed: [],
-  timed_out: [],
-  cancelled: [],
-  cancellation_requested: ['cancelled', 'compensation_pending'],
-  compensation_pending: ['compensated', 'failed'],
-  compensated: [],
-};
+import {
+  getAllowedRunStepTransitions,
+  TERMINAL_RUN_STEP_STATUSES,
+  type RunStepStatus,
+} from './run-step-transition-table.ts';
 
 export function assertRunStepTransitionAllowed(input: {
   previousStatus?: RunStepStatus;
@@ -33,7 +17,7 @@ export function assertRunStepTransitionAllowed(input: {
     return;
   }
 
-  const allowed = RUN_STEP_TRANSITIONS[input.previousStatus] ?? [];
+  const allowed = getAllowedRunStepTransitions(input.previousStatus);
   if (allowed.includes(input.nextStatus)) {
     return;
   }
