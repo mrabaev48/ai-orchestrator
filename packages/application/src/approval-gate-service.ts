@@ -10,6 +10,11 @@ export interface ApprovalHistoryQueryInput {
   status?: ApprovalStatus;
 }
 
+export interface ApprovalDecisionLinkInput {
+  policyDecisionId?: string;
+  evidenceId?: string;
+}
+
 export class ApprovalGateService {
   private readonly stateStore: StateStore;
 
@@ -24,8 +29,8 @@ export class ApprovalGateService {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
-  async approve(requestId: string, approvedBy: string): Promise<ApprovalRequest> {
-    return await this.update(requestId, (request) => {
+  async approve(requestId: string, approvedBy: string, links: ApprovalDecisionLinkInput = {}): Promise<ApprovalRequest> {
+    return await this.update(requestId, links, (request) => {
       if (request.status !== 'pending') {
         throw new WorkflowPolicyError(`Cannot approve request in status ${request.status}`, {
           retrySuggested: false,
@@ -37,6 +42,8 @@ export class ApprovalGateService {
         status: 'approved',
         approvedBy,
         approvedAt: new Date().toISOString(),
+        ...(links.policyDecisionId ? { decisionPolicyDecisionId: links.policyDecisionId } : {}),
+        ...(links.evidenceId ? { decisionEvidenceId: links.evidenceId } : {}),
       };
       return {
         request: updated,
@@ -45,8 +52,13 @@ export class ApprovalGateService {
     });
   }
 
-  async reject(requestId: string, rejectedBy: string, rejectionReason: string): Promise<ApprovalRequest> {
-    return await this.update(requestId, (request) => {
+  async reject(
+    requestId: string,
+    rejectedBy: string,
+    rejectionReason: string,
+    links: ApprovalDecisionLinkInput = {},
+  ): Promise<ApprovalRequest> {
+    return await this.update(requestId, links, (request) => {
       if (request.status !== 'pending') {
         throw new WorkflowPolicyError(`Cannot reject request in status ${request.status}`, {
           retrySuggested: false,
@@ -59,6 +71,8 @@ export class ApprovalGateService {
         rejectedBy,
         rejectedAt: new Date().toISOString(),
         rejectionReason,
+        ...(links.policyDecisionId ? { decisionPolicyDecisionId: links.policyDecisionId } : {}),
+        ...(links.evidenceId ? { decisionEvidenceId: links.evidenceId } : {}),
       };
       return {
         request: updated,
@@ -67,8 +81,8 @@ export class ApprovalGateService {
     });
   }
 
-  async resume(requestId: string, resumedBy: string): Promise<ApprovalRequest> {
-    return await this.update(requestId, (request) => {
+  async resume(requestId: string, resumedBy: string, links: ApprovalDecisionLinkInput = {}): Promise<ApprovalRequest> {
+    return await this.update(requestId, links, (request) => {
       if (request.status !== 'approved') {
         throw new WorkflowPolicyError(`Cannot resume request in status ${request.status}`, {
           retrySuggested: false,
@@ -80,6 +94,8 @@ export class ApprovalGateService {
         status: 'resumed',
         resumedBy,
         resumedAt: new Date().toISOString(),
+        ...(links.policyDecisionId ? { decisionPolicyDecisionId: links.policyDecisionId } : {}),
+        ...(links.evidenceId ? { decisionEvidenceId: links.evidenceId } : {}),
       };
       return {
         request: updated,
@@ -90,6 +106,7 @@ export class ApprovalGateService {
 
   private async update(
     requestId: string,
+    links: ApprovalDecisionLinkInput,
     mutate: (
       request: ApprovalRequest,
     ) => { request: ApprovalRequest; eventType: 'APPROVAL_APPROVED' | 'APPROVAL_REJECTED' | 'APPROVAL_RESUMED' },
@@ -114,6 +131,8 @@ export class ApprovalGateService {
           taskId: outcome.request.taskId,
           requestedAction: outcome.request.requestedAction,
           status: outcome.request.status,
+          ...(links.policyDecisionId ? { policyDecisionId: links.policyDecisionId } : {}),
+          ...(links.evidenceId ? { evidenceId: links.evidenceId } : {}),
         },
         { runId: outcome.request.runId },
       ),

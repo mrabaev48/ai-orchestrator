@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.21.0
+# AI Orchestrator — Documentation 1.22.0
 
 ## 1. Что это за проект
 
@@ -284,6 +284,17 @@ API защищается через API key и/или JWT. Без настрое
 - в `packages/state` выделен persistence port `ApprovalStore` (`append/getById/listByRunId`) для явной границы между domain-моделью approval и адаптерами хранения.
 
 Это делает approval request поток более детерминированным, типобезопасным и удобным для последующей интеграции SLA/routing/task-linking этапов без breaking изменений публичных контрактов.
+
+
+
+### 3.2.15 Approval decision linking to policy decisions and run evidence
+
+Добавлена явная связка approval outcome с policy/evidence контекстом на application-контракте:
+- `ApprovalRequest` расширен optional-полями `decisionPolicyDecisionId` и `decisionEvidenceId`;
+- `ApprovalGateService` (`approve/reject/resume`) теперь принимает optional links (`policyDecisionId`, `evidenceId`) и сохраняет их в approval-модели;
+- события `APPROVAL_APPROVED|APPROVAL_REJECTED|APPROVAL_RESUMED` публикуют те же link-поля в payload для корреляции audit trail с execution evidence.
+
+Это снижает риск потери трассировки между manual approval outcome и governance/evidence слоями при incident-forensics и runtime replay.
 
 ## 4. Как пользоваться
 
