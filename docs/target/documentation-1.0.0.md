@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.8.0
+# AI Orchestrator — Documentation 1.9.0
 
 ## 1. Что это за проект
 
@@ -134,6 +134,16 @@ Run-step evidence теперь поддерживает first-class статус
 - evidence integrity invariant: детект tampering checksum-chain через `EVIDENCE_INTEGRITY_VIOLATION`.
 
 Suite запускается через `npm run test:baseline-invariants`; в turbo-пайплайне добавлена задача `baseline-invariants`, и `build` теперь зависит от нее (blocking gate).
+
+### 3.2.5 Initial autonomous SLI/SLO and error budget policy
+
+Введён базовый production-ready слой для SLO governance автономных прогонов:
+- typed SLI snapshot (`successRatePercent`, `timeoutRatePercent`, `cancellationRatePercent`, `p95LatencyMs`, `sampleSize`);
+- default SLO policy `autonomous-default-v1` (success >= 99%, timeout <= 1%, cancellation <= 2%, p95 latency <= 120000ms);
+- error budget policy (30 дней, budget 1%, warning при burn >= 70%);
+- deterministic assessment output с verdict `healthy|at_risk`, criterion-level evidence и budget status `healthy|burn_warning|exhausted`.
+
+Этот слой является минимальным инкрементом для Phase 6 (Observability/SLO) и может расширяться per-tenant/per-tier без breaking изменений текущих контрактов.
 
 ## 3.3 Worker mode
 

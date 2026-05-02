@@ -1424,7 +1424,9 @@ export class Orchestrator {
           tenantId: state.orgId,
           projectId: state.projectId,
           runId: input.runId,
-          stepId: `${input.taskId}:pr_draft`,
+          taskId: input.taskId,
+          stage: 'pr_draft',
+          attempt: 0,
           sideEffectType: 'pr_draft',
           normalizedInput: `${branchName}|${prTitle}`,
         });
