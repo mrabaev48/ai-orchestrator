@@ -5,3 +5,4 @@ export * from './workspace-manager.ts';
 export * from './gates/preflight-policy-gate.ts';
 
 export * from './repo-mutation-pipeline.ts';
+export * from './steps/step-policy-gate.ts';

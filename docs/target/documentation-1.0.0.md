@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.17.0
+# AI Orchestrator — Documentation 1.18.0
 
 ## 1. Что это за проект
 
@@ -205,6 +205,14 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 
 Это формирует production-ready фундамент для безопасного branch/apply/verify/commit/push/pr-draft цикла с детерминированной диагностикой.
 
+
+### 3.2.12 Mandatory per-step policy gate before side-effect actions
+
+Добавлен явный step-level policy gate модуль для side-effect стадий:
+- `buildStepPolicyGateRequest(...)` формирует typed/deterministic request для каждого side-effect шага;
+- orchestration-path использует его перед `git_commit`, `git_push`, `pr_draft`;
+- risk-level заполняется только через централизованную classification matrix, без локальных hardcoded fallback;
+- это делает per-step governance contract явным и снижает риск bypass/дрейфа при эволюции control flow.
 
 ### 3.2.9 Unified tool contracts and normalized error envelope
 
