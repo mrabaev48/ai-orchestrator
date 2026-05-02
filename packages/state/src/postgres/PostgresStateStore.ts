@@ -2,6 +2,7 @@ import {
   assertProjectState,
   defaultArtifactSchemaRegistry,
   verifyRunStepEvidenceChain,
+  assertRunStepTransitionAllowed,
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
@@ -355,6 +356,30 @@ export class PostgresStateStore implements StateStore {
   async recordRunStep(step: RunStepLogEntry): Promise<void> {
     await this.ensureInitialized();
     await this.withTransaction(async (client) => {
+      const previousResult = (await client.query(
+        `SELECT status
+         FROM ${this.table('run_step_log')}
+         WHERE org_id = $1 AND project_id = $2 AND run_id = $3 AND step_id = $4 AND attempt = $5
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [
+          this.tenantScope.orgId,
+          this.tenantScope.projectId,
+          step.runId,
+          step.stepId,
+          step.attempt,
+        ],
+      )) as { rows: { status: RunStepLogEntry['status'] }[] };
+
+      assertRunStepTransitionAllowed({
+        ...(previousResult.rows[0]?.status ? { previousStatus: previousResult.rows[0].status } : {}),
+        nextStatus: step.status,
+        runId: step.runId,
+        stepId: step.stepId,
+        attempt: step.attempt,
+        evidenceId: step.id,
+      });
+
       await client.query(
         `INSERT INTO ${this.table('run_step_log')} (
           id, org_id, project_id, run_id, tenant_id, project_scope_id, step_id, attempt, task_id, role, tool, input_text, output_text, status, policy_decision_id, idempotency_key, payload_ref, checksum, prev_checksum, trace_id, duration_ms, created_at

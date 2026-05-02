@@ -21,3 +21,5 @@ export * from './state-integrity.ts';
 export * from './testing.ts';
 export * from './evidence/run-step-evidence.ts';
 export * from './idempotency/build-idempotency-key.ts';
+
+export * from './transition-guards.ts';

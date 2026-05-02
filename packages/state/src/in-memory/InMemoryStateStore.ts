@@ -2,6 +2,7 @@ import {
   assertProjectState,
   defaultArtifactSchemaRegistry,
   verifyRunStepEvidenceChain,
+  assertRunStepTransitionAllowed,
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
@@ -153,6 +154,20 @@ export class InMemoryStateStore implements StateStore {
   async recordRunStep(step: RunStepLogEntry): Promise<void> {
     const current = await this.load();
     current.execution.runStepLog ??= [];
+
+    const previous = current.execution.runStepLog
+      .filter((entry) => entry.runId === step.runId && entry.stepId === step.stepId && entry.attempt === step.attempt)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+
+    assertRunStepTransitionAllowed({
+      ...(previous?.status ? { previousStatus: previous.status } : {}),
+      nextStatus: step.status,
+      runId: step.runId,
+      stepId: step.stepId,
+      attempt: step.attempt,
+      evidenceId: step.id,
+    });
+
     current.execution.runStepLog.push(structuredClone(step));
     await this.save(current);
   }

@@ -76,3 +76,41 @@ test('InMemoryStateStore rejects artifacts that violate schema registry', async 
     /Artifact schema validation failed/,
   );
 });
+
+
+test('InMemoryStateStore enforces closed run-step status transitions per attempt', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const now = Date.now();
+
+  const base = {
+    tenantId: 'tenant-1',
+    projectId: 'proj-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    attempt: 0,
+    role: 'tester',
+    input: 'input',
+    output: 'output',
+    idempotencyKey: 'key-1',
+    checksum: 'checksum-1',
+    traceId: 'trace-1',
+    durationMs: 1,
+    createdAt: new Date(now).toISOString(),
+  } as const;
+
+  await store.recordRunStep({ id: 'ev-1', ...base, status: 'cancellation_requested' });
+  await store.recordRunStep({ id: 'ev-2', ...base, status: 'cancelled', checksum: 'checksum-2', createdAt: new Date(now + 1_000).toISOString() });
+
+  await assert.rejects(
+    async () =>
+      store.recordRunStep({
+        id: 'ev-3',
+        ...base,
+        status: 'cancelled',
+        checksum: 'checksum-3',
+        createdAt: new Date(now + 2_000).toISOString(),
+      }),
+    /Illegal run step status transition/,
+  );
+});
+
