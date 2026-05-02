@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.24.0
+# AI Orchestrator — Documentation 1.25.0
 
 ## 1. Что это за проект
 
@@ -218,6 +218,18 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 
 Добавлен выделенный postflight policy gate модуль для финализации исполнения задачи:
 - `buildPostflightPolicyGateDecisionRequest(...)` формирует детерминированный payload для обязательной postflight check-точки;
+
+### 3.2.14 Dedup guard for git push/PR side effects in autonomous flow
+
+Для git side effects в автономном цикле закреплён production-ready dedup guard на уровнях `git_push` и `pr_draft`:
+- перед `pushBranch(...)` и `createPullRequestDraft(...)` всегда выполняется idempotency reserve через `execution.dedupRegistry`;
+- при уже зафиксированном успешном ключе side effect детерминированно подавляется (`pushStatus=skipped_duplicate`, `prStatus=skipped_duplicate`);
+- suppression не приводит к скрытому выполнению внешних эффектов (нет повторного push/PR вызова);
+- артефакты git lifecycle сохраняют явные статусы suppression, что улучшает forensic-разбор retry/replay сценариев.
+
+Тестовое покрытие расширено отдельными сценариями для `runCycle`:
+- duplicate `git_push` ключ блокирует повторный push и фиксирует корректный статус;
+- duplicate `pr_draft` ключ блокирует повторное создание PR draft при успешно выполненном push.
 - payload фиксирует `task:{id}:postflight_policy`, `artifact_write`, `NON_BYPASS_POSTFLIGHT_CHECK`, а также стабильный `inputHashSeed`;
 - orchestration-path использует этот модуль перед финальным `STATE_COMMITTED`, что устраняет inline-конструирование postflight-policy payload и снижает риск bypass/дрейфа.
 
