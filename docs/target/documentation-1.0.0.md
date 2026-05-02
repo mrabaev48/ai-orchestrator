@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.13.0
+# AI Orchestrator — Documentation 1.14.0
 
 ## 1. Что это за проект
 
@@ -175,6 +175,16 @@ Suite запускается через `npm run test:baseline-invariants`; в t
 - application-слой использует thin mapper-адаптер для чтения core matrix без дублирования правил.
 
 Это снижает риск drift между policy-check, approval-flow и runtime side effects, а также улучшает diagnosability при инцидентном разборе.
+### 3.2.8 Policy Engine Evaluator (allow/deny/requires_approval/defer)
+
+Добавлен минимальный production-ready policy evaluator слой:
+- единый typed outcome-контракт `PolicyOutcome` с исходами `allow|deny|requires_approval|defer`;
+- deterministic evaluator `evaluatePolicy(...)` в application-слое, который учитывает risk-level, флаг обязательного approval, доступность policy backend и явные deny-коды;
+- schema-first валидация outcome и state-level policy decision record (`PolicyDecisionRecord`) для консистентной персистенции/диагностики;
+- non-allow outcomes всегда сопровождаются reason-кодами, а `allow` остается без reasonCodes для предсказуемой downstream-обработки.
+
+Это формирует базовый contract для дальнейшей интеграции evaluator в execution preflight/postflight и side-effect checkpoints без breaking изменений в существующих runtime контрактах.
+
 
 ## 3.3 Worker mode
 

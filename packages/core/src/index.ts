@@ -16,6 +16,7 @@ export * from './review.ts';
 export * from './roles.ts';
 export * from './policy-decision-errors.ts';
 export * from './policy/risk-classification.ts';
+export * from './policy/policy-outcome.ts';
 export * from './release-assessment.ts';
 export * from './role-output-schema-registry.ts';
 export * from './state-integrity.ts';
