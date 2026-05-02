@@ -24,6 +24,7 @@ import { createLocalToolSet } from '../../tools/src/index.ts';
 import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
 import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.ts';
 import { buildPreflightPolicyGateDecisionRequest } from './gates/preflight-policy-gate.ts';
+import { buildStepPolicyGateRequest } from './steps/step-policy-gate.ts';
 import {
   createWorkspaceManager,
   type ManagedWorkspace,
@@ -1305,11 +1306,11 @@ export class Orchestrator {
         commitStatus = 'skipped_duplicate';
         pushStatus = 'skipped_duplicate';
       } else {
-      await this.persistAndRequirePolicyDecision({
+      await this.persistAndRequirePolicyDecision(buildStepPolicyGateRequest({
         state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:git_commit`, attempt: 0,
         actionType: 'git_commit', inputHashSeed: `${input.runId}:${input.taskId}:git_commit:${commitMessage}`,
         reasonCodes: ['REPO_CHANGES_PRESENT'],
-      });
+      }));
       const committed = await this.createCommit(input.workspaceRoot, commitMessage);
       commitStatus = committed.ok ? 'created' : 'failed';
       const commitPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;
@@ -1380,11 +1381,11 @@ export class Orchestrator {
           if (pushReserve.dedupSuppressed) {
             pushStatus = 'skipped_duplicate';
           } else {
-          await this.persistAndRequirePolicyDecision({
+          await this.persistAndRequirePolicyDecision(buildStepPolicyGateRequest({
             state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:git_push`, attempt: 0,
             actionType: 'git_push', inputHashSeed: `${input.runId}:${input.taskId}:git_push:${branchName}:${commitSha}`,
             reasonCodes: ['APPROVAL_GATE_PASSED'],
-          });
+          }));
           const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
           pushStatus = isPushed ? 'pushed' : 'failed';
           const pushPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;
@@ -1463,11 +1464,11 @@ export class Orchestrator {
         if (prReserve.dedupSuppressed) {
           prStatus = 'skipped_duplicate';
         } else {
-        await this.persistAndRequirePolicyDecision({
+        await this.persistAndRequirePolicyDecision(buildStepPolicyGateRequest({
           state, runId: input.runId, taskId: input.taskId, stepId: `${input.taskId}:pr_draft`, attempt: 0,
           actionType: 'pr_draft', inputHashSeed: `${input.runId}:${input.taskId}:pr_draft:${branchName}:${prTitle}`,
           reasonCodes: ['PUSH_SUCCESSFUL'],
-        });
+        }));
         const isPrCreated = await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody);
         prStatus = isPrCreated ? 'created' : 'failed';
         const prPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;
