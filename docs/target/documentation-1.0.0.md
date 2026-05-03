@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.29.0
+# AI Orchestrator — Documentation 1.29.1
 
 ## 1. Что это за проект
 
@@ -229,6 +229,8 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 - `withToolTimeout(...)` переведен на abort-aware helper, сохраняя `TOOL_CANCELLED`/`TOOL_TIMEOUT` ошибки как структурированные operational outcomes.
 
 Это снижает риск расхождения cancellation-семантики между слоями и повышает diagnosability при прерывании долгих/повторяемых операций.
+
+Для regression-контроля добавлены targeted unit/integration тесты на propagation и listener cleanup (`propagateAbort`, `createAbortAwareSignal`) в `tests/cancellation-propagation.test.ts`.
 
 ### 3.2.14 Tool timeout enforcement and stage timeout boundaries
 
