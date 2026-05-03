@@ -20,6 +20,7 @@ import { createShellToolAdapter } from './shell/adapter.ts';
 import { createTestingToolAdapter } from './testing/adapter.ts';
 import { createDiffToolAdapter } from './diff/adapter.ts';
 import { createSearchToolAdapter } from './search/adapter.ts';
+import { withToolTimeout } from './runtime/with-timeout.ts';
 
 export type { ToolExecutionRecord, ToolAdapterName } from './contracts.ts';
 export type { FileSystemTool, GitTool, TypeScriptTool };
@@ -118,8 +119,18 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
     const determinism = TOOL_METADATA[request.toolName] ?? { deterministic: false, sideEffectRisk: 'low' };
 
     const start = Date.now();
+    const timeoutMs =
+      typeof request.input.timeoutMs === 'number' && Number.isFinite(request.input.timeoutMs)
+        ? Math.max(1, request.input.timeoutMs)
+        : 10_000;
+
     try {
-      const result = await adapter.execute(request, options);
+      const result = await withToolTimeout({
+        execute: async (signal) => adapter.execute(request, { ...options, signal }),
+        timeoutMs,
+        toolName: request.toolName,
+        ...(options?.signal ? { parentSignal: options.signal } : {}),
+      });
       evidenceAdapter.store.add({
         adapter: adapter.name,
         toolName: request.toolName,
