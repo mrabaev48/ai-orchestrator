@@ -104,3 +104,27 @@ test('RepoMutationPipeline: retriable fail выполняет retry в рамк�
   assert.equal(result.evidences[0]?.status, 'skipped');
   assert.equal(result.evidences[1]?.status, 'succeeded');
 });
+
+
+test('RepoMutationPipeline: stage timeout enforced even when stage ignores signal', async () => {
+  const pipeline = new RepoMutationPipeline();
+
+  const result = await pipeline.run({
+    context,
+    stages: [
+      {
+        name: 'verification',
+        timeoutMs: 20,
+        maxAttempts: 1,
+        execute: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+          return { ok: true };
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.stoppedAt, 'verification');
+  assert.equal(result.evidences[0]?.errorCode, 'STAGE_TIMEOUT');
+});

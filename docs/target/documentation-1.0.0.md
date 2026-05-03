@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.27.0
+# AI Orchestrator — Documentation 1.28.0
 
 ## 1. Что это за проект
 
@@ -217,6 +217,18 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 - это делает per-step governance contract явным и снижает риск bypass/дрейфа при эволюции control flow.
 
 ### 3.2.13 Postflight policy gate module as explicit finalization contract
+
+
+### 3.2.14 Tool timeout enforcement and stage timeout boundaries
+
+Усилены timeout-гарантии на двух критичных границах исполнения:
+- в tool runtime добавлен общий timeout-wrapper `withToolTimeout(...)`, который применяет единый per-tool deadline и нормализует ошибки в `TOOL_TIMEOUT` (`category=timeout`);
+- timeout применяется на orchestration boundary независимо от поведения конкретного адаптера, что исключает зависание шага при игнорировании signal внутри инструмента;
+- в `RepoMutationPipeline` stage timeout теперь enforced через `Promise.race(...)` + `AbortController`, поэтому stage не может бесконечно блокировать pipeline даже при некорректной реализации execute;
+- evidence для stage timeout фиксируется как `STAGE_TIMEOUT`, что улучшает postmortem-диагностику и снижает риск неявных stuck-сценариев.
+
+Изменение выполнено additively, без изменения публичных контрактов вызова toolset/pipeline.
+
 
 Добавлен выделенный postflight policy gate модуль для финализации исполнения задачи:
 - `buildPostflightPolicyGateDecisionRequest(...)` формирует детерминированный payload для обязательной postflight check-точки;

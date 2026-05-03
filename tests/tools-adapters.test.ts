@@ -181,3 +181,17 @@ test('tools adapter enforces maximum modified files threshold', async () => {
 
   await rm(workspace, { recursive: true, force: true });
 });
+
+
+test('tools adapter enforces timeout at runtime boundary', async () => {
+  const tools = createLocalToolSet([process.cwd()]);
+
+  const result = await tools.execute({
+    toolName: 'shell_exec',
+    input: { command: 'node', args: ['-e', 'setTimeout(() => console.log("late"), 200)'], timeoutMs: 10 },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error.category, 'timeout');
+  assert.equal(result.error.code, 'TOOL_TIMEOUT');
+});

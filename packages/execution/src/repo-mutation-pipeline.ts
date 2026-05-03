@@ -57,6 +57,18 @@ export interface RepoMutationPipelineInput {
   stages: RepoMutationStageDefinition[];
 }
 
+class StageTimeoutError extends Error {
+  readonly stage: RepoMutationStageName;
+  readonly timeoutMs: number;
+
+  constructor(stage: RepoMutationStageName, timeoutMs: number) {
+    super(`Stage ${stage} timed out after ${timeoutMs}ms`);
+    this.name = 'StageTimeoutError';
+    this.stage = stage;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
 export interface RepoMutationPipelineResult {
   ok: boolean;
   stoppedAt?: RepoMutationStageName;
@@ -85,10 +97,21 @@ export class RepoMutationPipeline {
         attempt += 1;
         const startedAt = Date.now();
         const abortController = new AbortController();
-        const timeout = setTimeout(() => { abortController.abort(); }, stage.timeoutMs);
+        const timeout = setTimeout(() => {
+          abortController.abort(new StageTimeoutError(stage.name, stage.timeoutMs));
+        }, stage.timeoutMs);
 
         try {
-          const result = await stage.execute(input.context, abortController.signal);
+          const result = await Promise.race([
+            stage.execute(input.context, abortController.signal),
+            new Promise<never>((_, reject) => {
+              const onAbort = () => {
+                const reason = abortController.signal.reason;
+                reject(reason instanceof Error ? reason : new StageTimeoutError(stage.name, stage.timeoutMs));
+              };
+              abortController.signal.addEventListener('abort', onAbort, { once: true });
+            }),
+          ]);
           clearTimeout(timeout);
           const finishedAt = Date.now();
 
@@ -135,6 +158,7 @@ export class RepoMutationPipeline {
           clearTimeout(timeout);
           const finishedAt = Date.now();
           const message = error instanceof Error ? error.message : 'unknown_error';
+          const isStageTimeout = error instanceof StageTimeoutError;
           evidences.push({
             stage: stage.name,
             status: 'failed',
@@ -142,7 +166,7 @@ export class RepoMutationPipeline {
             finishedAt: new Date(finishedAt).toISOString(),
             durationMs: finishedAt - startedAt,
             attempt,
-            errorCode: abortController.signal.aborted ? 'STAGE_TIMEOUT' : 'STAGE_EXCEPTION',
+            errorCode: isStageTimeout || abortController.signal.aborted ? 'STAGE_TIMEOUT' : 'STAGE_EXCEPTION',
             errorMessage: message,
           });
           await this.compensateIfNeeded(stage, input.context, evidences);
