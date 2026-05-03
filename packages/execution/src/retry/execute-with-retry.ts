@@ -1,4 +1,5 @@
 import { getRetrySchedule, type RetryPolicy } from '../../../core/src/retry/retry-policy.ts';
+import { propagateAbort } from '../cancellation/propagate-abort.ts';
 
 export interface RetryFailure {
   code: string;
@@ -38,11 +39,18 @@ export async function executeWithRetry<TSuccess>(
       return { ok: false, failure: { code: 'RETRY_CANCELLED', message: 'retry cancelled before attempt', retriable: false } };
     }
 
-    const result = await input.execute({ attempt, signal: parentSignal ?? new AbortController().signal });
+    const currentAttempt = attempt;
+    const attemptSignal = propagateAbort(parentSignal);
+    let result: RetryExecutionResult<TSuccess>;
+    try {
+      result = await input.execute({ attempt: currentAttempt, signal: attemptSignal.signal });
+    } finally {
+      attemptSignal.dispose();
+    }
     if (result.ok) {
       return result;
     }
-    if (!result.failure || !result.failure.retriable) {
+    if (!result.failure?.retriable) {
       return result;
     }
 
@@ -52,7 +60,12 @@ export async function executeWithRetry<TSuccess>(
     }
 
     try {
-      await sleep(schedule.delayMs, parentSignal ?? new AbortController().signal);
+      const sleepSignal = propagateAbort(parentSignal);
+      try {
+        await sleep(schedule.delayMs, sleepSignal.signal);
+      } finally {
+        sleepSignal.dispose();
+      }
     } catch {
       return { ok: false, failure: { code: 'RETRY_CANCELLED', message: 'retry cancelled during backoff', retriable: false } };
     }
