@@ -238,7 +238,7 @@ export class EtcdLockAuthority implements LockAuthority {
 async function loadPostgresPool(connectionString: string): Promise<PgPoolLike> {
   let module: PgModule;
   try {
-    module = (await import('pg')) as PgModule;
+    module = await import('pg');
   } catch (error) {
     throw new ConfigError(
       'PostgreSQL run lock provider requires `pg` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
@@ -256,7 +256,7 @@ async function loadRedisClient(dsn: string): Promise<RedisLike> {
 
   let module: RedisModule;
   try {
-    module = (await import('redis')) as RedisModule;
+    module = await import('redis');
   } catch (error) {
     throw new ConfigError(
       'Redis run lock provider requires `redis` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
@@ -276,7 +276,7 @@ async function loadEtcdClient(dsn: string): Promise<EtcdClientLike> {
 
   let module: EtcdModule;
   try {
-    module = (await import('etcd3')) as EtcdModule;
+    module = await import('etcd3');
   } catch (error) {
     throw new ConfigError(
       'Etcd run lock provider requires `etcd3` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
