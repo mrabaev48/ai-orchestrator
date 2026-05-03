@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.29.0
+# AI Orchestrator — Documentation 1.30.0
 
 ## 1. Что это за проект
 
@@ -515,3 +515,15 @@ pnpm run build
 - non-retriable ошибки завершают цикл немедленно, retriable — повторяются только в пределах policy-лимита.
 
 Это формирует переиспользуемый production-ready базис для безопасных retry решений без дублирования backoff-логики по execution-коду.
+
+### 3.2.7 Strict tool input/output schemas for adapters
+
+В `packages/tools` введена обязательная контрактная schema-валидация на unified runtime boundary:
+- перед dispatch в adapter выполняется `validateToolInput(...)`;
+- после выполнения adapter выполняется `validateToolOutput(...)`;
+- нарушения схем возвращаются как структурированные ошибки `TOOL_INPUT_SCHEMA_INVALID` / `TOOL_OUTPUT_SCHEMA_INVALID` с категорией `validation` и `retriable=false`.
+
+Покрыты tool-контракты для:
+`file_read`, `file_write`, `file_list`, `file_exists`, `git_status`, `git_diff`, `git_current_branch`, `typescript_check`, `typescript_diagnostics`, `shell_exec`, `testing_run`, `diff_workspace`, `search_repo`.
+
+Это уменьшает риск дрейфа контрактов между orchestration core и adapters и повышает diagnosability инцидентов на execution boundary.
