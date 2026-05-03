@@ -7,3 +7,5 @@ export * from './finalize/postflight-policy.ts';
 
 export * from './repo-mutation-pipeline.ts';
 export * from './steps/step-policy-gate.ts';
+
+export * from './retry/execute-with-retry.ts';

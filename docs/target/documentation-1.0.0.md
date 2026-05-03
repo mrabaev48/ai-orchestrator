@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.26.0
+# AI Orchestrator — Documentation 1.27.0
 
 ## 1. Что это за проект
 
@@ -465,3 +465,14 @@ pnpm run build
 ## 10. Краткое резюме
 
 Проект реализует **ядро AI-оркестратора** для инженерных workflow: от bootstrap и анализа до исполнения задач, quality gates, approvals, наблюдаемости и API-доступа к состоянию. Использовать его можно как через CLI (control plane), так и как фоновый worker + dashboard API в production-подобной инфраструктуре.
+
+
+### 3.2.15 Bounded Retry Policy module (backoff + jitter)
+
+Добавлен отдельный retry-policy слой для execution runtime:
+- в `packages/core` введён typed модуль `retry-policy` с валидацией параметров (`maxAttempts`, `baseDelayMs`, `maxDelayMs`, `backoffMultiplier`, `jitterRatio`);
+- расчет retry schedule выполняется детерминированно и bounded: exponential backoff ограничивается `maxDelayMs`, jitter применяется в контролируемом диапазоне `± jitterRatio`;
+- в `packages/execution` добавлен `executeWithRetry(...)`, который централизует retry-loop, bounded delays и отмену через `AbortSignal`;
+- non-retriable ошибки завершают цикл немедленно, retriable — повторяются только в пределах policy-лимита.
+
+Это формирует переиспользуемый production-ready базис для безопасных retry решений без дублирования backoff-логики по execution-коду.
