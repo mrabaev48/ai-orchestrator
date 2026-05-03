@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.29.1
+# AI Orchestrator — Documentation 1.29.0
 
 ## 1. Что это за проект
 
@@ -144,6 +144,20 @@ Run-step evidence теперь поддерживает first-class статус
 - evidence integrity invariant: детект tampering checksum-chain через `EVIDENCE_INTEGRITY_VIOLATION`.
 
 Suite запускается через `pnpm run test:baseline-invariants`; в turbo-пайплайне добавлена задача `baseline-invariants`, и `build` теперь зависит от нее (blocking gate).
+
+### 3.2.6 Bounded ActionLoop step/wall-time budgets
+
+Для ролей с `executeStep` (think-act-observe loop) включены два явных budget-ограничителя:
+
+- `workflow.maxRoleStepsPerTask` — верхняя граница шагов action loop на одну задачу;
+- `workflow.maxRoleWallTimeMs` — wall-time budget для всего role loop, проверяется перед каждым шагом.
+
+Семантика остановки детерминирована и типизирована через `WorkflowPolicyError`:
+
+- при исчерпании step budget: `Role <name> exceeded action loop step limit`;
+- при исчерпании wall-time budget: `Role <name> exhausted action loop wall-time budget` с деталями (`step`, `elapsedMs`, `maxWallTimeMs`, `budgetType=wall_time_ms`).
+
+Дополнительно шагу назначается bounded timeout: `min(llm.timeoutMs, remainingWallTimeMs)`, что предотвращает выход за общий wall-time budget из-за «длинного» отдельного шага и упрощает диагностику stop-condition в telemetry/evidence.
 
 ### 3.2.5 Initial autonomous SLI/SLO and error budget policy
 
