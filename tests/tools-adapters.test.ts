@@ -195,3 +195,28 @@ test('tools adapter enforces timeout at runtime boundary', async () => {
   assert.equal(result.error.category, 'timeout');
   assert.equal(result.error.code, 'TOOL_TIMEOUT');
 });
+
+
+test('tools adapter validates shell_exec input schema', async () => {
+  const tools = createLocalToolSet([process.cwd()]);
+  await assert.rejects(
+    async () => tools.execute({
+      toolName: 'shell_exec',
+      input: { command: 'node', args: ['--version', 123] },
+    }),
+    /TOOL_INPUT_SCHEMA_INVALID|Invalid input for shell_exec/,
+  );
+});
+
+test('tools adapter validates output schema for testing_run', async () => {
+  const tools = createLocalToolSet([process.cwd()]);
+  const result = await tools.execute({
+    toolName: 'testing_run',
+    input: { command: 'node', args: ['-e', 'process.exit(2)'] },
+  });
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(typeof (result.output as { exitCode: number }).exitCode, 'number');
+  }
+});

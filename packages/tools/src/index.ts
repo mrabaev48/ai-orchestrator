@@ -21,6 +21,7 @@ import { createTestingToolAdapter } from './testing/adapter.ts';
 import { createDiffToolAdapter } from './diff/adapter.ts';
 import { createSearchToolAdapter } from './search/adapter.ts';
 import { withToolTimeout } from './runtime/with-timeout.ts';
+import { validateToolInput, validateToolOutput } from './contracts/input-output-schemas.ts';
 
 export type { ToolExecutionRecord, ToolAdapterName } from './contracts.ts';
 export type { FileSystemTool, GitTool, TypeScriptTool };
@@ -106,6 +107,7 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
     request: UnifiedToolRequest,
     options?: { signal?: AbortSignal },
   ): Promise<UnifiedToolResult> => {
+    validateToolInput(request.toolName, request.input);
     const adapter = adapters.find((candidate) => candidate.canHandle(request.toolName));
     if (!adapter) {
       throw new ToolExecutionContractError({
@@ -131,6 +133,7 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
         toolName: request.toolName,
         ...(options?.signal ? { parentSignal: options.signal } : {}),
       });
+      validateToolOutput(request.toolName, result);
       evidenceAdapter.store.add({
         adapter: adapter.name,
         toolName: request.toolName,
