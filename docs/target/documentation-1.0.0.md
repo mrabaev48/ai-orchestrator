@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.28.0
+# AI Orchestrator — Documentation 1.29.0
 
 ## 1. Что это за проект
 
@@ -218,6 +218,17 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 
 ### 3.2.13 Postflight policy gate module as explicit finalization contract
 
+
+
+### 3.2.14 Cancellation propagation through execution and tool runtime
+
+Усилена сквозная propagation-модель `AbortSignal` между execution и tools слоями:
+- в `packages/execution` добавлен `propagateAbort(...)`, который формирует дочерний signal, переносит `reason` и гарантирует очистку listener-ов через `dispose`;
+- retry-контур `executeWithRetry(...)` теперь использует отдельный дочерний signal на каждый attempt и на backoff sleep, что предотвращает скрытую утечку listener-ов и делает cancellation path детерминированным;
+- в `packages/tools/runtime` добавлен `createAbortAwareSignal(...)` для typed preflight-проверки отмены и унифицированной propagation в tool timeout boundary;
+- `withToolTimeout(...)` переведен на abort-aware helper, сохраняя `TOOL_CANCELLED`/`TOOL_TIMEOUT` ошибки как структурированные operational outcomes.
+
+Это снижает риск расхождения cancellation-семантики между слоями и повышает diagnosability при прерывании долгих/повторяемых операций.
 
 ### 3.2.14 Tool timeout enforcement and stage timeout boundaries
 
