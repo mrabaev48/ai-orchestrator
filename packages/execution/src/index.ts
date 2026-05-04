@@ -13,3 +13,8 @@ export * from './retry/execute-with-retry.ts';
 export * from './evidence/append-run-step-evidence.ts';
 
 export * from './recovery/resume-from-checkpoint.ts';
+
+export * from './worker/lease-manager.ts';
+
+export * from './queue/dead-letter-handler.ts';
+export * from './queue/replay-controller.ts';

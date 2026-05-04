@@ -15,3 +15,7 @@ export * from './idempotency/in-memory-dedup-registry-port.ts';
 export * from './evidence/run-step-evidence.store.ts';
 
 export * from './recovery/recovery-checkpoint.store.ts';
+
+export * from './leases/lease-store.ts';
+
+export * from './queue/dead-letter-replay.store.ts';

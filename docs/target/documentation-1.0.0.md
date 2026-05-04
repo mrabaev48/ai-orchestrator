@@ -1,4 +1,5 @@
-# AI Orchestrator — Documentation 1.35.0
+
+# AI Orchestrator — Documentation 1.40.0
 
 ## 1. Что это за проект
 
@@ -54,6 +55,13 @@
 - `run-task --task-id <id>` — исполнение конкретной задачи.
 - `resume-failure --failure-id <id>` — возврат dead-lettered failure в resumed.
 - `replay-failure --failure-id <id>` — replay task из checkpoint.
+
+
+### 3.1.1 Dead-letter and controlled replay hardening (1.40.0)
+
+- Replay path is now explicitly gated: `replay-failure` works only for `dead_lettered` failures.
+- Replay checkpoint selection is isolated in execution queue controller (`selectReplayCheckpoint`) to keep policy/validation deterministic and typed.
+- Queue recovery contracts are now explicit in state layer via `DeadLetterReplayStore` interface for adapter-safe extensions.
 
 ## 3.2 Orchestrator runtime
 
@@ -238,6 +246,16 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 
 
 ### 3.2.14 Cancellation propagation through execution and tool runtime
+
+### 3.2.15 PR draft prepare stage with structured evidence bundle
+
+В mutation stages добавлен выделенный `pr-draft-prepare` шаг (`pr_draft_prepare`) для подготовки draft PR как отдельного typed side-effect этапа:
+- явная precondition-проверка `branchName` с non-retriable отказом `PR_DRAFT_PREPARE_BRANCH_REQUIRED`;
+- success-path возвращает evidence bundle (`notes=draft_pr_created`) с метаданными `branchName`, `prNumber`, `prUrl`;
+- error-path нормализован в структурированную retriable ошибку `PR_DRAFT_PREPARE_FAILED`;
+- тестами покрыты success/failure/regression (missing branch) сценарии для детерминированной диагностики и безопасного retry-поведения.
+
+Это завершает минимальный production-ready срез для `pr_draft_prepare` в mutation pipeline и делает контракт шага явным и проверяемым.
 
 Усилена сквозная propagation-модель `AbortSignal` между execution и tools слоями:
 - в `packages/execution` добавлен `propagateAbort(...)`, который формирует дочерний signal, переносит `reason` и гарантирует очистку listener-ов через `dispose`;
@@ -550,14 +568,48 @@ pnpm run build
 - добавлены unit-тесты для success/failure/regression/cancellation путей, чтобы закрыть базовые execution safety требования для стадии подготовки workspace.
 
 
+### 3.2.15 change_apply stage with patch diagnostics
 
-### 3.2.15 Mutation stage `branch_prepare` with naming policy
+Добавлен минимальный production-ready слой применения патча для стадии `change_apply`:
+- в tools-слое реализован `applyPatch(...)` с использованием `git apply --recount --index --verbose` и структурированными диагностическими полями (`changedFiles`, `stdout`, `stderr`, `command`);
+- введен typed error-contract `ApplyPatchError` с кодами `PATCH_TEXT_EMPTY`, `PATCH_APPLY_FAILED`, `PATCH_CANCELLED`;
+- в execution-слое стадия `executeChangeApplyStage(...)` маппит tool-ошибки в детерминированные stage failure outcomes с явной retry-семантикой (empty/cancelled => non-retriable, apply_failed => retriable);
+- это повышает diagnosability мутаций и снижает риск неявного падения change_apply без полезного контекста для postmortem.
 
-Добавлен production-ready срез для стадии `branch_prepare` в mutation pipeline:
-- введён deterministic branch naming policy `mutation/<sanitized-runId>-<sanitized-taskId>`;
-- добавлена валидация policy (`BRANCH_POLICY_INVALID`) как non-retriable отказ для недопустимых branch-имён;
-- добавлен explicit success/noop результат: если pipeline уже находится на целевой ветке, стадия возвращает `branch_prepare_already_on_target`;
-- transient ошибки git-перехода возвращаются как `BRANCH_PREPARE_FAILED` с `retriable=true`;
-- в tools-слое добавлен helper `ensureLocalBranch(...)`, который детерминированно делает `checkout` существующей локальной ветки или `checkout -b` новой.
 
-Изменение выполнено additively и не меняет публичные контракты RepoMutationPipeline.
+
+### 3.2.15 Mutation verification gates (build/lint/typecheck/test/security)
+
+Для `RepoMutationPipeline` добавлен минимальный verification-slice production-ready уровня:
+- stage `verification` реализован через `executeVerificationStage(...)` с typed результатом и явными кодами ошибок;
+- verification suite выполняет фиксированные gates: `build -> lint -> typecheck -> test -> security` последовательно и fail-fast;
+- по каждой gate собирается evidence (`startedAt`, `finishedAt`, `durationMs`, `exitCode`, `output`) для postmortem;
+- stage формирует агрегированные metadata (`executedGates`, `executedGateCount`, `totalDurationMs`, `failedGate`) и разделяет: 
+  - бизнес-failure gate (`VERIFICATION_GATE_FAILED`, non-retriable),
+  - runtime-исключения раннера (`VERIFICATION_STAGE_FAILED`, retriable).
+
+Это делает verification-контур явным contract-level этапом mutation pipeline и улучшает diagnosability без breaking изменений существующих API.
+
+
+### 3.2.15 Commit/push prepare stages with explicit compensation
+
+Для `RepoMutationPipeline` реализованы отдельные стадии `commit_prepare` и `push_prepare` с явными typed-контрактами и компенсацией:
+- `commit_prepare` создаёт commit и возвращает metadata (`commitSha`), на ошибке выдаёт structured failure `COMMIT_PREPARE_FAILED`;
+- компенсация commit-стадии выполняет `git reset --hard HEAD~1` через отдельный `resetHardHead` executor;
+- `push_prepare` требует `branchName`, выполняет push и возвращает metadata (`branchName`, `remoteRef`), на ошибке выдаёт `PUSH_PREPARE_FAILED`;
+- при отсутствии `branchName` возвращается deterministic non-retriable ошибка `PUSH_PREPARE_BRANCH_REQUIRED`;
+- компенсация push-стадии удаляет удалённую ветку через `pushDelete`, что снижает риск partial-success при падении downstream-стадий.
+
+Изменение additively расширяет stage coverage без изменения публичных runtime контрактов pipeline.
+
+
+### 3.2.16 Queue lease/heartbeat worker ownership protocol
+
+Добавлен минимальный production-ready контракт владения задачей очереди между worker-инстансами:
+- в `packages/state` введен typed `QueueLeaseStore` и in-memory реализация `InMemoryQueueLeaseStore` с операциями `acquire/heartbeat/release`;
+- lease хранит `jobId`, `ownerId`, `leaseId`, `acquiredAtIso`, `heartbeatAtIso`, `expiresAtIso`;
+- повторный `acquire` для активного lease детерминированно отклоняется с `already_leased`;
+- `heartbeat/release` валидируют owner+lease token и возвращают структурированные причины `missing_lease|lease_owner_mismatch`;
+- в execution-слой добавлен `QueueLeaseManager`, который оборачивает store-контракт, добавляет telemetry-friendly logging и выдает `QueueLeaseHandle` для worker-потока.
+
+Это закрывает минимальный ownership-протокол для Phase 4 queue/worker separation и снижает риск конкурентной обработки одной job несколькими worker-процессами.

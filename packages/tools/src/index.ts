@@ -164,3 +164,5 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
     evidence: evidenceAdapter.store,
   };
 }
+
+export * from './verification/run-verification-suite.ts';
