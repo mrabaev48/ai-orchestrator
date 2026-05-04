@@ -11,6 +11,7 @@ import {
   EventHistoryQueryDto,
   FailureHistoryQueryDto,
   HistoryQueryDto,
+  RunStepEvidenceQueryDto,
 } from './dashboard-query.dto.ts';
 import { DashboardReadApiService } from './dashboard-query.service.ts';
 
@@ -68,6 +69,12 @@ export class DashboardQueryController {
   @Get('artifacts')
   async getArtifacts(@Query() query: ArtifactHistoryQueryDto) {
     return await this.dashboardReadApiService.getArtifacts(query.limit, query.offset, query.type);
+  }
+
+
+  @Get('evidence/run-steps')
+  async getRunStepEvidence(@Query() query: RunStepEvidenceQueryDto) {
+    return await this.dashboardReadApiService.getRunStepEvidence(query.runId, query.taskId, query.limit, query.offset);
   }
 
   @Get('runs/latest')

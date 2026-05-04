@@ -11,3 +11,5 @@ export * from './approval/approval-store.ts';
 export * from './idempotency/dedup-registry.ts';
 export * from './idempotency/dedup-registry.port.ts';
 export * from './idempotency/in-memory-dedup-registry-port.ts';
+
+export * from './evidence/run-step-evidence.store.ts';
