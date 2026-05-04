@@ -15,6 +15,7 @@ import { SchemaValidationError, WorkflowPolicyError } from '../packages/shared/s
 import { InMemoryStateStore } from '../packages/state/src/index.ts';
 import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
 import type { LockAuthority } from '../packages/execution/src/lock-authority.ts';
+import type { FencingTokenGuard } from '../packages/execution/src/locks/fencing-token-guard.ts';
 import type {
   AgentRole,
   RoleExecutionContext,
@@ -637,6 +638,46 @@ test('runCycle returns idle when distributed run lock is unavailable', async () 
   const result = await orchestrator.runCycle();
   assert.equal(result.status, 'idle');
   assert.equal(result.stopReason, 'run_lock_unavailable');
+});
+
+test('runCycle returns idle when fencing lock is unavailable', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const fencingTokenGuard: FencingTokenGuard = { acquire: async () => null };
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
+    fencingTokenGuard,
+  });
+
+  const result = await orchestrator.runCycle();
+  assert.equal(result.status, 'idle');
+  assert.equal(result.stopReason, 'run_lock_unavailable');
+});
+
+test('runCycle fails when fencing validation fails before execution', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
+  const fencingTokenGuard: FencingTokenGuard = {
+    acquire: async () => ({
+      lease: {
+        resource: 'global-run-cycle',
+        ownerId: 'run-1',
+        fencingToken: 1,
+        acquiredAtIso: '2026-01-01T00:00:00.000Z',
+        expiresAtIso: '2026-01-01T00:01:00.000Z',
+      },
+      validate: async () => ({ valid: false, reason: 'stale_fencing_token' }),
+      release: async () => {},
+    }),
+  };
+  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
+    fencingTokenGuard,
+  });
+
+  await assert.rejects(
+    async () => orchestrator.runCycle(),
+    (error: unknown) => error instanceof WorkflowPolicyError
+      && error.message.includes('Fencing lock validation failed before cycle execution'),
+  );
 });
 
 test('runCycle rejects invalid coder output via role output schema registry', async () => {
