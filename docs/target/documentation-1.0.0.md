@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.36.0
+# AI Orchestrator — Documentation 1.37.0
 
 ## 1. Что это за проект
 
@@ -571,3 +571,15 @@ pnpm run build
   - runtime-исключения раннера (`VERIFICATION_STAGE_FAILED`, retriable).
 
 Это делает verification-контур явным contract-level этапом mutation pipeline и улучшает diagnosability без breaking изменений существующих API.
+
+
+### 3.2.15 Commit/push prepare stages with explicit compensation
+
+Для `RepoMutationPipeline` реализованы отдельные стадии `commit_prepare` и `push_prepare` с явными typed-контрактами и компенсацией:
+- `commit_prepare` создаёт commit и возвращает metadata (`commitSha`), на ошибке выдаёт structured failure `COMMIT_PREPARE_FAILED`;
+- компенсация commit-стадии выполняет `git reset --hard HEAD~1` через отдельный `resetHardHead` executor;
+- `push_prepare` требует `branchName`, выполняет push и возвращает metadata (`branchName`, `remoteRef`), на ошибке выдаёт `PUSH_PREPARE_FAILED`;
+- при отсутствии `branchName` возвращается deterministic non-retriable ошибка `PUSH_PREPARE_BRANCH_REQUIRED`;
+- компенсация push-стадии удаляет удалённую ветку через `pushDelete`, что снижает риск partial-success при падении downstream-стадий.
+
+Изменение additively расширяет stage coverage без изменения публичных runtime контрактов pipeline.
