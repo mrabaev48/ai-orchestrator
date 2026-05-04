@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.34.0
+# AI Orchestrator — Documentation 1.35.0
 
 ## 1. Что это за проект
 
@@ -549,3 +549,15 @@ pnpm run build
 - ошибки нормализуются в explicit коды `WORKSPACE_NOT_FOUND`, `SNAPSHOT_CANCELLED`, `SNAPSHOT_FAILED`, что улучшает retry-решения и postmortem-диагностику;
 - добавлены unit-тесты для success/failure/regression/cancellation путей, чтобы закрыть базовые execution safety требования для стадии подготовки workspace.
 
+
+
+### 3.2.15 Mutation stage `branch_prepare` with naming policy
+
+Добавлен production-ready срез для стадии `branch_prepare` в mutation pipeline:
+- введён deterministic branch naming policy `mutation/<sanitized-runId>-<sanitized-taskId>`;
+- добавлена валидация policy (`BRANCH_POLICY_INVALID`) как non-retriable отказ для недопустимых branch-имён;
+- добавлен explicit success/noop результат: если pipeline уже находится на целевой ветке, стадия возвращает `branch_prepare_already_on_target`;
+- transient ошибки git-перехода возвращаются как `BRANCH_PREPARE_FAILED` с `retriable=true`;
+- в tools-слое добавлен helper `ensureLocalBranch(...)`, который детерминированно делает `checkout` существующей локальной ветки или `checkout -b` новой.
+
+Изменение выполнено additively и не меняет публичные контракты RepoMutationPipeline.
