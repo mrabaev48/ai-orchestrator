@@ -1,6 +1,5 @@
 import {
   ToolExecutionContractError,
-  normalizeToolError,
   type ToolDeterminismMetadata,
   type ToolEvidenceStore,
   type UnifiedToolAdapter,
@@ -22,6 +21,7 @@ import { createDiffToolAdapter } from './diff/adapter.ts';
 import { createSearchToolAdapter } from './search/adapter.ts';
 import { withToolTimeout } from './runtime/with-timeout.ts';
 import { validateToolInput, validateToolOutput } from './contracts/input-output-schemas.ts';
+import { normalizeToolError } from './errors/tool-error-envelope.ts';
 
 export type { ToolExecutionRecord, ToolAdapterName } from './contracts.ts';
 export type { FileSystemTool, GitTool, TypeScriptTool };

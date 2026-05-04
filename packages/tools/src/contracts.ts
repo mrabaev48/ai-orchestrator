@@ -87,16 +87,3 @@ export class ToolExecutionContractError extends Error {
   }
 }
 
-export function normalizeToolError(error: unknown, fallbackCode: string): ToolErrorEnvelope {
-  if (error instanceof ToolExecutionContractError) {
-    return error.envelope;
-  }
-
-  const message = error instanceof Error ? error.message : String(error);
-  return {
-    category: 'execution',
-    retriable: true,
-    code: fallbackCode,
-    message,
-  };
-}
