@@ -1,7 +1,6 @@
 import { buildIdempotencyKey, type ApprovalRequest, type ArtifactRecord, type BacklogTask, type ExecutionPolicyActionType, type ProjectState } from '../../core/src/index.ts';
 import {
   assertProjectState,
-  computeRunStepChecksum,
   formatPolicyDecisionError,
   isExecutableTask,
   makeEvent,
@@ -32,6 +31,8 @@ import {
   type WorkspaceManager,
 } from './workspace-manager.ts';
 import { completeSideEffect, reserveSideEffect } from './idempotency/side-effect-dedup-guard.ts';
+import { appendRunStepEvidence } from './evidence/append-run-step-evidence.ts';
+import { createRunStepEvidenceStore } from '../../state/src/evidence/run-step-evidence.store.ts';
 import {
   nextFailureAction,
   requiresReview,
@@ -1715,9 +1716,10 @@ export class Orchestrator {
   }): Promise<void> {
     const stepId = crypto.randomUUID();
     const attempt = 0;
-    const prevChecksum = this.currentRunChecksumByRunId.get(input.runId);
-    const step: RunStepLogEntry = {
-      id: stepId,
+    const evidenceStore = createRunStepEvidenceStore(this.stateStore);
+    const previousChecksum = this.currentRunChecksumByRunId.get(input.runId);
+    const step = await appendRunStepEvidence(evidenceStore, {
+      evidenceId: stepId,
       tenantId: this.currentEvidenceTenantId ?? 'default-org',
       projectId: this.currentEvidenceProjectId ?? 'ai-orchestrator',
       runId: input.runId,
@@ -1730,27 +1732,12 @@ export class Orchestrator {
       output: truncateText(safeStringify(input.output)),
       status: input.status,
       idempotencyKey: `${input.runId}:${stepId}:${attempt}`,
-      checksum: '',
-      ...(prevChecksum ? { prevChecksum } : {}),
+      ...(previousChecksum ? { prevChecksum: previousChecksum } : {}),
       traceId: input.runId,
-      durationMs: Math.max(0, input.durationMs),
+      durationMs: input.durationMs,
       createdAt: new Date().toISOString(),
-    };
-    step.checksum = computeRunStepChecksum({
-      evidenceId: step.id,
-      tenantId: step.tenantId,
-      projectId: step.projectId,
-      runId: step.runId,
-      stepId: step.stepId,
-      attempt: step.attempt,
-      status: step.status,
-      idempotencyKey: step.idempotencyKey,
-      createdAt: step.createdAt,
-      ...(step.prevChecksum ? { prevChecksum: step.prevChecksum } : {}),
-      traceId: step.traceId,
     });
     this.currentRunChecksumByRunId.set(input.runId, step.checksum);
-    await this.stateStore.recordRunStep(step);
     this.currentRunStepBuffer?.push(step);
   }
 

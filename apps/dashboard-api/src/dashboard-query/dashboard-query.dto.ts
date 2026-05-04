@@ -111,3 +111,9 @@ export class ApprovalDecisionBodyDto {
   @IsString()
   reason?: string;
 }
+
+export class RunStepEvidenceQueryDto extends HistoryQueryDto {
+  @IsOptional()
+  @IsString()
+  taskId?: string;
+}

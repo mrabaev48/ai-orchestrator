@@ -1,24 +1,31 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { STATE_STORE } from '../dashboard-api.tokens.ts';
+
 import {
   ApprovalGateService,
   DashboardQueryService as ApplicationDashboardQueryService,
 } from '../../../../packages/application/src/index.ts';
 import type { DomainEventType } from '../../../../packages/core/src/index.ts';
+import type { StateStore } from '../../../../packages/state/src/index.ts';
 
 @Injectable()
 export class DashboardReadApiService {
   private readonly dashboardQueryService: ApplicationDashboardQueryService;
   private readonly approvalGateService: ApprovalGateService;
+  private readonly stateStore: StateStore;
 
   constructor(
     @Inject(ApplicationDashboardQueryService)
     dashboardQueryService: ApplicationDashboardQueryService,
     @Inject(ApprovalGateService)
     approvalGateService: ApprovalGateService,
+    @Inject(STATE_STORE)
+    stateStore: StateStore,
   ) {
     this.dashboardQueryService = dashboardQueryService;
     this.approvalGateService = approvalGateService;
+    this.stateStore = stateStore;
   }
 
   async getStateSummary(orgId?: string, projectId?: string) {
@@ -111,5 +118,13 @@ export class DashboardReadApiService {
 
   async resume(requestId: string, actor: string) {
     return await this.approvalGateService.resume(requestId, actor);
+  }
+  async getRunStepEvidence(runId?: string, taskId?: string, limit?: number, offset?: number) {
+    return await this.stateStore.listRunSteps({
+      ...(runId ? { runId } : {}),
+      ...(taskId ? { taskId } : {}),
+      ...(limit === undefined ? {} : { limit }),
+      ...(offset === undefined ? {} : { offset }),
+    });
   }
 }

@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.31.0
+# AI Orchestrator — Documentation 1.32.0
 
 ## 1. Что это за проект
 
@@ -67,6 +67,9 @@ Execution-слой включает:
 - git lifecycle automation (branch/commit/push/pr-draft) с approval gating.
 
 ### 3.2.1 Run-step evidence integrity
+
+Обновление 1.32.0: выделен отдельный append-only evidence слой (`RunStepEvidenceStore` + `appendRunStepEvidence`) и подключен в Orchestrator для централизованного вычисления checksum и append-записи в state store. Это зафиксировало явный контракт между execution/state слоями без изменения публичных payload-форматов.
+
 
 Начиная с текущей реализации, записи run-step имеют расширенный evidence-контракт:
 
