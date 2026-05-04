@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.35.0
+# AI Orchestrator — Documentation 1.36.0
 
 ## 1. Что это за проект
 
@@ -558,3 +558,16 @@ pnpm run build
 - в execution-слое стадия `executeChangeApplyStage(...)` маппит tool-ошибки в детерминированные stage failure outcomes с явной retry-семантикой (empty/cancelled => non-retriable, apply_failed => retriable);
 - это повышает diagnosability мутаций и снижает риск неявного падения change_apply без полезного контекста для postmortem.
 
+
+
+### 3.2.15 Mutation verification gates (build/lint/typecheck/test/security)
+
+Для `RepoMutationPipeline` добавлен минимальный verification-slice production-ready уровня:
+- stage `verification` реализован через `executeVerificationStage(...)` с typed результатом и явными кодами ошибок;
+- verification suite выполняет фиксированные gates: `build -> lint -> typecheck -> test -> security` последовательно и fail-fast;
+- по каждой gate собирается evidence (`startedAt`, `finishedAt`, `durationMs`, `exitCode`, `output`) для postmortem;
+- stage формирует агрегированные metadata (`executedGates`, `executedGateCount`, `totalDurationMs`, `failedGate`) и разделяет: 
+  - бизнес-failure gate (`VERIFICATION_GATE_FAILED`, non-retriable),
+  - runtime-исключения раннера (`VERIFICATION_STAGE_FAILED`, retriable).
+
+Это делает verification-контур явным contract-level этапом mutation pipeline и улучшает diagnosability без breaking изменений существующих API.
