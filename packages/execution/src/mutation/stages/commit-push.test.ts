@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { executeCommitPrepareStage, compensateCommitPrepareStage } from './commit-prepare.ts';
 import { executePushPrepareStage, compensatePushPrepareStage } from './push-prepare.ts';
+
+import { executePrDraftPrepareStage } from './pr-draft-prepare.ts';
 import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.ts';
 
 const context: RepoMutationPipelineContext = {
@@ -88,4 +90,53 @@ void test('push_prepare compensation: branch delete is called when branch exists
     },
   });
   assert.equal(didCallCompensation, true);
+});
+
+
+void test('pr_draft_prepare: success returns draft pr evidence metadata', async () => {
+  const result = await executePrDraftPrepareStage({
+    context,
+    signal: new AbortController().signal,
+    title: '[task-29] Draft PR',
+    body: 'Automated draft PR body',
+    createDraftPr: async () => ({ prNumber: 42, prUrl: 'https://example.test/pr/42' }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.notes, 'draft_pr_created');
+  assert.equal(result.metadata?.branchName, 'feature/task-29');
+  assert.equal(result.metadata?.prNumber, '42');
+});
+
+void test('pr_draft_prepare: missing branch is explicit non-retriable', async () => {
+  const contextWithoutBranch: RepoMutationPipelineContext = { ...context };
+  delete contextWithoutBranch.branchName;
+
+  const result = await executePrDraftPrepareStage({
+    context: contextWithoutBranch,
+    signal: new AbortController().signal,
+    title: '[task-29] Draft PR',
+    body: 'Automated draft PR body',
+    createDraftPr: async () => ({ prNumber: 42, prUrl: 'https://example.test/pr/42' }),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.failure?.code, 'PR_DRAFT_PREPARE_BRANCH_REQUIRED');
+  assert.equal(result.failure?.retriable, false);
+});
+
+void test('pr_draft_prepare: failure returns retriable structured error', async () => {
+  const result = await executePrDraftPrepareStage({
+    context,
+    signal: new AbortController().signal,
+    title: '[task-29] Draft PR',
+    body: 'Automated draft PR body',
+    createDraftPr: async () => {
+      throw new Error('create draft pr failed');
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.failure?.code, 'PR_DRAFT_PREPARE_FAILED');
+  assert.equal(result.failure?.retriable, true);
 });

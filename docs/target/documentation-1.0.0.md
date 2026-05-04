@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.37.0
+# AI Orchestrator — Documentation 1.38.0
 
 ## 1. Что это за проект
 
@@ -238,6 +238,16 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 
 
 ### 3.2.14 Cancellation propagation through execution and tool runtime
+
+### 3.2.15 PR draft prepare stage with structured evidence bundle
+
+В mutation stages добавлен выделенный `pr-draft-prepare` шаг (`pr_draft_prepare`) для подготовки draft PR как отдельного typed side-effect этапа:
+- явная precondition-проверка `branchName` с non-retriable отказом `PR_DRAFT_PREPARE_BRANCH_REQUIRED`;
+- success-path возвращает evidence bundle (`notes=draft_pr_created`) с метаданными `branchName`, `prNumber`, `prUrl`;
+- error-path нормализован в структурированную retriable ошибку `PR_DRAFT_PREPARE_FAILED`;
+- тестами покрыты success/failure/regression (missing branch) сценарии для детерминированной диагностики и безопасного retry-поведения.
+
+Это завершает минимальный production-ready срез для `pr_draft_prepare` в mutation pipeline и делает контракт шага явным и проверяемым.
 
 Усилена сквозная propagation-модель `AbortSignal` между execution и tools слоями:
 - в `packages/execution` добавлен `propagateAbort(...)`, который формирует дочерний signal, переносит `reason` и гарантирует очистку listener-ов через `dispose`;
