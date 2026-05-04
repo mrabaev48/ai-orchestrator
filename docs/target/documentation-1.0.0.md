@@ -74,6 +74,16 @@ Execution-слой включает:
 - workflow policy guards;
 - git lifecycle automation (branch/commit/push/pr-draft) с approval gating.
 
+
+### 3.2.2 Distributed run lock fencing tokens (1.41.0)
+
+Добавлен минимальный production-ready слой fencing для distributed lock:
+- в `packages/state` добавлен typed-контракт `DistributedLockStore` + `InMemoryDistributedLockStore` с монотонным `fencingToken`;
+- acquire/release/validate возвращают структурированные причины (`already_locked`, `stale_fencing_token`, `owner_mismatch`, `expired`), что повышает diagnosability и безопасность retry/replay;
+- в `packages/execution` добавлен `createFencingTokenGuard(...)`, который инкапсулирует acquire/validate/release с логированием и явной ошибкой `WorkflowPolicyError` при невалидном release.
+
+Это снижает риск stale-owner выполнения и фиксирует явный контракт single-active-run поверх distributed lock механизма.
+
 ### 3.2.1 Run-step evidence integrity
 
 Обновление 1.32.0: выделен отдельный append-only evidence слой (`RunStepEvidenceStore` + `appendRunStepEvidence`) и подключен в Orchestrator для централизованного вычисления checksum и append-записи в state store. Это зафиксировало явный контракт между execution/state слоями без изменения публичных payload-форматов.

@@ -18,3 +18,5 @@ export * from './worker/lease-manager.ts';
 
 export * from './queue/dead-letter-handler.ts';
 export * from './queue/replay-controller.ts';
+
+export * from './locks/fencing-token-guard.ts';
