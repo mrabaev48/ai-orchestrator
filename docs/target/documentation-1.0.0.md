@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.38.0
+# AI Orchestrator — Documentation 1.39.0
 
 ## 1. Что это за проект
 
@@ -593,3 +593,15 @@ pnpm run build
 - компенсация push-стадии удаляет удалённую ветку через `pushDelete`, что снижает риск partial-success при падении downstream-стадий.
 
 Изменение additively расширяет stage coverage без изменения публичных runtime контрактов pipeline.
+
+
+### 3.2.16 Queue lease/heartbeat worker ownership protocol
+
+Добавлен минимальный production-ready контракт владения задачей очереди между worker-инстансами:
+- в `packages/state` введен typed `QueueLeaseStore` и in-memory реализация `InMemoryQueueLeaseStore` с операциями `acquire/heartbeat/release`;
+- lease хранит `jobId`, `ownerId`, `leaseId`, `acquiredAtIso`, `heartbeatAtIso`, `expiresAtIso`;
+- повторный `acquire` для активного lease детерминированно отклоняется с `already_leased`;
+- `heartbeat/release` валидируют owner+lease token и возвращают структурированные причины `missing_lease|lease_owner_mismatch`;
+- в execution-слой добавлен `QueueLeaseManager`, который оборачивает store-контракт, добавляет telemetry-friendly logging и выдает `QueueLeaseHandle` для worker-потока.
+
+Это закрывает минимальный ownership-протокол для Phase 4 queue/worker separation и снижает риск конкурентной обработки одной job несколькими worker-процессами.
