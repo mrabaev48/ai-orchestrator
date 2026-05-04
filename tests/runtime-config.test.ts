@@ -97,12 +97,14 @@ test('loadRuntimeConfig supports distributed lock configuration', () => {
       WORKFLOW_WORKER_COUNT: '3',
       WORKFLOW_RUN_LOCK_PROVIDER: 'postgresql',
       WORKFLOW_RUN_LOCK_DSN: 'postgresql://localhost:5432/ai_orchestrator',
+      WORKFLOW_FENCING_TTL_MS: '90000',
     },
   });
 
   assert.equal(config.workflow.workerCount, 3);
   assert.equal(config.workflow.runLockProvider, 'postgresql');
   assert.equal(config.workflow.runLockDsn, 'postgresql://localhost:5432/ai_orchestrator');
+  assert.equal(config.workflow.fencingTtlMs, 90_000);
 });
 
 test('loadRuntimeConfig supports workspace manager mode and ttl configuration', () => {

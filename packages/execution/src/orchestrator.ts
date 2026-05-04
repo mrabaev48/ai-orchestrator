@@ -21,6 +21,7 @@ import type { StateStore } from '../../state/src/index.ts';
 import type { ToolSet } from '../../tools/src/index.ts';
 import { createLocalToolSet } from '../../tools/src/index.ts';
 import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
+import { createFencingTokenGuard, type FencingTokenGuard } from './locks/fencing-token-guard.ts';
 import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.ts';
 import { buildPreflightPolicyGateDecisionRequest } from './gates/preflight-policy-gate.ts';
 import { buildPostflightPolicyGateDecisionRequest } from './finalize/postflight-policy.ts';
@@ -33,6 +34,7 @@ import {
 import { completeSideEffect, reserveSideEffect } from './idempotency/side-effect-dedup-guard.ts';
 import { appendRunStepEvidence } from './evidence/append-run-step-evidence.ts';
 import { createRunStepEvidenceStore } from '../../state/src/evidence/run-step-evidence.store.ts';
+import { createDistributedLockStore } from './locks/distributed-lock-store-factory.ts';
 import {
   nextFailureAction,
   requiresReview,
@@ -80,6 +82,7 @@ export class Orchestrator {
   private readonly config: RuntimeConfig;
   private readonly logger: Logger;
   private readonly lockAuthority: LockAuthority;
+  private readonly fencingTokenGuard: FencingTokenGuard;
   private readonly telemetry: ExecutionTelemetry;
   private readonly workspaceManager: WorkspaceManager;
   private currentRunStepBuffer: RunStepLogEntry[] | null = null;
@@ -94,7 +97,7 @@ export class Orchestrator {
     roleRegistry: RoleRegistry,
     config: RuntimeConfig,
     logger: Logger,
-    overrides?: { lockAuthority?: LockAuthority; telemetry?: ExecutionTelemetry; workspaceManager?: WorkspaceManager },
+    overrides?: { lockAuthority?: LockAuthority; telemetry?: ExecutionTelemetry; workspaceManager?: WorkspaceManager; fencingTokenGuard?: FencingTokenGuard },
   ) {
     this.stateStore = stateStore;
     this.roleRegistry = roleRegistry;
@@ -111,6 +114,11 @@ export class Orchestrator {
     };
     this.tools = createLocalToolSet(toolPolicyConfig);
     this.lockAuthority = overrides?.lockAuthority ?? createLockAuthority(config);
+    this.fencingTokenGuard = overrides?.fencingTokenGuard ?? createFencingTokenGuard(
+      createDistributedLockStore(config),
+      logger,
+      { ttlMs: config.workflow.fencingTtlMs ?? 60_000 },
+    );
     this.telemetry = overrides?.telemetry ?? new StateStoreExecutionTelemetry(stateStore, logger);
     this.workspaceManager = overrides?.workspaceManager
       ?? createWorkspaceManager({
@@ -123,9 +131,9 @@ export class Orchestrator {
   async runCycle(options: RunCycleOptions = {}): Promise<RunCycleResult> {
     this.currentRunTokenEstimate = 0;
     this.currentRunCostUsdMicro = 0;
+    const runId = crypto.randomUUID();
     const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle');
     if (!lockHandle) {
-      const runId = crypto.randomUUID();
       await this.telemetry.incrementCounter({
         name: 'run_lock_contention_total',
         value: 1,
@@ -146,9 +154,36 @@ export class Orchestrator {
         stopReason: 'run_lock_unavailable',
       };
     }
+    const fencingHandle = await this.fencingTokenGuard.acquire('global-run-cycle', runId, new Date().toISOString());
+    if (!fencingHandle) {
+      await lockHandle.release();
+      await this.telemetry.incrementCounter({
+        name: 'run_lock_contention_total',
+        value: 1,
+        runId,
+        tags: { lock_resource: 'global-run-cycle', lock_phase: 'fencing' },
+      });
+      this.logger.info('Run cycle skipped because fencing lock is unavailable', {
+        event: 'cycle_idle_fencing_unavailable',
+        runId,
+        data: { resource: 'global-run-cycle', delta: 1 },
+      });
+      return { runId, status: 'idle', stopReason: 'run_lock_unavailable' };
+    }
 
     try {
       const state = await this.stateStore.load();
+      const fencingValidation = await fencingHandle.validate(new Date().toISOString());
+      if (!fencingValidation.valid) {
+        throw new WorkflowPolicyError('Fencing lock validation failed before cycle execution', {
+          details: {
+            runId,
+            reason: fencingValidation.reason,
+            resource: 'global-run-cycle',
+            fencingToken: fencingHandle.lease.fencingToken,
+          },
+        });
+      }
       assertProjectState(state);
 
       const stop = shouldStopRun(state, this.config.workflow);
@@ -160,7 +195,6 @@ export class Orchestrator {
         };
       }
 
-      const runId = crypto.randomUUID();
       const task = options.forcedTaskId
         ? this.selectForcedTask(state, options.forcedTaskId)
         : await this.selectNextTask(state, runId);
@@ -206,6 +240,7 @@ export class Orchestrator {
         ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
       });
     } finally {
+      await fencingHandle.release();
       await lockHandle.release();
     }
   }

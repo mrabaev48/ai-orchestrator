@@ -1,5 +1,4 @@
-
-# AI Orchestrator — Documentation 1.40.0
+# AI Orchestrator — Documentation 1.42.0
 
 ## 1. Что это за проект
 
@@ -83,6 +82,8 @@ Execution-слой включает:
 - в `packages/execution` добавлен `createFencingTokenGuard(...)`, который инкапсулирует acquire/validate/release с логированием и явной ошибкой `WorkflowPolicyError` при невалидном release.
 
 Это снижает риск stale-owner выполнения и фиксирует явный контракт single-active-run поверх distributed lock механизма.
+
+Обновление 1.42.0: default wiring Orchestrator теперь использует shared fencing store для `runLockProvider=redis`; TTL fencing вынесен в runtime config (`workflow.fencingTtlMs` / `WORKFLOW_FENCING_TTL_MS`) для операционного тюнинга.
 
 ### 3.2.1 Run-step evidence integrity
 
