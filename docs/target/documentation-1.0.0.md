@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.32.0
+# AI Orchestrator — Documentation 1.33.0
 
 ## 1. Что это за проект
 
