@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.39.0
+# AI Orchestrator — Documentation 1.40.0
 
 ## 1. Что это за проект
 
@@ -54,6 +54,13 @@
 - `run-task --task-id <id>` — исполнение конкретной задачи.
 - `resume-failure --failure-id <id>` — возврат dead-lettered failure в resumed.
 - `replay-failure --failure-id <id>` — replay task из checkpoint.
+
+
+### 3.1.1 Dead-letter and controlled replay hardening (1.40.0)
+
+- Replay path is now explicitly gated: `replay-failure` works only for `dead_lettered` failures.
+- Replay checkpoint selection is isolated in execution queue controller (`selectReplayCheckpoint`) to keep policy/validation deterministic and typed.
+- Queue recovery contracts are now explicit in state layer via `DeadLetterReplayStore` interface for adapter-safe extensions.
 
 ## 3.2 Orchestrator runtime
 
