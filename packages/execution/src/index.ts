@@ -11,3 +11,5 @@ export * from './steps/step-policy-gate.ts';
 export * from './retry/execute-with-retry.ts';
 
 export * from './evidence/append-run-step-evidence.ts';
+
+export * from './recovery/resume-from-checkpoint.ts';
