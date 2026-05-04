@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.34.0
+# AI Orchestrator — Documentation 1.35.0
 
 ## 1. Что это за проект
 
@@ -548,4 +548,13 @@ pnpm run build
 - добавлен tool-layer helper `createWorkspaceSnapshot(...)`, который проверяет существование workspace, создает snapshot-каталог и копию workspace с `AbortSignal`-поддержкой;
 - ошибки нормализуются в explicit коды `WORKSPACE_NOT_FOUND`, `SNAPSHOT_CANCELLED`, `SNAPSHOT_FAILED`, что улучшает retry-решения и postmortem-диагностику;
 - добавлены unit-тесты для success/failure/regression/cancellation путей, чтобы закрыть базовые execution safety требования для стадии подготовки workspace.
+
+
+### 3.2.15 change_apply stage with patch diagnostics
+
+Добавлен минимальный production-ready слой применения патча для стадии `change_apply`:
+- в tools-слое реализован `applyPatch(...)` с использованием `git apply --recount --index --verbose` и структурированными диагностическими полями (`changedFiles`, `stdout`, `stderr`, `command`);
+- введен typed error-contract `ApplyPatchError` с кодами `PATCH_TEXT_EMPTY`, `PATCH_APPLY_FAILED`, `PATCH_CANCELLED`;
+- в execution-слое стадия `executeChangeApplyStage(...)` маппит tool-ошибки в детерминированные stage failure outcomes с явной retry-семантикой (empty/cancelled => non-retriable, apply_failed => retriable);
+- это повышает diagnosability мутаций и снижает риск неявного падения change_apply без полезного контекста для postmortem.
 
