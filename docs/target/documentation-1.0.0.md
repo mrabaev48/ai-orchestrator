@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.33.0
+# AI Orchestrator — Documentation 1.34.0
 
 ## 1. Что это за проект
 
@@ -540,3 +540,12 @@ pnpm run build
 `file_read`, `file_write`, `file_list`, `file_exists`, `git_status`, `git_diff`, `git_current_branch`, `typescript_check`, `typescript_diagnostics`, `shell_exec`, `testing_run`, `diff_workspace`, `search_repo`.
 
 Это уменьшает риск дрейфа контрактов между orchestration core и adapters и повышает diagnosability инцидентов на execution boundary.
+
+### 3.2.15 Workspace prepare stage with snapshot creation
+
+Добавлен минимальный production-ready срез для `workspace_prepare` в mutation pipeline:
+- выделен `executeWorkspacePrepareStage(...)` с typed-результатом, детерминированным `snapshotId` (`{runId}-{taskId}`) и structured metadata (`snapshotPath`, `snapshotCreatedAt`);
+- добавлен tool-layer helper `createWorkspaceSnapshot(...)`, который проверяет существование workspace, создает snapshot-каталог и копию workspace с `AbortSignal`-поддержкой;
+- ошибки нормализуются в explicit коды `WORKSPACE_NOT_FOUND`, `SNAPSHOT_CANCELLED`, `SNAPSHOT_FAILED`, что улучшает retry-решения и postmortem-диагностику;
+- добавлены unit-тесты для success/failure/regression/cancellation путей, чтобы закрыть базовые execution safety требования для стадии подготовки workspace.
+
