@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.30.0
+# AI Orchestrator — Documentation 1.31.0
 
 ## 1. Что это за проект
 
@@ -255,6 +255,16 @@ Suite запускается через `pnpm run test:baseline-invariants`; в 
 - evidence для stage timeout фиксируется как `STAGE_TIMEOUT`, что улучшает postmortem-диагностику и снижает риск неявных stuck-сценариев.
 
 Изменение выполнено additively, без изменения публичных контрактов вызова toolset/pipeline.
+
+
+### 3.2.15 Tool error normalization into retriable structured envelopes
+
+В tool-runtime введена отдельная нормализация ошибок `normalizeToolError(...)`:
+- typed ошибки `ToolExecutionContractError` пробрасываются без потери category/code/details;
+- platform-level `AbortError` нормализуется в `TOOL_CANCELLED` (`category=cancelled`, `retriable=false`);
+- прочие неизвестные ошибки приводятся к `execution` envelope с fallback-кодом (`TOOL_EXECUTION_FAILED`) и явным message.
+
+Это делает retry/timeout/cancellation семантику стабильной на orchestration boundary и улучшает diagnosability в evidence-записях tool execution.
 
 
 Добавлен выделенный postflight policy gate модуль для финализации исполнения задачи:
