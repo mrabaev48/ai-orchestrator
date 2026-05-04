@@ -117,7 +117,7 @@ test('ControlPlaneService replays task from failure checkpoint', async () => {
   state.backlog.epics['epic-1'] = { id: 'epic-1', title: 'Epic', goal: 'Goal', status: 'todo', featureIds: ['feature-1'] };
   state.failures.push({
     id: 'failure-2', taskId: 'task-2', role: 'tester', reason: 'failed', symptoms: [], badPatterns: [], retrySuggested: true,
-    status: 'retryable', checkpointRunId: 'run-2', checkpointStepId: 'step-5', createdAt: new Date().toISOString(),
+    status: 'dead_lettered', checkpointRunId: 'run-2', deadLetteredAt: new Date().toISOString(), checkpointStepId: 'step-5', createdAt: new Date().toISOString(),
   });
   const store = new InMemoryStateStore(state);
   const service = new ControlPlaneService(store, createLogger(makeRuntimeConfig(), { sink: () => {} }));
@@ -129,4 +129,24 @@ test('ControlPlaneService replays task from failure checkpoint', async () => {
   assert.equal(loaded.execution.activeTaskId, 'task-2');
   assert.equal(loaded.execution.activeRunId, 'run-2');
   assert.equal(loaded.failures[0]?.status, 'replayed');
+});
+
+
+test('ControlPlaneService rejects replay for non dead-lettered failures', async () => {
+  const state = createEmptyProjectState({ projectId: 'project-1', projectName: 'Project', summary: 'Summary' });
+  state.backlog.tasks['task-3'] = {
+    id: 'task-3', featureId: 'feature-1', title: 'Task', kind: 'implementation', status: 'todo',
+    priority: 'p1', dependsOn: [], acceptanceCriteria: ['done'], affectedModules: ['packages/execution'], estimatedRisk: 'medium',
+  };
+  state.backlog.features['feature-1'] = { id: 'feature-1', epicId: 'epic-1', title: 'Feature', outcome: 'Outcome', risks: [], taskIds: ['task-3'] };
+  state.backlog.epics['epic-1'] = { id: 'epic-1', title: 'Epic', goal: 'Goal', status: 'todo', featureIds: ['feature-1'] };
+  state.failures.push({
+    id: 'failure-3', taskId: 'task-3', role: 'tester', reason: 'failed', symptoms: [], badPatterns: [], retrySuggested: true,
+    status: 'retryable', checkpointRunId: 'run-3', checkpointStepId: 'step-3', createdAt: new Date().toISOString(),
+  });
+
+  const store = new InMemoryStateStore(state);
+  const service = new ControlPlaneService(store, createLogger(makeRuntimeConfig(), { sink: () => {} }));
+
+  await assert.rejects(async () => service.replayFromFailureCheckpoint('failure-3'));
 });

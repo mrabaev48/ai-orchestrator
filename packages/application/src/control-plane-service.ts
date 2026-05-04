@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { makeEvent, type ProjectState } from '../../core/src/index.ts';
+import { selectReplayCheckpoint } from '../../execution/src/queue/replay-controller.ts';
 import { WorkflowPolicyError } from '../../shared/src/index.ts';
 import type { Logger } from '../../shared/src/index.ts';
 import type { StateStore } from '../../state/src/index.ts';
@@ -103,14 +104,16 @@ export class ControlPlaneService {
       });
     }
 
+    const replay = selectReplayCheckpoint(failure);
+
     failure.status = 'replayed';
     failure.replayedAt = new Date().toISOString();
-    if (failure.checkpointRunId) {
-      state.execution.activeRunId = failure.checkpointRunId;
+    if (replay.runId) {
+      state.execution.activeRunId = replay.runId;
     } else {
       delete state.execution.activeRunId;
     }
-    state.execution.activeTaskId = failure.taskId;
+    state.execution.activeTaskId = replay.taskId;
     await this.stateStore.saveWithEvents(state, [
       makeEvent(
         'TASK_SELECTED',
@@ -119,6 +122,6 @@ export class ControlPlaneService {
       ),
     ]);
 
-    return { taskId: failure.taskId, ...(failure.checkpointRunId ? { runId: failure.checkpointRunId } : {}) };
+    return replay;
   }
 }
