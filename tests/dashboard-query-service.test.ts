@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DashboardQueryService } from '../packages/application/src/index.ts';
+import { DashboardQueryService } from '@ai-orchestrator/application';
 import {
   createEmptyProjectState,
   makeEvent,
-} from '../packages/core/src/index.ts';
-import { InMemoryStateStore } from '../packages/state/src/index.ts';
+} from '@ai-orchestrator/core';
+import { InMemoryStateStore } from '@ai-orchestrator/state';
 
 test('DashboardQueryService returns state summary view from current state', async () => {
   const state = createEmptyProjectState({
@@ -187,7 +187,47 @@ test('DashboardQueryService returns readiness scorecard with go/no-go verdict', 
   assert.equal(scorecard.criteria.some((criterion) => criterion.status === 'fail'), false);
   assert.equal(typeof scorecard.generatedAt, 'string');
 });
+
+test('DashboardQueryService returns latest production readiness review from release artifact metadata', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'project-1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  state.artifacts.push({
+    id: 'release-assessment-1',
+    type: 'release_assessment',
+    title: 'Release readiness assessment',
+    metadata: {
+      runId: 'run-44',
+      verdict: 'blocked',
+      confidence: '0.4',
+      productionReadinessReview: JSON.stringify({
+        runId: 'run-44',
+        reviewDateIso: '2026-05-05T00:00:00.000Z',
+        verdict: 'not_ready',
+        blockers: [{ checkId: 'repo-tests', title: 'Tests', details: 'Tests are failing' }],
+        warnings: [],
+        evidence: {
+          totalChecks: 1,
+          passedChecks: 0,
+          failedChecks: 1,
+          blockerCount: 1,
+          warningCount: 0,
+        },
+      }),
+    },
+    createdAt: '2026-05-05T01:00:00.000Z',
+  });
+
+  const service = new DashboardQueryService(new InMemoryStateStore(state));
   const review = await service.getLatestProductionReadinessReview({ runId: 'run-44' });
+
+  assert.equal(review?.artifactId, 'release-assessment-1');
+  assert.equal(review?.runId, 'run-44');
+  assert.equal(review?.verdict, 'not_ready');
+  assert.equal(review?.evidence.blockerCount, 1);
+});
 
 test('DashboardQueryService returns null for invalid production readiness review JSON payload', async () => {
   const state = createEmptyProjectState({

@@ -2,8 +2,8 @@ import { timingSafeEqual } from 'node:crypto';
 
 import type { NextFunction, Request, Response } from 'express';
 
-import type { DashboardApiConfig } from '../config/dashboard-config.ts';
-import { verifyHs256Jwt } from './jwt.ts';
+import type { DashboardApiConfig } from '../config/dashboard-config.js';
+import { verifyHs256Jwt } from './jwt.js';
 
 export function createDashboardAuthMiddleware(config: DashboardApiConfig) {
   return (request: Request, response: Response, next: NextFunction): void => {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ToolExecutionContractError } from '../contracts.ts';
+import { ToolExecutionContractError } from '../contracts.js';
 
 const nonEmptyString = z.string().trim().min(1);
 const finiteNumber = z.number();

@@ -1,8 +1,8 @@
 import {
   computeRunStepChecksum,
   type RunStepLogEntry,
-} from '../../../core/src/index.ts';
-import type { RunStepEvidenceStore } from '../../../state/src/evidence/run-step-evidence.store.ts';
+} from '@ai-orchestrator/core';
+import type { RunStepEvidenceStore } from '@ai-orchestrator/state';
 
 export interface AppendRunStepEvidenceInput {
   evidenceId: string;

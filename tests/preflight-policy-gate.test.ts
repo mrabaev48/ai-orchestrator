@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPreflightPolicyGateDecisionRequest } from '../packages/execution/src/index.ts';
-import { createEmptyProjectState, type BacklogTask } from '../packages/core/src/index.ts';
+import { buildPreflightPolicyGateDecisionRequest } from '@ai-orchestrator/execution';
+import { createEmptyProjectState, type BacklogTask } from '@ai-orchestrator/core';
 
 test('buildPreflightPolicyGateDecisionRequest returns deterministic non-bypass preflight decision payload', () => {
   const state = createEmptyProjectState({ projectId: 'orchestrator', projectName: 'Orchestrator', summary: 'Preflight gate' });

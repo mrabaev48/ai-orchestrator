@@ -3,8 +3,8 @@ import test from 'node:test';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { executeWorkspacePrepareStage } from './workspace-prepare.ts';
-import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.ts';
+import { executeWorkspacePrepareStage } from './workspace-prepare.js';
+import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.js';
 
 const createContext = (workspacePath: string): RepoMutationPipelineContext => ({
   runId: 'run-25',

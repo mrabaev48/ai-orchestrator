@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { propagateAbort } from '../packages/execution/src/cancellation/propagate-abort.ts';
-import { createAbortAwareSignal } from '../packages/tools/src/runtime/abort-aware-adapter.ts';
-import { ToolExecutionContractError } from '../packages/tools/src/contracts.ts';
+import { propagateAbort } from '@ai-orchestrator/execution';
+import { createAbortAwareSignal } from '@ai-orchestrator/tools';
+import { ToolExecutionContractError } from '@ai-orchestrator/tools';
 
 test('propagateAbort: parent cancellation propagates reason to child signal', () => {
   const parent = new AbortController();

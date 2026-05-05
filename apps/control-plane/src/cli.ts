@@ -10,15 +10,15 @@ import {
   evaluateHumanOverride,
   evaluateKillSwitch,
   createApplicationContext,
-} from '../../../packages/application/src/index.ts';
+} from '@ai-orchestrator/application';
 import {
   createLogger,
   loadRuntimeConfig,
   OrchestratorError,
   ConfigError,
   SafetyViolationError,
-} from '../../../packages/shared/src/index.ts';
-import { authorizeControlPlaneCommand } from './authz/rbac-abac.ts';
+} from '@ai-orchestrator/shared';
+import { authorizeControlPlaneCommand } from './authz/rbac-abac.js';
 
 type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'run-task' | 'show-state' | 'export-backlog' | 'resume-failure' | 'replay-failure';
 

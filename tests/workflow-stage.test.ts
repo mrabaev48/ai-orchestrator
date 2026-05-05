@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { canTransitionStage } from '../packages/workflow/src/index.ts';
+import { canTransitionStage } from '@ai-orchestrator/workflow';
 
 test('workflow stage machine allows valid transitions', () => {
   assert.equal(canTransitionStage('select_task', 'generate_prompt'), true);

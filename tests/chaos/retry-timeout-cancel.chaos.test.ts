@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { executeWithRetry } from '../../packages/execution/src/retry/execute-with-retry.ts';
+import { executeWithRetry } from '@ai-orchestrator/execution';
 
 void test('chaos: executeWithRetry stops immediately when parent signal already aborted', async () => {
   const controller = new AbortController();

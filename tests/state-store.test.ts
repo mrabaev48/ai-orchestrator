@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 
 import {
   createEmptyProjectState,
-} from '../packages/core/src/index.ts';
+} from '@ai-orchestrator/core';
 import {
   InMemoryStateStore,
-} from '../packages/state/src/index.ts';
+} from '@ai-orchestrator/state';
 
 function makeState() {
   const state = createEmptyProjectState({

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { appendRunStepEvidence } from '../packages/execution/src/evidence/append-run-step-evidence.ts';
-import { createRunStepEvidenceStore, InMemoryStateStore } from '../packages/state/src/index.ts';
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
+import { appendRunStepEvidence } from '@ai-orchestrator/execution';
+import { createRunStepEvidenceStore, InMemoryStateStore } from '@ai-orchestrator/state';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
 
 function makeStore() {
   return new InMemoryStateStore(createEmptyProjectState({

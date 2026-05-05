@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { PlannerRole } from '../packages/agents/src/index.ts';
-import { buildMergePreview } from '../packages/agents/src/default-roles.ts';
-import { createEmptyProjectDiscovery, type ArchitectureFinding } from '../packages/core/src/index.ts';
+import { PlannerRole } from '@ai-orchestrator/agents';
+import { buildMergePreview } from '@ai-orchestrator/agents';
+import { createEmptyProjectDiscovery, type ArchitectureFinding } from '@ai-orchestrator/core';
 
 test('PlannerRole produces milestone-aware backlog with dependencies and acceptance criteria', async () => {
   const role = new PlannerRole();

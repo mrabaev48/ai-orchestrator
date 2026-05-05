@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { BootstrapAnalystRole } from '../packages/agents/src/index.ts';
+import { BootstrapAnalystRole } from '@ai-orchestrator/agents';
 
 test('BootstrapAnalystRole maps repository snapshot into reusable discovery output', async () => {
   const role = new BootstrapAnalystRole();

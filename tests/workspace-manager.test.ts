@@ -10,7 +10,7 @@ import {
   GitWorktreeWorkspaceManager,
   parsePrunedWorktreeCount,
   StaticWorkspaceManager,
-} from '../packages/execution/src/workspace-manager.ts';
+} from '@ai-orchestrator/execution';
 
 const execFileAsync = promisify(execFile);
 

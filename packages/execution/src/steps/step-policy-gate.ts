@@ -1,5 +1,5 @@
-import type { ExecutionPolicyActionType, ProjectState } from '../../../core/src/index.ts';
-import { classifyExecutionPolicyActionRisk } from '../../../core/src/index.ts';
+import type { ExecutionPolicyActionType, ProjectState } from '@ai-orchestrator/core';
+import { classifyExecutionPolicyActionRisk } from '@ai-orchestrator/core';
 
 export interface StepPolicyGateRequestInput {
   state: ProjectState;

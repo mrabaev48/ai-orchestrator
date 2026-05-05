@@ -1,5 +1,5 @@
-import { ToolExecutionContractError } from '../contracts.ts';
-import { createAbortAwareSignal } from './abort-aware-adapter.ts';
+import { ToolExecutionContractError } from '../contracts.js';
+import { createAbortAwareSignal } from './abort-aware-adapter.js';
 
 export interface WithTimeoutInput<T> {
   execute: (signal: AbortSignal) => Promise<T>;

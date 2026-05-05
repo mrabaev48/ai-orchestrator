@@ -1,5 +1,5 @@
-import { createWorkspaceSnapshot, WorkspaceSnapshotError, type WorkspaceSnapshotResult } from '../../../../tools/src/workspace/snapshot.ts';
-import type { RepoMutationPipelineContext, RepoMutationStageResult } from '../../repo-mutation-pipeline.ts';
+import { createWorkspaceSnapshot, WorkspaceSnapshotError, type WorkspaceSnapshotResult } from '@ai-orchestrator/tools';
+import type { RepoMutationPipelineContext, RepoMutationStageResult } from '../../repo-mutation-pipeline.js';
 
 export interface WorkspacePrepareStageInput {
   context: RepoMutationPipelineContext;

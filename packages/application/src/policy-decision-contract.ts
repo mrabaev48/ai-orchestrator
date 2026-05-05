@@ -3,7 +3,7 @@ import {
   validateExecutionPolicyDecision,
   type ExecutionPolicyActionType,
   type ExecutionPolicyDecision,
-} from '../../core/src/index.ts';
+} from '@ai-orchestrator/core';
 
 export function assertPolicyDecisionForAction(input: {
   decision: ExecutionPolicyDecision | undefined;

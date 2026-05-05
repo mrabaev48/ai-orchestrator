@@ -1,5 +1,5 @@
-import type { Logger } from '../../../shared/src/index.ts';
-import type { QueueLeaseStore } from '../../../state/src/leases/lease-store.ts';
+import type { Logger } from '@ai-orchestrator/shared';
+import type { QueueLeaseStore } from '@ai-orchestrator/state';
 
 export interface QueueLeaseManagerOptions {
   readonly ownerId: string;

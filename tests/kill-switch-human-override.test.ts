@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluateKillSwitch, evaluateHumanOverride } from '../packages/application/src/index.ts';
+import { evaluateKillSwitch, evaluateHumanOverride } from '@ai-orchestrator/application';
 
 test('kill switch allows read-only command when active', () => {
   const decision = evaluateKillSwitch({

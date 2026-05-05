@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DocsWriterRole } from '../packages/agents/src/index.ts';
+import { DocsWriterRole } from '@ai-orchestrator/agents';
 
 test('DocsWriterRole produces bounded markdown documentation output', async () => {
   const role = new DocsWriterRole();

@@ -1,4 +1,4 @@
-import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+import { defaultRoleOutputSchemaRegistry } from '@ai-orchestrator/core';
 
 export interface ReleaseAssessmentPrompt {
   id: string;

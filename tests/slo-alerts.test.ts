@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSloAlertBatch } from '../packages/application/src/slo/slo-alerts.ts';
-import type { SloPolicy } from '../packages/application/src/slo/slo-policy.ts';
+import { buildSloAlertBatch } from '@ai-orchestrator/application';
+import type { SloPolicy } from '@ai-orchestrator/application';
 
 test('buildSloAlertBatch returns empty alerts for healthy snapshot', () => {
   const result = buildSloAlertBatch({

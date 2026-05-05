@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluateAutonomyLevel } from '../packages/application/src/index.ts';
-import { getAutonomyPolicyProfile } from '../packages/core/src/index.ts';
+import { evaluateAutonomyLevel } from '@ai-orchestrator/application';
+import { getAutonomyPolicyProfile } from '@ai-orchestrator/core';
 
 test('autonomy level profile mapping is deterministic for L0 and L5', () => {
   assert.deepEqual(getAutonomyPolicyProfile('L0'), {

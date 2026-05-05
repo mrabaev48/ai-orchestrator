@@ -10,7 +10,7 @@ import {
   loadRuntimeConfig,
   redactSecrets,
   registerRuntimeSecrets,
-} from '../packages/shared/src/index.ts';
+} from '@ai-orchestrator/shared';
 
 test.afterEach(() => {
   clearRuntimeSecrets();

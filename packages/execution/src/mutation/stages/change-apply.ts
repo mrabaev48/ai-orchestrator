@@ -1,5 +1,5 @@
-import { applyPatch, ApplyPatchError, type ApplyPatchDiagnostics } from '../../../../tools/src/patch/apply-patch.ts';
-import type { RepoMutationPipelineContext, RepoMutationStageResult } from '../../repo-mutation-pipeline.ts';
+import { applyPatch, ApplyPatchError, type ApplyPatchDiagnostics } from '@ai-orchestrator/tools';
+import type { RepoMutationPipelineContext, RepoMutationStageResult } from '../../repo-mutation-pipeline.js';
 
 export interface ChangeApplyStageInput {
   context: RepoMutationPipelineContext;

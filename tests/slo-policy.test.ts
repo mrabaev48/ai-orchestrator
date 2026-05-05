@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assessSlo, DEFAULT_AUTONOMOUS_SLO_POLICY } from '../packages/application/src/slo/slo-policy.ts';
+import { assessSlo, DEFAULT_AUTONOMOUS_SLO_POLICY } from '@ai-orchestrator/application';
 
 test('assessSlo returns healthy verdict for passing snapshot', () => {
   const result = assessSlo({

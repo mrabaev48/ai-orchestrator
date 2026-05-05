@@ -2,9 +2,9 @@ import {
   makeEvent,
   type ApprovalRequest,
   type ApprovalStatus,
-} from '../../core/src/index.ts';
-import { WorkflowPolicyError } from '../../shared/src/index.ts';
-import type { StateStore } from '../../state/src/index.ts';
+} from '@ai-orchestrator/core';
+import { WorkflowPolicyError } from '@ai-orchestrator/shared';
+import type { StateStore } from '@ai-orchestrator/state';
 
 export interface ApprovalHistoryQueryInput {
   status?: ApprovalStatus;

@@ -1,5 +1,5 @@
-import { createDashboardApiApp } from './bootstrap.ts';
-import { loadDashboardRuntimeContext } from './config/dashboard-config.ts';
+import { createDashboardApiApp } from './bootstrap.js';
+import { loadDashboardRuntimeContext } from './config/dashboard-config.js';
 
 async function main(): Promise<void> {
   const runtimeContext = loadDashboardRuntimeContext();

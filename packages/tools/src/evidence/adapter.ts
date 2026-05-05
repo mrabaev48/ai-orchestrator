@@ -1,4 +1,4 @@
-import type { ToolExecutionRecord, ToolEvidenceStore } from '../contracts.ts';
+import type { ToolExecutionRecord, ToolEvidenceStore } from '../contracts.js';
 
 export interface EvidenceToolAdapter {
   store: ToolEvidenceStore;

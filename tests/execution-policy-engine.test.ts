@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { defaultExecutionPolicyEngine } from '../packages/core/src/index.ts';
-import { createLogger } from '../packages/shared/src/index.ts';
+import { defaultExecutionPolicyEngine } from '@ai-orchestrator/core';
+import { createLogger } from '@ai-orchestrator/shared';
 
 const logger = createLogger({
   llm: { provider: 'mock', model: 'm', temperature: 0, timeoutMs: 1000 },

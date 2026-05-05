@@ -1,4 +1,4 @@
-import type { DedupRegistryEntry } from './dedup-registry.ts';
+import type { DedupRegistryEntry } from './dedup-registry.js';
 
 export type DedupFinalizeStatus = 'succeeded' | 'failed';
 

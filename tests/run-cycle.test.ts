@@ -8,14 +8,14 @@ import {
   RoleRegistry,
   TaskManagerRole,
   TesterRole,
-} from '../packages/agents/src/index.ts';
-import { buildIdempotencyKey, classifyExecutionPolicyActionRisk, createEmptyProjectState } from '../packages/core/src/index.ts';
-import { Orchestrator } from '../packages/execution/src/index.ts';
-import { SchemaValidationError, WorkflowPolicyError } from '../packages/shared/src/errors/index.ts';
-import { InMemoryStateStore } from '../packages/state/src/index.ts';
-import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
-import type { LockAuthority } from '../packages/execution/src/lock-authority.ts';
-import type { FencingTokenGuard } from '../packages/execution/src/locks/fencing-token-guard.ts';
+} from '@ai-orchestrator/agents';
+import { buildIdempotencyKey, classifyExecutionPolicyActionRisk, createEmptyProjectState } from '@ai-orchestrator/core';
+import { Orchestrator } from '@ai-orchestrator/execution';
+import { SchemaValidationError, WorkflowPolicyError } from '@ai-orchestrator/shared';
+import { InMemoryStateStore } from '@ai-orchestrator/state';
+import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
+import type { LockAuthority } from '@ai-orchestrator/execution';
+import type { FencingTokenGuard } from '@ai-orchestrator/execution';
 import type {
   AgentRole,
   RoleExecutionContext,
@@ -23,7 +23,7 @@ import type {
   RoleRequest,
   RoleResponse,
   RoleStepResult,
-} from '../packages/core/src/index.ts';
+} from '@ai-orchestrator/core';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {

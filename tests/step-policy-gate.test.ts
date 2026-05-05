@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createEmptyProjectState } from '../packages/core/src/project-state.ts';
-import { buildStepPolicyGateRequest } from '../packages/execution/src/steps/step-policy-gate.ts';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import { buildStepPolicyGateRequest } from '@ai-orchestrator/execution';
 
 test('buildStepPolicyGateRequest builds deterministic per-step payload with risk classification', () => {
   const state = createEmptyProjectState({ projectId: 'orchestrator', projectName: 'Orchestrator', summary: 'Step gate' });

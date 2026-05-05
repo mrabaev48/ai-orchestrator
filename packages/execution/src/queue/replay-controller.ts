@@ -1,5 +1,5 @@
-import type { FailureRecord } from '../../../core/src/index.ts';
-import { WorkflowPolicyError } from '../../../shared/src/index.ts';
+import type { FailureRecord } from '@ai-orchestrator/core';
+import { WorkflowPolicyError } from '@ai-orchestrator/shared';
 
 export interface ReplaySelection {
   taskId: string;

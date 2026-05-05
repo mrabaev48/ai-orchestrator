@@ -1,7 +1,7 @@
 import { Global, Module, type DynamicModule } from '@nestjs/common';
 
-import { DASHBOARD_CONFIG } from '../dashboard-api.tokens.ts';
-import type { DashboardApiConfig } from './dashboard-config.ts';
+import { DASHBOARD_CONFIG } from '../dashboard-api.tokens.js';
+import type { DashboardApiConfig } from './dashboard-config.js';
 
 @Global()
 @Module({})

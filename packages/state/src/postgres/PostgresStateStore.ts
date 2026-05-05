@@ -11,10 +11,10 @@ import {
   type RunStepLogEntry,
   type ExecutionPolicyDecision,
   makeEvent,
-} from '../../../core/src/index.ts';
-import { StateStoreError, redactSecrets } from '../../../shared/src/index.ts';
-import type { ListEventsQuery, ListRunStepsQuery, PolicyDecisionQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
-import { createPostgresMigrations } from './migrations.ts';
+} from '@ai-orchestrator/core';
+import { StateStoreError, redactSecrets } from '@ai-orchestrator/shared';
+import type { ListEventsQuery, ListRunStepsQuery, PolicyDecisionQuery, RecordFailureInput, StateStore } from '../StateStore.js';
+import { createPostgresMigrations } from './migrations.js';
 
 interface PgPoolLike {
   connect: () => Promise<PgClientLike>;
@@ -26,9 +26,9 @@ interface PgClientLike {
   release: () => void;
 }
 
-type PgModule = {
+interface PgModule {
   Pool: new (options: { connectionString: string }) => PgPoolLike;
-};
+}
 
 export class PostgresStateStore implements StateStore {
   private readonly poolPromise: Promise<PgPoolLike>;
@@ -509,7 +509,7 @@ export class PostgresStateStore implements StateStore {
 
 async function loadPgPool(connectionString: string): Promise<PgPoolLike> {
   try {
-    const pgModule = (await import('pg')) as PgModule;
+    const pgModule = asPgModule(await importOptionalModule('pg'));
     return new pgModule.Pool({ connectionString });
   } catch (error) {
     throw new StateStoreError(
@@ -517,4 +517,19 @@ async function loadPgPool(connectionString: string): Promise<PgPoolLike> {
       { cause: error },
     );
   }
+}
+
+async function importOptionalModule(moduleName: string): Promise<unknown> {
+  return await import(moduleName);
+}
+
+function asPgModule(module: unknown): PgModule {
+  if (isRecord(module) && typeof module.Pool === 'function') {
+    return module as unknown as PgModule;
+  }
+  throw new StateStoreError('PostgreSQL backend loaded an invalid "pg" module');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

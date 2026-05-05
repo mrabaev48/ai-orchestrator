@@ -1,8 +1,8 @@
 import type {
   ArchitectureFinding,
   ProjectDiscovery,
-} from '../../core/src/index.ts';
-import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+} from '@ai-orchestrator/core';
+import { defaultRoleOutputSchemaRegistry } from '@ai-orchestrator/core';
 
 export interface PlanningPrompt {
   id: string;

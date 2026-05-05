@@ -12,6 +12,7 @@ const sharedGlobals = {
 export default defineConfig(
   globalIgnores([
     'node_modules/**',
+    'build/**',
     '.git/**',
     '.idea/**',
     '.agents/**',

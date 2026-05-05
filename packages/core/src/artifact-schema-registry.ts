@@ -1,4 +1,4 @@
-import { validateArtifact, type ArtifactRecord, type ArtifactType } from './artifacts.ts';
+import { validateArtifact, type ArtifactRecord, type ArtifactType } from './artifacts.js';
 
 type ArtifactValidator = (artifact: ArtifactRecord) => string[];
 

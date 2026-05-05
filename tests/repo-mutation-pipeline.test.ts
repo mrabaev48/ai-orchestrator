@@ -4,7 +4,7 @@ import {
   RepoMutationPipeline,
   type RepoMutationPipelineContext,
   type RepoMutationStageDefinition,
-} from '../packages/execution/src/repo-mutation-pipeline.ts';
+} from '@ai-orchestrator/execution';
 
 const context: RepoMutationPipelineContext = {
   runId: 'run-1',

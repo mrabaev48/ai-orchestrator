@@ -6,14 +6,15 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const cliPath = path.resolve('apps/control-plane/src/cli.ts');
+const tsxBinPath = path.resolve('node_modules/.bin/tsx');
 
 test('bootstrap writes initial state with memory backend', () => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'ai-orchestrator-cli-'));
 
   try {
     const result = spawnSync(
-      process.execPath,
-      ['--experimental-strip-types', cliPath, 'bootstrap', '--project-id', 'p1', '--project-name', 'Test'],
+      tsxBinPath,
+      [cliPath, 'bootstrap', '--project-id', 'p1', '--project-name', 'Test'],
       {
         cwd: tempDir,
         env: {
@@ -35,8 +36,8 @@ test('bootstrap writes initial state with memory backend', () => {
 
 test('bootstrap fails fast on invalid config', () => {
   const result = spawnSync(
-    process.execPath,
-    ['--experimental-strip-types', cliPath, 'bootstrap'],
+    tsxBinPath,
+    [cliPath, 'bootstrap'],
     {
       cwd: process.cwd(),
       env: {
@@ -55,8 +56,8 @@ test('bootstrap fails fast on invalid config', () => {
 
 test('run-task fails fast without --task-id', () => {
   const result = spawnSync(
-    process.execPath,
-    ['--experimental-strip-types', cliPath, 'run-task'],
+    tsxBinPath,
+    [cliPath, 'run-task'],
     {
       cwd: process.cwd(),
       env: {
@@ -74,8 +75,8 @@ test('run-task fails fast without --task-id', () => {
 
 test('run-task fails with deterministic error for missing task in state', () => {
   const result = spawnSync(
-    process.execPath,
-    ['--experimental-strip-types', cliPath, 'run-task', '--task-id', 'missing-task'],
+    tsxBinPath,
+    [cliPath, 'run-task', '--task-id', 'missing-task'],
     {
       cwd: process.cwd(),
       env: {
@@ -95,8 +96,8 @@ test('run-task fails with deterministic error for missing task in state', () => 
 
 test('run-task is blocked by kill-switch without human override', () => {
   const result = spawnSync(
-    process.execPath,
-    ['--experimental-strip-types', cliPath, 'run-task', '--task-id', 't-1'],
+    tsxBinPath,
+    [cliPath, 'run-task', '--task-id', 't-1'],
     {
       cwd: process.cwd(),
       env: {
@@ -115,8 +116,8 @@ test('run-task is blocked by kill-switch without human override', () => {
 
 test('run-task accepts human override while kill-switch is active', () => {
   const result = spawnSync(
-    process.execPath,
-    ['--experimental-strip-types', cliPath, 'run-task', '--task-id', 'missing-task'],
+    tsxBinPath,
+    [cliPath, 'run-task', '--task-id', 'missing-task'],
     {
       cwd: process.cwd(),
       env: {

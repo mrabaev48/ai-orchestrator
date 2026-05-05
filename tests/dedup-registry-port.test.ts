@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
-import { DedupRegistryService } from '../packages/application/src/idempotency/dedup-registry-service.ts';
-import { InMemoryDedupRegistryPort } from '../packages/state/src/idempotency/in-memory-dedup-registry-port.ts';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import { DedupRegistryService } from '@ai-orchestrator/application';
+import { InMemoryDedupRegistryPort } from '@ai-orchestrator/state';
 
 test('dedup-registry-port: reserve/finalize success path', () => {
   const state = createEmptyProjectState({ projectId: 'project-1', projectName: 'P', summary: 'S' });

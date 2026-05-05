@@ -1,12 +1,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { makeEvent, type ProjectState } from '../../core/src/index.ts';
-import { selectReplayCheckpoint } from '../../execution/src/queue/replay-controller.ts';
-import { WorkflowPolicyError } from '../../shared/src/index.ts';
-import type { Logger } from '../../shared/src/index.ts';
-import type { StateStore } from '../../state/src/index.ts';
-import { toBacklogExportView, toStateSummaryView, type StateSummaryView } from './read-models.ts';
+import { makeEvent, type ProjectState } from '@ai-orchestrator/core';
+import { selectReplayCheckpoint } from '@ai-orchestrator/execution';
+import { WorkflowPolicyError } from '@ai-orchestrator/shared';
+import type { Logger } from '@ai-orchestrator/shared';
+import type { StateStore } from '@ai-orchestrator/state';
+import { toBacklogExportView, toStateSummaryView, type StateSummaryView } from './read-models.js';
 
 export class ControlPlaneService {
   private readonly stateStore: StateStore;

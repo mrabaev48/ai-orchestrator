@@ -1,5 +1,5 @@
-import type { ApprovalRequestedAction } from '../approvals.ts';
-import type { ExecutionPolicyActionType, ExecutionPolicyRiskLevel } from '../execution-policy-decision.ts';
+import type { ApprovalRequestedAction } from '../approvals.js';
+import type { ExecutionPolicyActionType, ExecutionPolicyRiskLevel } from '../execution-policy-decision.js';
 
 export const riskOwnershipTeams = ['orchestration', 'release', 'security', 'platform'] as const;
 export type RiskOwnershipTeam = (typeof riskOwnershipTeams)[number];

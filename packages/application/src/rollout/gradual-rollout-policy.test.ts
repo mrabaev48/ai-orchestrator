@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { InMemoryRolloutConfigStore } from '../../../state/src/rollout/rollout-config.store.ts';
-import { evaluateGradualRolloutPolicy } from './gradual-rollout-policy.ts';
+import { InMemoryRolloutConfigStore } from '@ai-orchestrator/state';
+import { evaluateGradualRolloutPolicy } from './gradual-rollout-policy.js';
 
 void test('GradualRolloutPolicy: enables rollout for matching tenant/project rule', () => {
   const store = new InMemoryRolloutConfigStore([

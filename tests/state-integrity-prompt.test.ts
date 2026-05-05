@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildStateIntegrityPrompt } from '../packages/prompts/src/index.ts';
+import { buildStateIntegrityPrompt } from '@ai-orchestrator/prompts';
 
 test('buildStateIntegrityPrompt exposes explainable integrity report schema', () => {
   const prompt = buildStateIntegrityPrompt({

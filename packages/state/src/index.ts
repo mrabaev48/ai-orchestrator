@@ -1,27 +1,27 @@
-export * from './StateStore.ts';
-export * from './in-memory/InMemoryStateStore.ts';
-export * from './postgres/PostgresStateStore.ts';
+export * from './StateStore.js';
+export * from './in-memory/InMemoryStateStore.js';
+export * from './postgres/PostgresStateStore.js';
 
-export * from './metrics/sli-snapshot.ts';
+export * from './metrics/sli-snapshot.js';
 
-export * from './policy/policy-decision-record.ts';
+export * from './policy/policy-decision-record.js';
 
-export * from './approval/approval-store.ts';
+export * from './approval/approval-store.js';
 
-export * from './idempotency/dedup-registry.ts';
-export * from './idempotency/dedup-registry.port.ts';
-export * from './idempotency/in-memory-dedup-registry-port.ts';
+export * from './idempotency/dedup-registry.js';
+export * from './idempotency/dedup-registry.port.js';
+export * from './idempotency/in-memory-dedup-registry-port.js';
 
-export * from './evidence/run-step-evidence.store.ts';
+export * from './evidence/run-step-evidence.store.js';
 
-export * from './recovery/recovery-checkpoint.store.ts';
+export * from './recovery/recovery-checkpoint.store.js';
 
-export * from './leases/lease-store.ts';
+export * from './leases/lease-store.js';
 
-export * from './queue/dead-letter-replay.store.ts';
+export * from './queue/dead-letter-replay.store.js';
 
-export * from './locks/distributed-lock.store.ts';
+export * from './locks/distributed-lock.store.js';
 
-export * from './audit/immutable-audit-log.ts';
+export * from './audit/immutable-audit-log.js';
 
-export * from './rollout/rollout-config.store.ts';
+export * from './rollout/rollout-config.store.js';

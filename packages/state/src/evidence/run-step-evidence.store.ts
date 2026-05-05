@@ -1,5 +1,5 @@
-import type { RunStepLogEntry } from '../../../core/src/index.ts';
-import type { StateStore } from '../StateStore.ts';
+import type { RunStepLogEntry } from '@ai-orchestrator/core';
+import type { StateStore } from '../StateStore.js';
 
 export interface RunStepEvidenceStore {
   append: (entry: RunStepLogEntry) => Promise<void>;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildDocsWriterPrompt } from '../packages/prompts/src/index.ts';
+import { buildDocsWriterPrompt } from '@ai-orchestrator/prompts';
 
 test('buildDocsWriterPrompt exposes structured documentation schema', () => {
   const prompt = buildDocsWriterPrompt({

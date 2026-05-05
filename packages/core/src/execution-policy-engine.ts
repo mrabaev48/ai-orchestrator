@@ -5,7 +5,7 @@ import type {
   ToolExecutionPolicy,
   ToolPermissionScope,
   ToolProfile,
-} from './roles.ts';
+} from './roles.js';
 
 export interface ExecutionPolicyRule {
   maxChangedFiles: number;

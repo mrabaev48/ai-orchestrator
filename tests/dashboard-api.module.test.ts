@@ -3,9 +3,9 @@ import test from 'node:test';
 
 import { Test } from '@nestjs/testing';
 
-import { createDashboardApiRootModule } from '../apps/dashboard-api/src/dashboard-api.module.ts';
-import { DashboardQueryService } from '../packages/application/src/index.ts';
-import type { DashboardApiConfig } from '../apps/dashboard-api/src/config/dashboard-config.ts';
+import { createDashboardApiRootModule } from '@ai-orchestrator/dashboard-api';
+import { DashboardQueryService } from '@ai-orchestrator/application';
+import type { DashboardApiConfig } from '@ai-orchestrator/dashboard-api';
 
 test('DashboardApiModule wires DashboardQueryService provider', async () => {
   const moduleRef = await Test.createTestingModule({

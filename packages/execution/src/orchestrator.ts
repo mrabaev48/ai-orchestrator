@@ -1,4 +1,4 @@
-import { buildIdempotencyKey, type ApprovalRequest, type ArtifactRecord, type BacklogTask, type ExecutionPolicyActionType, type ProjectState } from '../../core/src/index.ts';
+import { buildIdempotencyKey, type ApprovalRequest, type ArtifactRecord, type BacklogTask, type ExecutionPolicyActionType, type ProjectState } from '@ai-orchestrator/core';
 import {
   assertProjectState,
   formatPolicyDecisionError,
@@ -6,35 +6,35 @@ import {
   makeEvent,
   classifyExecutionPolicyActionRisk,
   classifyApprovalRequestedActionRisk,
-} from '../../core/src/index.ts';
+} from '@ai-orchestrator/core';
 import {
   defaultExecutionPolicyEngine,
   defaultRoleOutputSchemaRegistry,
   validateRoleResponse,
-} from '../../core/src/index.ts';
-import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
-import { SchemaValidationError, StepCancelledError, StepTimeoutError, WorkflowPolicyError } from '../../shared/src/index.ts';
+} from '@ai-orchestrator/core';
+import type { Logger, RuntimeConfig } from '@ai-orchestrator/shared';
+import { SchemaValidationError, StepCancelledError, StepTimeoutError, WorkflowPolicyError } from '@ai-orchestrator/shared';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { StateStore } from '../../state/src/index.ts';
-import type { ToolSet } from '../../tools/src/index.ts';
-import { createLocalToolSet } from '../../tools/src/index.ts';
-import { createLockAuthority, type LockAuthority } from './lock-authority.ts';
-import { createFencingTokenGuard, type FencingTokenGuard } from './locks/fencing-token-guard.ts';
-import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.ts';
-import { buildPreflightPolicyGateDecisionRequest } from './gates/preflight-policy-gate.ts';
-import { buildPostflightPolicyGateDecisionRequest } from './finalize/postflight-policy.ts';
-import { buildStepPolicyGateRequest } from './steps/step-policy-gate.ts';
+import type { StateStore } from '@ai-orchestrator/state';
+import type { ToolSet } from '@ai-orchestrator/tools';
+import { createLocalToolSet } from '@ai-orchestrator/tools';
+import { createLockAuthority, type LockAuthority } from './lock-authority.js';
+import { createFencingTokenGuard, type FencingTokenGuard } from './locks/fencing-token-guard.js';
+import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.js';
+import { buildPreflightPolicyGateDecisionRequest } from './gates/preflight-policy-gate.js';
+import { buildPostflightPolicyGateDecisionRequest } from './finalize/postflight-policy.js';
+import { buildStepPolicyGateRequest } from './steps/step-policy-gate.js';
 import {
   createWorkspaceManager,
   type ManagedWorkspace,
   type WorkspaceManager,
-} from './workspace-manager.ts';
-import { completeSideEffect, reserveSideEffect } from './idempotency/side-effect-dedup-guard.ts';
-import { appendRunStepEvidence } from './evidence/append-run-step-evidence.ts';
-import { createRunStepEvidenceStore } from '../../state/src/evidence/run-step-evidence.store.ts';
-import { createDistributedLockStore } from './locks/distributed-lock-store-factory.ts';
+} from './workspace-manager.js';
+import { completeSideEffect, reserveSideEffect } from './idempotency/side-effect-dedup-guard.js';
+import { appendRunStepEvidence } from './evidence/append-run-step-evidence.js';
+import { createRunStepEvidenceStore } from '@ai-orchestrator/state';
+import { createDistributedLockStore } from './locks/distributed-lock-store-factory.js';
 import {
   nextFailureAction,
   requiresReview,
@@ -42,8 +42,8 @@ import {
   routeTaskToRole,
   splitTaskForRetry,
   shouldStopRun,
-} from '../../workflow/src/index.ts';
-import type { RoleRegistry } from '../../agents/src/index.ts';
+} from '@ai-orchestrator/workflow';
+import type { RoleRegistry } from '@ai-orchestrator/agents';
 import type {
   AgentRole,
   RoleObservation,
@@ -52,9 +52,9 @@ import type {
   RoleResponse,
   RoleStepResult,
   ToolCallRequest,
-} from '../../core/src/roles.ts';
-import type { RunStepLogEntry } from '../../core/src/index.ts';
-import type { QualityStageResult } from '../../core/src/testing.ts';
+} from '@ai-orchestrator/core';
+import type { RunStepLogEntry } from '@ai-orchestrator/core';
+import type { QualityStageResult } from '@ai-orchestrator/core';
 const execFileAsync = promisify(execFile);
 
 export interface RunCycleResult {

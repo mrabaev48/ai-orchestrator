@@ -1,12 +1,12 @@
-import type { DedupRegistryRecord } from '../../../core/src/index.ts';
+import type { DedupRegistryRecord } from '@ai-orchestrator/core';
 import type {
   DedupFinalizeCommand,
   DedupFinalizeResult,
   DedupRegistryPort,
   DedupReserveCommand,
   DedupReserveResult,
-} from './dedup-registry.port.ts';
-import { finalizeDedupEntry, reserveDedupEntry } from './dedup-registry.ts';
+} from './dedup-registry.port.js';
+import { finalizeDedupEntry, reserveDedupEntry } from './dedup-registry.js';
 
 export class InMemoryDedupRegistryPort implements DedupRegistryPort {
   private readonly registry: Record<string, DedupRegistryRecord>;

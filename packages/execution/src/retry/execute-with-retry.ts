@@ -1,5 +1,5 @@
-import { getRetrySchedule, type RetryPolicy } from '../../../core/src/retry/retry-policy.ts';
-import { propagateAbort } from '../cancellation/propagate-abort.ts';
+import { getRetrySchedule, type RetryPolicy } from '@ai-orchestrator/core';
+import { propagateAbort } from '../cancellation/propagate-abort.js';
 
 export interface RetryFailure {
   code: string;

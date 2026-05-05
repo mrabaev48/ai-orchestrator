@@ -6,9 +6,9 @@ import {
   EtcdLockAuthority,
   NoopLockAuthority,
   RedisLockAuthority,
-} from '../packages/execution/src/index.ts';
-import { ConfigError, WorkflowPolicyError } from '../packages/shared/src/index.ts';
-import type { RuntimeConfig } from '../packages/shared/src/index.ts';
+} from '@ai-orchestrator/execution';
+import { ConfigError, WorkflowPolicyError } from '@ai-orchestrator/shared';
+import type { RuntimeConfig } from '@ai-orchestrator/shared';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {

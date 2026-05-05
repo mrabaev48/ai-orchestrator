@@ -4,11 +4,11 @@ import test from 'node:test';
 
 import request from 'supertest';
 
-import { createDashboardApiApp } from '../apps/dashboard-api/src/bootstrap.ts';
-import { createDashboardAuthMiddleware } from '../apps/dashboard-api/src/security/dashboard-auth.middleware.ts';
-import { verifyHs256Jwt } from '../apps/dashboard-api/src/security/jwt.ts';
-import type { DashboardRuntimeContext } from '../apps/dashboard-api/src/config/dashboard-config.ts';
-import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
+import { createDashboardApiApp } from '@ai-orchestrator/dashboard-api';
+import { createDashboardAuthMiddleware } from '@ai-orchestrator/dashboard-api';
+import { verifyHs256Jwt } from '@ai-orchestrator/dashboard-api';
+import type { DashboardRuntimeContext } from '@ai-orchestrator/dashboard-api';
+import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {

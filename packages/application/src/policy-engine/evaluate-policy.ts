@@ -1,5 +1,5 @@
-import { policyOutcomeSchema, type PolicyOutcome, type PolicyOutcomeType } from '../../../core/src/policy/policy-outcome.ts';
-import type { ExecutionPolicyRiskLevel } from '../../../core/src/execution-policy-decision.ts';
+import { policyOutcomeSchema, type PolicyOutcome, type PolicyOutcomeType } from '@ai-orchestrator/core';
+import type { ExecutionPolicyRiskLevel } from '@ai-orchestrator/core';
 
 export interface EvaluatePolicyInput {
   riskLevel: ExecutionPolicyRiskLevel;

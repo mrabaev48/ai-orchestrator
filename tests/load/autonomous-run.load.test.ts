@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { executeWithRetry } from '../../packages/execution/src/retry/execute-with-retry.ts';
-import { resumeFromCheckpoint } from '../../packages/execution/src/recovery/resume-from-checkpoint.ts';
-import type { RecoveryCheckpoint, RecoveryCheckpointStore } from '../../packages/state/src/recovery/recovery-checkpoint.store.ts';
-import type { RunStepLogEntry } from '../../packages/core/src/index.ts';
+import { executeWithRetry } from '@ai-orchestrator/execution';
+import { resumeFromCheckpoint } from '@ai-orchestrator/execution';
+import type { RecoveryCheckpoint, RecoveryCheckpointStore } from '@ai-orchestrator/state';
+import type { RunStepLogEntry } from '@ai-orchestrator/core';
 
 class InMemoryCheckpointStore implements RecoveryCheckpointStore {
   readonly checkpoints = new Map<string, RecoveryCheckpoint>();

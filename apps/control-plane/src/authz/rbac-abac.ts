@@ -2,8 +2,8 @@ import {
   evaluateControlPlaneAccess,
   type AccessRequest,
   type ControlPlaneAction,
-} from '../../../../packages/application/src/authorization/evaluate-access.ts';
-import { SafetyViolationError } from '../../../../packages/shared/src/index.ts';
+} from '@ai-orchestrator/application';
+import { SafetyViolationError } from '@ai-orchestrator/shared';
 
 export interface CliAuthzInput {
   readonly command: string;

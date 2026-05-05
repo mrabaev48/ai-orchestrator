@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { executeCommitPrepareStage, compensateCommitPrepareStage } from './commit-prepare.ts';
-import { executePushPrepareStage, compensatePushPrepareStage } from './push-prepare.ts';
+import { executeCommitPrepareStage, compensateCommitPrepareStage } from './commit-prepare.js';
+import { executePushPrepareStage, compensatePushPrepareStage } from './push-prepare.js';
 
-import { executePrDraftPrepareStage } from './pr-draft-prepare.ts';
-import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.ts';
+import { executePrDraftPrepareStage } from './pr-draft-prepare.js';
+import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.js';
 
 const context: RepoMutationPipelineContext = {
   runId: 'run-29',

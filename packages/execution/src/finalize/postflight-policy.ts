@@ -1,5 +1,5 @@
-import type { BacklogTask, ProjectState } from '../../../core/src/index.ts';
-import type { ExecutionPolicyActionType } from '../../../core/src/index.ts';
+import type { BacklogTask, ProjectState } from '@ai-orchestrator/core';
+import type { ExecutionPolicyActionType } from '@ai-orchestrator/core';
 
 export interface PostflightPolicyGateInput {
   state: ProjectState;

@@ -1,3 +1,3 @@
-export * from './policies.ts';
-export * from './task-splitting.ts';
-export * from './workflow-stage.ts';
+export * from './policies.js';
+export * from './task-splitting.js';
+export * from './workflow-stage.js';

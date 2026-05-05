@@ -3,11 +3,11 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
-import { createDashboardApiRootModule } from './dashboard-api.module.ts';
-import { HttpExceptionFilter } from './common/http-exception.filter.ts';
-import { NestStructuredLogger } from './common/nest-logger.ts';
-import type { DashboardRuntimeContext } from './config/dashboard-config.ts';
-import { createDashboardAuthMiddleware } from './security/dashboard-auth.middleware.ts';
+import { createDashboardApiRootModule } from './dashboard-api.module.js';
+import { HttpExceptionFilter } from './common/http-exception.filter.js';
+import { NestStructuredLogger } from './common/nest-logger.js';
+import type { DashboardRuntimeContext } from './config/dashboard-config.js';
+import { createDashboardAuthMiddleware } from './security/dashboard-auth.middleware.js';
 
 export async function createDashboardApiApp(runtimeContext: DashboardRuntimeContext) {
   const app = await NestFactory.create(createDashboardApiRootModule(runtimeContext.config), {

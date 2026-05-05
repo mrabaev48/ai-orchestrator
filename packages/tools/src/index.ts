@@ -5,27 +5,28 @@ import {
   type UnifiedToolAdapter,
   type UnifiedToolRequest,
   type UnifiedToolResult,
-} from './contracts.ts';
+} from './contracts.js';
 import path from 'node:path';
-import { createEvidenceToolAdapter } from './evidence/adapter.ts';
+import { createEvidenceToolAdapter } from './evidence/adapter.js';
 import {
   createFileSystemToolAdapter,
   type FileSystemTool,
-} from './filesystem/adapter.ts';
-import { createGitToolAdapter, type GitTool } from './git/adapter.ts';
-import { createToolPolicyAdapter, type ToolPolicyConfig } from './policy/adapter.ts';
-import { createTypeScriptToolAdapter, type TypeScriptTool } from './typescript/adapter.ts';
-import { createShellToolAdapter } from './shell/adapter.ts';
-import { createTestingToolAdapter } from './testing/adapter.ts';
-import { createDiffToolAdapter } from './diff/adapter.ts';
-import { createSearchToolAdapter } from './search/adapter.ts';
-import { withToolTimeout } from './runtime/with-timeout.ts';
-import { validateToolInput, validateToolOutput } from './contracts/input-output-schemas.ts';
-import { normalizeToolError } from './errors/tool-error-envelope.ts';
+} from './filesystem/adapter.js';
+import { createGitToolAdapter, type GitTool } from './git/adapter.js';
+import { createToolPolicyAdapter, type ToolPolicyConfig } from './policy/adapter.js';
+import { createTypeScriptToolAdapter, type TypeScriptTool } from './typescript/adapter.js';
+import { createShellToolAdapter } from './shell/adapter.js';
+import { createTestingToolAdapter } from './testing/adapter.js';
+import { createDiffToolAdapter } from './diff/adapter.js';
+import { createSearchToolAdapter } from './search/adapter.js';
+import { withToolTimeout } from './runtime/with-timeout.js';
+import { validateToolInput, validateToolOutput } from './contracts/input-output-schemas.js';
+import { normalizeToolError } from './errors/tool-error-envelope.js';
 
-export type { ToolExecutionRecord, ToolAdapterName } from './contracts.ts';
+export type { ToolExecutionRecord, ToolAdapterName } from './contracts.js';
 export type { FileSystemTool, GitTool, TypeScriptTool };
-export type { SafeWriteMode } from './policy/adapter.ts';
+export type { SafeWriteMode } from './policy/adapter.js';
+export { ToolExecutionContractError } from './contracts.js';
 
 export interface ToolSet {
   fileSystem: FileSystemTool;
@@ -165,6 +166,10 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
   };
 }
 
-export * from './verification/run-verification-suite.ts';
+export * from './verification/run-verification-suite.js';
 
-export * from './secrets/redaction.ts';
+export * from './secrets/redaction.js';
+export * from './patch/apply-patch.js';
+export * from './workspace/snapshot.js';
+export * from './runtime/abort-aware-adapter.js';
+export * from './errors/tool-error-envelope.js';

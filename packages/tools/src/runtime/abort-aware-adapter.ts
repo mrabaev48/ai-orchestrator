@@ -1,4 +1,4 @@
-import { ToolExecutionContractError } from '../contracts.ts';
+import { ToolExecutionContractError } from '../contracts.js';
 
 export interface AbortAwareSignal {
   signal: AbortSignal;

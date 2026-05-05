@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildReleaseAssessmentPrompt } from '../packages/prompts/src/index.ts';
+import { buildReleaseAssessmentPrompt } from '@ai-orchestrator/prompts';
 
 test('buildReleaseAssessmentPrompt exposes release assessment schema', () => {
   const prompt = buildReleaseAssessmentPrompt({

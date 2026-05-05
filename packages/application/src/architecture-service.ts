@@ -1,19 +1,19 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import type { RoleRegistry } from '../../agents/src/index.ts';
+import type { RoleRegistry } from '@ai-orchestrator/agents';
 import {
   defaultExecutionPolicyEngine,
   assertProjectState,
   makeEvent,
   type ArchitectureAnalysis,
   type ProjectState,
-} from '../../core/src/index.ts';
-import { buildArchitectureAnalysisPrompt } from '../../prompts/src/index.ts';
-import type { Logger } from '../../shared/src/index.ts';
-import type { StateStore } from '../../state/src/index.ts';
-import type { RoleRequest } from '../../core/src/roles.ts';
-import { assertRoleOutput } from './role-output-validation.ts';
+} from '@ai-orchestrator/core';
+import { buildArchitectureAnalysisPrompt } from '@ai-orchestrator/prompts';
+import type { Logger } from '@ai-orchestrator/shared';
+import type { StateStore } from '@ai-orchestrator/state';
+import type { RoleRequest } from '@ai-orchestrator/core';
+import { assertRoleOutput } from './role-output-validation.js';
 
 export class ArchitectureService {
   private readonly stateStore: StateStore;

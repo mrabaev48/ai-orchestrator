@@ -1,4 +1,4 @@
-import type { Logger } from '../../shared/src/index.ts';
+import type { Logger } from '@ai-orchestrator/shared';
 
 export type AgentRoleName =
   | 'bootstrap_analyst'

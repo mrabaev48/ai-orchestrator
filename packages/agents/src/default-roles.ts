@@ -1,19 +1,19 @@
-import type { BacklogTask } from '../../core/src/backlog.ts';
+import type { BacklogTask } from '@ai-orchestrator/core';
 import type {
   ArchitectureAnalysis,
   ArchitectureFinding,
-} from '../../core/src/architecture-findings.ts';
-import type { FailureRecord } from '../../core/src/failures.ts';
-import type { ProjectDiscovery } from '../../core/src/discovery.ts';
-import type { Backlog, Epic, Feature, Priority } from '../../core/src/backlog.ts';
-import type { Milestone } from '../../core/src/milestones.ts';
-import type { ReleaseAssessment } from '../../core/src/release-assessment.ts';
-import type { StateIntegrityAssessment, StateIntegrityFinding } from '../../core/src/state-integrity.ts';
+} from '@ai-orchestrator/core';
+import type { FailureRecord } from '@ai-orchestrator/core';
+import type { ProjectDiscovery } from '@ai-orchestrator/core';
+import type { Backlog, Epic, Feature, Priority } from '@ai-orchestrator/core';
+import type { Milestone } from '@ai-orchestrator/core';
+import type { ReleaseAssessment } from '@ai-orchestrator/core';
+import type { StateIntegrityAssessment, StateIntegrityFinding } from '@ai-orchestrator/core';
 import type {
   IntegrationExportPayload,
   IntegrationExportRecord,
-} from '../../core/src/integration-export.ts';
-import type { ReviewResult } from '../../core/src/review.ts';
+} from '@ai-orchestrator/core';
+import type { ReviewResult } from '@ai-orchestrator/core';
 import type {
   AgentRole,
   AgentRoleName,
@@ -21,12 +21,12 @@ import type {
   RoleExecutionContext,
   RoleRequest,
   RoleResponse,
-} from '../../core/src/roles.ts';
-import type { QualityStageResult, TestExecutionResult } from '../../core/src/testing.ts';
-import type { ProjectState } from '../../core/src/project-state.ts';
-import type { OptimizedPrompt } from '../../prompts/src/index.ts';
-import { PromptPipeline } from '../../prompts/src/index.ts';
-import { selectNextTask } from '../../workflow/src/index.ts';
+} from '@ai-orchestrator/core';
+import type { QualityStageResult, TestExecutionResult } from '@ai-orchestrator/core';
+import type { ProjectState } from '@ai-orchestrator/core';
+import type { OptimizedPrompt } from '@ai-orchestrator/prompts';
+import { PromptPipeline } from '@ai-orchestrator/prompts';
+import { selectNextTask } from '@ai-orchestrator/workflow';
 
 interface BootstrapRepositorySnapshot {
   rootPath: string;

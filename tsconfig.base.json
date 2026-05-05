@@ -1,0 +1,64 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "ES2023"
+    ],
+    "target": "ES2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noImplicitAny": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@ai-orchestrator/shared": [
+        "packages/shared/src/index.ts"
+      ],
+      "@ai-orchestrator/core": [
+        "packages/core/src/index.ts"
+      ],
+      "@ai-orchestrator/workflow": [
+        "packages/workflow/src/index.ts"
+      ],
+      "@ai-orchestrator/prompts": [
+        "packages/prompts/src/index.ts"
+      ],
+      "@ai-orchestrator/agents": [
+        "packages/agents/src/index.ts"
+      ],
+      "@ai-orchestrator/state": [
+        "packages/state/src/index.ts"
+      ],
+      "@ai-orchestrator/tools": [
+        "packages/tools/src/index.ts"
+      ],
+      "@ai-orchestrator/execution": [
+        "packages/execution/src/index.ts"
+      ],
+      "@ai-orchestrator/application": [
+        "packages/application/src/index.ts"
+      ],
+      "@ai-orchestrator/llm": [
+        "packages/llm/src/index.ts"
+      ],
+      "@ai-orchestrator/control-plane": [
+        "apps/control-plane/src/index.ts"
+      ],
+      "@ai-orchestrator/dashboard-api": [
+        "apps/dashboard-api/src/index.ts"
+      ],
+      "@ai-orchestrator/worker": [
+        "apps/worker/src/index.ts"
+      ]
+    }
+  }
+}

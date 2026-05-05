@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluatePolicy } from '../packages/application/src/index.ts';
-import { validatePolicyOutcome } from '../packages/core/src/index.ts';
-import { validatePolicyDecisionRecord } from '../packages/state/src/index.ts';
+import { evaluatePolicy } from '@ai-orchestrator/application';
+import { validatePolicyOutcome } from '@ai-orchestrator/core';
+import { validatePolicyDecisionRecord } from '@ai-orchestrator/state';
 
 test('evaluatePolicy returns allow for low-risk healthy policy backend', () => {
   const outcome = evaluatePolicy({

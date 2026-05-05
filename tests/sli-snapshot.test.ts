@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { DomainEvent } from '../packages/core/src/index.ts';
-import { buildSliSnapshotFromEvents } from '../packages/state/src/metrics/sli-snapshot.ts';
+import type { DomainEvent } from '@ai-orchestrator/core';
+import { buildSliSnapshotFromEvents } from '@ai-orchestrator/state';
 
 function event(eventType: DomainEvent['eventType'], payload: Record<string, unknown>): DomainEvent {
   return {

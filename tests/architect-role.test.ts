@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ArchitectRole } from '../packages/agents/src/index.ts';
-import { createEmptyProjectDiscovery } from '../packages/core/src/index.ts';
+import { ArchitectRole } from '@ai-orchestrator/agents';
+import { createEmptyProjectDiscovery } from '@ai-orchestrator/core';
 
 test('ArchitectRole produces structured findings from discovery and source import evidence', async () => {
   const role = new ArchitectRole();

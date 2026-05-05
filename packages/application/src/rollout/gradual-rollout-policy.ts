@@ -1,4 +1,4 @@
-import type { RolloutConfigStore, RolloutRiskTier, GradualRolloutRule } from '../../../state/src/rollout/rollout-config.store.ts';
+import type { RolloutConfigStore, RolloutRiskTier, GradualRolloutRule } from '@ai-orchestrator/state';
 
 export interface GradualRolloutRequest {
   tenantId: string;

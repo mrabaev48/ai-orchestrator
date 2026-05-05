@@ -2,10 +2,10 @@ import type {
   ToolExecutionOptions,
   UnifiedToolAdapter,
   UnifiedToolRequest,
-} from '../contracts.ts';
-import type { ToolPolicyAdapter } from '../policy/adapter.ts';
-import type { ShellExecResult } from '../shell/adapter.ts';
-import { createShellToolAdapter } from '../shell/adapter.ts';
+} from '../contracts.js';
+import type { ToolPolicyAdapter } from '../policy/adapter.js';
+import type { ShellExecResult } from '../shell/adapter.js';
+import { createShellToolAdapter } from '../shell/adapter.js';
 
 export interface TestingToolAdapter extends UnifiedToolAdapter {
   readonly name: 'testing';

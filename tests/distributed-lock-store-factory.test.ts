@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createDistributedLockStore } from '../packages/execution/src/locks/distributed-lock-store-factory.ts';
-import { type RuntimeConfig } from '../packages/shared/src/index.ts';
+import { createDistributedLockStore } from '@ai-orchestrator/execution';
+import { type RuntimeConfig } from '@ai-orchestrator/shared';
 
 function makeConfig(overrides: Partial<RuntimeConfig['workflow']> = {}): RuntimeConfig {
   return {

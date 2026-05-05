@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { evaluateProductionReadinessReview } from './readiness-review.ts';
+import { evaluateProductionReadinessReview } from './readiness-review.js';
 
 void test('ReadinessReview: returns not_ready when a blocker check fails', () => {
   const result = evaluateProductionReadinessReview({

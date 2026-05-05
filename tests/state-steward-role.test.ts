@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { StateStewardRole } from '../packages/agents/src/index.ts';
+import { StateStewardRole } from '@ai-orchestrator/agents';
 
 test('StateStewardRole maps validation issues into repair guidance', async () => {
   const role = new StateStewardRole();

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildIntegrationExportPrompt } from '../packages/prompts/src/index.ts';
+import { buildIntegrationExportPrompt } from '@ai-orchestrator/prompts';
 
 test('buildIntegrationExportPrompt exposes export payload schema', () => {
   const prompt = buildIntegrationExportPrompt({

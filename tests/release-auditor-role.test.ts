@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ReleaseAuditorRole } from '../packages/agents/src/index.ts';
+import { ReleaseAuditorRole } from '@ai-orchestrator/agents';
 
 test('ReleaseAuditorRole classifies blockers and warnings into a structured verdict', async () => {
   const role = new ReleaseAuditorRole();

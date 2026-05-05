@@ -4,7 +4,7 @@ import {
   type ActionRiskClassification,
   type ApprovalRequestedAction,
   type ExecutionPolicyActionType,
-} from '../../../core/src/index.ts';
+} from '@ai-orchestrator/core';
 
 export function mapExecutionPolicyActionRisk(actionType: ExecutionPolicyActionType): ActionRiskClassification<ExecutionPolicyActionType> {
   return classifyExecutionPolicyActionRisk(actionType);

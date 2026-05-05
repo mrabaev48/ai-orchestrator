@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { policyOutcomeSchema, type PolicyOutcome } from '../../../core/src/policy/policy-outcome.ts';
+import { policyOutcomeSchema, type PolicyOutcome } from '@ai-orchestrator/core';
 
 export interface PolicyDecisionRecord {
   decisionId: string;

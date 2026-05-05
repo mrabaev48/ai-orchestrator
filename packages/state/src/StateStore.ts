@@ -8,9 +8,9 @@ import type {
   RunStepLogEntry,
   ExecutionPolicyActionType,
   ExecutionPolicyDecision,
-} from '../../core/src/index.ts';
-import type { AgentRoleName } from '../../core/src/roles.ts';
-import type { FailureStatus } from '../../core/src/failures.ts';
+} from '@ai-orchestrator/core';
+import type { AgentRoleName } from '@ai-orchestrator/core';
+import type { FailureStatus } from '@ai-orchestrator/core';
 
 export interface RecordFailureInput {
   taskId: string;

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   createEmptyProjectState,
   validateProjectState,
-} from '../packages/core/src/index.ts';
+} from '@ai-orchestrator/core';
 
 test('validateProjectState accepts a minimal empty state', () => {
   const state = createEmptyProjectState({

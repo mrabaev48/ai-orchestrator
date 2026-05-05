@@ -1,4 +1,4 @@
-import type { ProjectState } from './project-state.ts';
+import type { ProjectState } from './project-state.js';
 
 export type MilestoneStatus = 'todo' | 'in_progress' | 'done' | 'blocked';
 

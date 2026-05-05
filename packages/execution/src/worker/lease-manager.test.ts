@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { LogEntry, Logger } from '../../../shared/src/index.ts';
-import { QueueLeaseManager } from './lease-manager.ts';
-import { InMemoryQueueLeaseStore } from '../../../state/src/leases/lease-store.ts';
+import type { LogEntry, Logger } from '@ai-orchestrator/shared';
+import { QueueLeaseManager } from './lease-manager.js';
+import { InMemoryQueueLeaseStore } from '@ai-orchestrator/state';
 
 const noop = (): void => undefined;
 

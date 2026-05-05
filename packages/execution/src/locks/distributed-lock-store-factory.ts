@@ -1,21 +1,28 @@
-import { ConfigError } from '../../../shared/src/index.ts';
-import type { RuntimeConfig } from '../../../shared/src/index.ts';
+import { ConfigError } from '@ai-orchestrator/shared';
+import type { RuntimeConfig } from '@ai-orchestrator/shared';
 import {
   InMemoryDistributedLockStore,
   type DistributedLockLease,
   type DistributedLockStore,
-} from '../../../state/src/locks/distributed-lock.store.ts';
+} from '@ai-orchestrator/state';
 
 interface RedisLike {
+  connect: () => Promise<void>;
   set: (key: string, value: string, options?: { NX?: boolean; PX?: number }) => Promise<unknown>;
   get: (key: string) => Promise<string | null>;
   incr: (key: string) => Promise<number>;
   eval: (script: string, options: { keys: string[]; arguments: string[] }) => Promise<unknown>;
 }
+interface RedisModuleLike {
+  createClient: (options: { url: string }) => RedisLike;
+}
 interface PgPoolLike { connect: () => Promise<PgClientLike>; }
 interface PgClientLike {
   query: (sql: string, values?: readonly unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
   release: () => void;
+}
+interface PgModuleLike {
+  Pool: new (options: { connectionString: string }) => PgPoolLike;
 }
 interface EtcdLeaseLike {
   put: (key: string) => { value: (value: string, options?: { prevNoExist?: boolean }) => Promise<unknown> };
@@ -26,6 +33,9 @@ interface EtcdClientLike {
   get: (key: string) => { string: () => Promise<string | null>; exec?: () => Promise<unknown> };
   if: (key: string, compare: string, value: string) => { then: (op: unknown) => { commit: () => Promise<{ succeeded: boolean }> } };
   delete: () => { key: (key: string) => unknown };
+}
+interface EtcdModuleLike {
+  Etcd3: new (options: { hosts: string }) => EtcdClientLike;
 }
 
 export function createDistributedLockStore(config: RuntimeConfig): DistributedLockStore {
@@ -204,18 +214,51 @@ async function ensurePgSchema(client: PgClientLike): Promise<void> {
   await client.query('CREATE TABLE IF NOT EXISTS workflow_fencing_locks(resource text PRIMARY KEY, lease_payload jsonb NOT NULL)');
 }
 async function loadRedisClient(dsn: string): Promise<RedisLike> {
-  const module = await import('redis').catch(() => { throw new ConfigError('Redis fencing store requires `redis` package'); });
+  const module = asRedisModule(await importOptionalModule('redis', 'Redis fencing store requires `redis` package'));
   const client = module.createClient({ url: dsn });
   await client.connect();
-  return client as unknown as RedisLike;
+  return client;
 }
 async function loadPostgresPool(dsn: string): Promise<PgPoolLike> {
-  const module = await import('pg').catch(() => { throw new ConfigError('PostgreSQL fencing store requires `pg` package'); });
+  const module = asPgModule(await importOptionalModule('pg', 'PostgreSQL fencing store requires `pg` package'));
   return new module.Pool({ connectionString: dsn });
 }
 async function loadEtcdClient(dsn: string): Promise<EtcdClientLike> {
-  const module = await import('etcd3').catch(() => { throw new ConfigError('Etcd fencing store requires `etcd3` package'); });
-  return new module.Etcd3({ hosts: dsn }) as EtcdClientLike;
+  const module = asEtcdModule(await importOptionalModule('etcd3', 'Etcd fencing store requires `etcd3` package'));
+  return new module.Etcd3({ hosts: dsn });
+}
+
+async function importOptionalModule(moduleName: string, errorMessage: string): Promise<unknown> {
+  try {
+    return await import(moduleName);
+  } catch {
+    throw new ConfigError(errorMessage);
+  }
+}
+
+function asRedisModule(module: unknown): RedisModuleLike {
+  if (isRecord(module) && typeof module.createClient === 'function') {
+    return module as unknown as RedisModuleLike;
+  }
+  throw new ConfigError('Redis fencing store loaded an invalid `redis` module');
+}
+
+function asPgModule(module: unknown): PgModuleLike {
+  if (isRecord(module) && typeof module.Pool === 'function') {
+    return module as unknown as PgModuleLike;
+  }
+  throw new ConfigError('PostgreSQL fencing store loaded an invalid `pg` module');
+}
+
+function asEtcdModule(module: unknown): EtcdModuleLike {
+  if (isRecord(module) && typeof module.Etcd3 === 'function') {
+    return module as unknown as EtcdModuleLike;
+  }
+  throw new ConfigError('Etcd fencing store loaded an invalid `etcd3` module');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function parseLeasePayload(payload: unknown): DistributedLockLease {

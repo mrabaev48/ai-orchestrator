@@ -1,17 +1,17 @@
-import { validateArchitectureFinding, type ArchitectureAnalysis } from './architecture-findings.ts';
-import { validateBacklogTask, type BacklogTask } from './backlog.ts';
-import { validateProjectDiscovery, type ProjectDiscovery } from './discovery.ts';
+import { validateArchitectureFinding, type ArchitectureAnalysis } from './architecture-findings.js';
+import { validateBacklogTask, type BacklogTask } from './backlog.js';
+import { validateProjectDiscovery, type ProjectDiscovery } from './discovery.js';
 import {
   validateIntegrationExportPayload,
   type IntegrationExportPayload,
-} from './integration-export.ts';
-import { validateReleaseAssessment, type ReleaseAssessment } from './release-assessment.ts';
-import type { ReviewResult } from './review.ts';
-import { validateStateIntegrityAssessment, type StateIntegrityAssessment } from './state-integrity.ts';
-import type { TestExecutionResult } from './testing.ts';
-import type { AgentRoleName, RoleResponse } from './roles.ts';
-import type { Backlog } from './backlog.ts';
-import type { Milestone } from './milestones.ts';
+} from './integration-export.js';
+import { validateReleaseAssessment, type ReleaseAssessment } from './release-assessment.js';
+import type { ReviewResult } from './review.js';
+import { validateStateIntegrityAssessment, type StateIntegrityAssessment } from './state-integrity.js';
+import type { TestExecutionResult } from './testing.js';
+import type { AgentRoleName, RoleResponse } from './roles.js';
+import type { Backlog } from './backlog.js';
+import type { Milestone } from './milestones.js';
 
 type PlannerOutput = {
   milestone: Milestone;

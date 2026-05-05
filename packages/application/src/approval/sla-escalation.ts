@@ -1,4 +1,4 @@
-import type { ApprovalRequest } from '../../../core/src/index.ts';
+import type { ApprovalRequest } from '@ai-orchestrator/core';
 
 export interface ApprovalSlaPolicy {
   readonly reminderAfterMs: number;

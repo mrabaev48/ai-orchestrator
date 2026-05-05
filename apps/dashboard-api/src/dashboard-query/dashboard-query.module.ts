@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 
-import { DashboardReadModelModule } from '../read-model/read-model.module.ts';
-import { DashboardQueryController } from './dashboard-query.controller.ts';
-import { DashboardReadApiService } from './dashboard-query.service.ts';
+import { DashboardReadModelModule } from '../read-model/read-model.module.js';
+import { DashboardQueryController } from './dashboard-query.controller.js';
+import { DashboardReadApiService } from './dashboard-query.service.js';
 
 @Module({
   imports: [DashboardReadModelModule],

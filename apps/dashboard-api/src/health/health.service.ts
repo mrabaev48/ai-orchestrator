@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { HealthIndicatorResult } from '@nestjs/terminus';
 
-import type { StateStore } from '../../../../packages/state/src/index.ts';
-import { STATE_STORE } from '../dashboard-api.tokens.ts';
+import type { StateStore } from '@ai-orchestrator/state';
+import { STATE_STORE } from '../dashboard-api.tokens.js';
 
 @Injectable()
 export class DashboardReadinessService {

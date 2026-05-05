@@ -2,7 +2,7 @@ import { accessSync, existsSync, readFileSync, statSync, constants as fsConstant
 import path from 'node:path';
 import { z } from 'zod';
 
-import { ConfigError } from '../errors/index.ts';
+import { ConfigError } from '../errors/index.js';
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
 

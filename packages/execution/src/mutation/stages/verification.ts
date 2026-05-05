@@ -2,8 +2,8 @@ import {
   runVerificationSuite,
   type VerificationGateCommand,
   type VerificationSuiteResult,
-} from '../../../../tools/src/verification/run-verification-suite.ts';
-import type { RepoMutationPipelineContext, RepoMutationStageResult } from '../../repo-mutation-pipeline.ts';
+} from '@ai-orchestrator/tools';
+import type { RepoMutationPipelineContext, RepoMutationStageResult } from '../../repo-mutation-pipeline.js';
 
 export interface VerificationStageInput {
   context: RepoMutationPipelineContext;

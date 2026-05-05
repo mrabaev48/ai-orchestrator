@@ -1,7 +1,7 @@
 import { inspect } from 'node:util';
 
-import type { RuntimeConfig } from '../config/runtime-config.ts';
-import { redactSecrets } from '../config/runtime-config.ts';
+import type { RuntimeConfig } from '../config/runtime-config.js';
+import { redactSecrets } from '../config/runtime-config.js';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type LogResult = 'ok' | 'fail';

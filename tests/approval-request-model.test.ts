@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   createImmutableApprovalRequest,
   type ImmutableApprovalRequest,
-} from '../packages/core/src/approval/approval-request.ts';
+} from '@ai-orchestrator/core';
 
 class InMemoryApprovalStore {
   private readonly entries = new Map<string, ImmutableApprovalRequest>();

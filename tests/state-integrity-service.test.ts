@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   StateIntegrityService,
   createRoleRegistry,
-} from '../packages/application/src/index.ts';
+} from '@ai-orchestrator/application';
 import {
   createEmptyProjectState,
   type ArtifactRecord,
@@ -12,9 +12,9 @@ import {
   type DomainEvent,
   type FailureRecord,
   type ProjectState,
-} from '../packages/core/src/index.ts';
-import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
-import type { RecordFailureInput, StateStore } from '../packages/state/src/StateStore.ts';
+} from '@ai-orchestrator/core';
+import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
+import type { RecordFailureInput, StateStore } from '@ai-orchestrator/state';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {

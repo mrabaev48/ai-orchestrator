@@ -1,6 +1,6 @@
-import type { AgentRoleName, RoleResponse } from '../../core/src/roles.ts';
-import { defaultRoleOutputSchemaRegistry, validateRoleResponse } from '../../core/src/index.ts';
-import { SchemaValidationError } from '../../shared/src/index.ts';
+import type { AgentRoleName, RoleResponse } from '@ai-orchestrator/core';
+import { defaultRoleOutputSchemaRegistry, validateRoleResponse } from '@ai-orchestrator/core';
+import { SchemaValidationError } from '@ai-orchestrator/shared';
 
 export function assertRoleOutput(role: AgentRoleName, response: RoleResponse<unknown>): void {
   const envelopeIssues = validateRoleResponse(role, response);

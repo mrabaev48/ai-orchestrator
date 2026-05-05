@@ -2,8 +2,8 @@ import type {
   ToolExecutionOptions,
   UnifiedToolAdapter,
   UnifiedToolRequest,
-} from '../contracts.ts';
-import type { GitTool } from '../git/adapter.ts';
+} from '../contracts.js';
+import type { GitTool } from '../git/adapter.js';
 
 export interface DiffToolAdapter extends UnifiedToolAdapter {
   readonly name: 'diff';

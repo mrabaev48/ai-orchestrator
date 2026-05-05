@@ -8,12 +8,12 @@ import {
   RoleRegistry,
   TaskManagerRole,
   TesterRole,
-} from '../packages/agents/src/index.ts';
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
-import type { DomainEventType } from '../packages/core/src/index.ts';
-import { Orchestrator } from '../packages/execution/src/index.ts';
-import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
-import { InMemoryStateStore } from '../packages/state/src/index.ts';
+} from '@ai-orchestrator/agents';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import type { DomainEventType } from '@ai-orchestrator/core';
+import { Orchestrator } from '@ai-orchestrator/execution';
+import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
+import { InMemoryStateStore } from '@ai-orchestrator/state';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PromptPipeline } from '../packages/prompts/src/index.ts';
+import { PromptPipeline } from '@ai-orchestrator/prompts';
 
 test('PromptPipeline injects acceptance criteria and failure constraints', () => {
   const pipeline = new PromptPipeline();

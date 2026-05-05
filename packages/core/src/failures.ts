@@ -1,4 +1,4 @@
-import type { AgentRoleName } from './roles.ts';
+import type { AgentRoleName } from './roles.js';
 
 export type FailureStatus = 'retryable' | 'dead_lettered' | 'resumed' | 'replayed';
 

@@ -1,4 +1,4 @@
-import type { ApprovalRequest, ApprovalRequestedAction } from '../../../core/src/index.ts';
+import type { ApprovalRequest, ApprovalRequestedAction } from '@ai-orchestrator/core';
 
 export interface ApprovalRoutingRule {
   readonly action: ApprovalRequestedAction;

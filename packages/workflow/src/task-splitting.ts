@@ -1,4 +1,4 @@
-import type { BacklogTask, Priority } from '../../core/src/backlog.ts';
+import type { BacklogTask, Priority } from '@ai-orchestrator/core';
 
 export interface SplitTaskPlan {
   parentTaskId: string;

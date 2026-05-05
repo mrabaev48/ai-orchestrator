@@ -5,7 +5,7 @@ import type {
   ToolExecutionOptions,
   UnifiedToolAdapter,
   UnifiedToolRequest,
-} from '../contracts.ts';
+} from '../contracts.js';
 
 const execFileAsync = promisify(execFile);
 

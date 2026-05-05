@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildMutationBranchName, executeBranchPrepareStage } from './branch-prepare.ts';
-import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.ts';
+import { buildMutationBranchName, executeBranchPrepareStage } from './branch-prepare.js';
+import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.js';
 
 const createContext = (): RepoMutationPipelineContext => ({
   runId: 'Run_26',

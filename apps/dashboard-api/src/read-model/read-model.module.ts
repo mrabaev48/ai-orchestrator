@@ -5,11 +5,11 @@ import {
   DEFAULT_READINESS_SCORECARD_POLICY,
   DashboardQueryService,
   createStateStore,
-} from '../../../../packages/application/src/index.ts';
-import { createEmptyProjectState } from '../../../../packages/core/src/index.ts';
-import type { StateStore } from '../../../../packages/state/src/index.ts';
-import { DASHBOARD_CONFIG, STATE_STORE } from '../dashboard-api.tokens.ts';
-import type { DashboardApiConfig } from '../config/dashboard-config.ts';
+} from '@ai-orchestrator/application';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import type { StateStore } from '@ai-orchestrator/state';
+import { DASHBOARD_CONFIG, STATE_STORE } from '../dashboard-api.tokens.js';
+import type { DashboardApiConfig } from '../config/dashboard-config.js';
 
 @Module({
   providers: [

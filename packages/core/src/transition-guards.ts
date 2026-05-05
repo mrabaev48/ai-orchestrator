@@ -1,9 +1,9 @@
-import { StateIntegrityError } from '../../shared/src/index.ts';
+import { StateIntegrityError } from '@ai-orchestrator/shared';
 import {
   getAllowedRunStepTransitions,
   TERMINAL_RUN_STEP_STATUSES,
   type RunStepStatus,
-} from './run-step-transition-table.ts';
+} from './run-step-transition-table.js';
 
 export function assertRunStepTransitionAllowed(input: {
   previousStatus?: RunStepStatus;

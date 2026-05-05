@@ -1,7 +1,7 @@
 import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
-import { SafetyViolationError } from '../../../shared/src/index.ts';
+import { SafetyViolationError } from '@ai-orchestrator/shared';
 
 export type SafeWriteMode =
   | 'read-only'

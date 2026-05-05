@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ToolExecutionContractError } from '../packages/tools/src/contracts.ts';
-import { normalizeToolError } from '../packages/tools/src/errors/tool-error-envelope.ts';
+import { ToolExecutionContractError } from '@ai-orchestrator/tools';
+import { normalizeToolError } from '@ai-orchestrator/tools';
 
 test('normalizeToolError: preserves envelope for typed tool contract error', () => {
   const typed = new ToolExecutionContractError({

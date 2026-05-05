@@ -1,4 +1,4 @@
-import type { DedupFinalizeCommand, DedupRegistryPort, DedupReserveCommand } from '../../../state/src/idempotency/dedup-registry.port.ts';
+import type { DedupFinalizeCommand, DedupRegistryPort, DedupReserveCommand } from '@ai-orchestrator/state';
 
 export class DedupRegistryService {
   private readonly dedupRegistry: DedupRegistryPort;

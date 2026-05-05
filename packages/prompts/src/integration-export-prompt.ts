@@ -1,4 +1,4 @@
-import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+import { defaultRoleOutputSchemaRegistry } from '@ai-orchestrator/core';
 
 export interface IntegrationExportPrompt {
   id: string;

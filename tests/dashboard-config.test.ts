@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { loadDashboardRuntimeContext } from '../apps/dashboard-api/src/config/dashboard-config.ts';
-import { ConfigError } from '../packages/shared/src/index.ts';
+import { loadDashboardRuntimeContext } from '@ai-orchestrator/dashboard-api';
+import { ConfigError } from '@ai-orchestrator/shared';
 
 test('loadDashboardRuntimeContext rejects missing dashboard auth config', () => {
   assert.throws(

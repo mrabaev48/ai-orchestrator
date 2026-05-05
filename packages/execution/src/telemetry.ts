@@ -1,6 +1,6 @@
-import { makeEvent } from '../../core/src/index.ts';
-import type { Logger } from '../../shared/src/index.ts';
-import type { StateStore } from '../../state/src/index.ts';
+import { makeEvent } from '@ai-orchestrator/core';
+import type { Logger } from '@ai-orchestrator/shared';
+import type { StateStore } from '@ai-orchestrator/state';
 
 export interface CounterMetricInput {
   name: string;

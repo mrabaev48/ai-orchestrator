@@ -12,15 +12,15 @@ import {
   StateStewardRole,
   TaskManagerRole,
   TesterRole,
-} from '../../agents/src/index.ts';
-import { createEmptyProjectState, type ProjectState } from '../../core/src/index.ts';
-import { Orchestrator } from '../../execution/src/index.ts';
-import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
+} from '@ai-orchestrator/agents';
+import { createEmptyProjectState, type ProjectState } from '@ai-orchestrator/core';
+import { Orchestrator } from '@ai-orchestrator/execution';
+import type { Logger, RuntimeConfig } from '@ai-orchestrator/shared';
 import {
   InMemoryStateStore,
   PostgresStateStore,
   type StateStore,
-} from '../../state/src/index.ts';
+} from '@ai-orchestrator/state';
 
 export interface ApplicationContext {
   initialState: ProjectState;

@@ -5,8 +5,8 @@ import {
   classifyApprovalRequestedActionRisk,
   classifyExecutionPolicyActionRisk,
   executionPolicyActionTypes,
-} from '../packages/core/src/index.ts';
-import { mapApprovalRequestedActionRisk, mapExecutionPolicyActionRisk } from '../packages/application/src/index.ts';
+} from '@ai-orchestrator/core';
+import { mapApprovalRequestedActionRisk, mapExecutionPolicyActionRisk } from '@ai-orchestrator/application';
 
 test('risk classification matrix covers all execution policy action types with deterministic ownership', () => {
   for (const actionType of executionPolicyActionTypes) {

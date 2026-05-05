@@ -1,5 +1,5 @@
-import type { ProjectDiscovery } from '../../core/src/index.ts';
-import { defaultRoleOutputSchemaRegistry } from '../../core/src/index.ts';
+import type { ProjectDiscovery } from '@ai-orchestrator/core';
+import { defaultRoleOutputSchemaRegistry } from '@ai-orchestrator/core';
 
 export interface ArchitectureAnalysisPrompt {
   id: string;

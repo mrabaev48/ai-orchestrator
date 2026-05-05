@@ -1,10 +1,10 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 
-import { DashboardQueryModule } from './dashboard-query/dashboard-query.module.ts';
-import type { DashboardApiConfig } from './config/dashboard-config.ts';
-import { DashboardConfigModule } from './config/dashboard-config.module.ts';
-import { HealthModule } from './health/health.module.ts';
-import { DashboardReadModelModule } from './read-model/read-model.module.ts';
+import { DashboardQueryModule } from './dashboard-query/dashboard-query.module.js';
+import type { DashboardApiConfig } from './config/dashboard-config.js';
+import { DashboardConfigModule } from './config/dashboard-config.module.js';
+import { HealthModule } from './health/health.module.js';
+import { DashboardReadModelModule } from './read-model/read-model.module.js';
 
 @Module({
   imports: [DashboardReadModelModule, HealthModule, DashboardQueryModule],

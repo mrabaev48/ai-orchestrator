@@ -1,6 +1,6 @@
-import type { Logger } from '../../../shared/src/index.ts';
-import { WorkflowPolicyError } from '../../../shared/src/index.ts';
-import type { DistributedLockLease, DistributedLockStore } from '../../../state/src/locks/distributed-lock.store.ts';
+import type { Logger } from '@ai-orchestrator/shared';
+import { WorkflowPolicyError } from '@ai-orchestrator/shared';
+import type { DistributedLockLease, DistributedLockStore } from '@ai-orchestrator/state';
 
 export interface FencingLockHandle {
   readonly lease: DistributedLockLease;

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildPlanningPrompt } from '../packages/prompts/src/index.ts';
+import { buildPlanningPrompt } from '@ai-orchestrator/prompts';
 import {
   createEmptyProjectDiscovery,
   type ArchitectureFinding,
-} from '../packages/core/src/index.ts';
+} from '@ai-orchestrator/core';
 
 test('buildPlanningPrompt exposes milestone-aware backlog schema', () => {
   const discovery = createEmptyProjectDiscovery();

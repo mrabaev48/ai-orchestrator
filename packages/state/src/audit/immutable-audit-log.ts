@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
-import { canonicalizeEvidencePayload } from '../../../core/src/evidence/run-step-evidence.ts';
-import type { DomainEvent } from '../../../core/src/events.ts';
+import { canonicalizeEvidencePayload } from '@ai-orchestrator/core';
+import type { DomainEvent } from '@ai-orchestrator/core';
 
 export interface ImmutableAuditRecord {
   readonly index: number;

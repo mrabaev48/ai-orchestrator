@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildIdempotencyKey } from '../packages/core/src/idempotency/build-idempotency-key.ts';
+import { buildIdempotencyKey } from '@ai-orchestrator/core';
 
 test('buildIdempotencyKey builds deterministic key for canonical object payload', () => {
   const first = buildIdempotencyKey({

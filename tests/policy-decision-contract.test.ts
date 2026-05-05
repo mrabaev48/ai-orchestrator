@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { assertPolicyDecisionForAction } from '../packages/application/src/policy-decision-contract.ts';
-import { validateExecutionPolicyDecision, type ExecutionPolicyDecision } from '../packages/core/src/execution-policy-decision.ts';
+import { assertPolicyDecisionForAction } from '@ai-orchestrator/application';
+import { validateExecutionPolicyDecision, type ExecutionPolicyDecision } from '@ai-orchestrator/core';
 
 function createDecision(overrides: Partial<ExecutionPolicyDecision> = {}): ExecutionPolicyDecision {
   return {

@@ -1,4 +1,4 @@
-import type { ImmutableApprovalRequest } from '../../../core/src/approval/approval-request.ts';
+import type { ImmutableApprovalRequest } from '@ai-orchestrator/core';
 
 export interface ApprovalStore {
   listByRunId: (runId: string) => Promise<readonly ImmutableApprovalRequest[]>;

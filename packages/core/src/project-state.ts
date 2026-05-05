@@ -1,25 +1,25 @@
 import { z } from 'zod';
 
-import { StateIntegrityError } from '../../shared/src/index.ts';
-import type { ApprovalRequest } from './approvals.ts';
-import type { ArchitectureFinding } from './architecture-findings.ts';
-import { validateArchitectureFinding } from './architecture-findings.ts';
-import type { ArtifactRecord } from './artifacts.ts';
-import type { Backlog } from './backlog.ts';
-import { validateBacklogTask } from './backlog.ts';
-import type { DecisionLogItem } from './decisions.ts';
+import { StateIntegrityError } from '@ai-orchestrator/shared';
+import type { ApprovalRequest } from './approvals.js';
+import type { ArchitectureFinding } from './architecture-findings.js';
+import { validateArchitectureFinding } from './architecture-findings.js';
+import type { ArtifactRecord } from './artifacts.js';
+import type { Backlog } from './backlog.js';
+import { validateBacklogTask } from './backlog.js';
+import type { DecisionLogItem } from './decisions.js';
 import {
   executionPolicyDecisionSchema,
   validateExecutionPolicyDecision,
   type ExecutionPolicyDecision,
-} from './execution-policy-decision.ts';
+} from './execution-policy-decision.js';
 import {
   createEmptyProjectDiscovery,
   type ProjectDiscovery,
   validateProjectDiscovery,
-} from './discovery.ts';
-import type { FailureRecord } from './failures.ts';
-import type { Milestone } from './milestones.ts';
+} from './discovery.js';
+import type { FailureRecord } from './failures.js';
+import type { Milestone } from './milestones.js';
 
 export interface ProjectArchitecture {
   packageMap: Record<string, string[]>;

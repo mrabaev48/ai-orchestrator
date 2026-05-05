@@ -11,10 +11,10 @@ import {
   PlanningService,
   ReleaseReadinessService,
   createRoleRegistry,
-} from '../packages/application/src/index.ts';
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
-import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
-import { InMemoryStateStore } from '../packages/state/src/index.ts';
+} from '@ai-orchestrator/application';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
+import { InMemoryStateStore } from '@ai-orchestrator/state';
 
 function makeRuntimeConfig(allowedWritePath: string): RuntimeConfig {
   return {

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
-import { StateStoreExecutionTelemetry } from '../packages/execution/src/index.ts';
-import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
-import { InMemoryStateStore } from '../packages/state/src/index.ts';
-import type { StateStore } from '../packages/state/src/index.ts';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import { StateStoreExecutionTelemetry } from '@ai-orchestrator/execution';
+import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
+import { InMemoryStateStore } from '@ai-orchestrator/state';
+import type { StateStore } from '@ai-orchestrator/state';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {

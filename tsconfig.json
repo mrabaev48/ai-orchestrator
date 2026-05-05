@@ -1,25 +1,50 @@
 {
-  "compilerOptions": {
-    "lib": ["ES2023"],
-    "target": "ES2023",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "strict": true,
-    "noImplicitAny": true,
-    "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "verbatimModuleSyntax": true,
-    "skipLibCheck": true,
-    "types": ["node"]
-  },
-  "include": [
-    "apps/**/*.ts",
-    "packages/**/*.ts",
-    "packages/**/*.d.ts",
-    "tests/**/*.ts"
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/shared"
+    },
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/workflow"
+    },
+    {
+      "path": "./packages/prompts"
+    },
+    {
+      "path": "./packages/agents"
+    },
+    {
+      "path": "./packages/state"
+    },
+    {
+      "path": "./packages/tools"
+    },
+    {
+      "path": "./packages/execution"
+    },
+    {
+      "path": "./packages/application"
+    },
+    {
+      "path": "./packages/llm"
+    },
+    {
+      "path": "./apps/control-plane"
+    },
+    {
+      "path": "./apps/dashboard-api"
+    },
+    {
+      "path": "./apps/worker"
+    },
+    {
+      "path": "./tests/tsconfig.json"
+    },
+    {
+      "path": "./scripts/tsconfig.json"
+    }
   ]
 }

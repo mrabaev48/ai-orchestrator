@@ -1,7 +1,7 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
-import type { DomainEventType } from '../../../../packages/core/src/index.ts';
+import type { DomainEventType } from '@ai-orchestrator/core';
 
 export class BacklogExportQueryDto {
   @IsOptional()

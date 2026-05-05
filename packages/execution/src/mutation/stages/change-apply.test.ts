@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { executeChangeApplyStage } from './change-apply.ts';
-import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.ts';
-import { ApplyPatchError } from '../../../../tools/src/patch/apply-patch.ts';
+import { executeChangeApplyStage } from './change-apply.js';
+import type { RepoMutationPipelineContext } from '../../repo-mutation-pipeline.js';
+import { ApplyPatchError } from '@ai-orchestrator/tools';
 
 const context: RepoMutationPipelineContext = {
   runId: 'run-27',

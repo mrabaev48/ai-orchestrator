@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { WorkerRunner } from '../apps/worker/src/worker-runner.ts';
-import type { LogEntry, Logger } from '../packages/shared/src/index.ts';
+import { WorkerRunner } from '@ai-orchestrator/worker';
+import type { LogEntry, Logger } from '@ai-orchestrator/shared';
 
 class CapturedLogger implements Logger {
   readonly records: { level: string; message: string }[] = [];

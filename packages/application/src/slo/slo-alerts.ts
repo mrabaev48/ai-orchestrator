@@ -1,5 +1,6 @@
-import type { SloAssessment, SloAssessmentCriterion, SloPolicy, SliSnapshot } from './slo-policy.ts';
-import { assessSlo } from './slo-policy.ts';
+import type { SliSnapshot } from '@ai-orchestrator/core';
+import type { SloAssessment, SloAssessmentCriterion, SloPolicy } from './slo-policy.js';
+import { assessSlo } from './slo-policy.js';
 
 export type SloIncidentClass =
   | 'success_rate_breach'

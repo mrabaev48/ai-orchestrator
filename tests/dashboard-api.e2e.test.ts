@@ -3,16 +3,16 @@ import test from 'node:test';
 
 import { HealthCheckService } from '@nestjs/terminus';
 
-import { DashboardReadApiService } from '../apps/dashboard-api/src/dashboard-query/dashboard-query.service.ts';
-import { DashboardQueryController } from '../apps/dashboard-api/src/dashboard-query/dashboard-query.controller.ts';
-import { HealthController } from '../apps/dashboard-api/src/health/health.controller.ts';
-import { DashboardReadinessService } from '../apps/dashboard-api/src/health/health.service.ts';
-import { STATE_STORE } from '../apps/dashboard-api/src/dashboard-api.tokens.ts';
-import { createDashboardApiApp } from '../apps/dashboard-api/src/bootstrap.ts';
-import type { DashboardRuntimeContext } from '../apps/dashboard-api/src/config/dashboard-config.ts';
-import { computeRunStepChecksum, type RunStepLogEntry } from '../packages/core/src/index.ts';
-import type { StateStore } from '../packages/state/src/index.ts';
-import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
+import { DashboardReadApiService } from '@ai-orchestrator/dashboard-api';
+import { DashboardQueryController } from '@ai-orchestrator/dashboard-api';
+import { HealthController } from '@ai-orchestrator/dashboard-api';
+import { DashboardReadinessService } from '@ai-orchestrator/dashboard-api';
+import { STATE_STORE } from '@ai-orchestrator/dashboard-api';
+import { createDashboardApiApp } from '@ai-orchestrator/dashboard-api';
+import type { DashboardRuntimeContext } from '@ai-orchestrator/dashboard-api';
+import { computeRunStepChecksum, type RunStepLogEntry } from '@ai-orchestrator/core';
+import type { StateStore } from '@ai-orchestrator/state';
+import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {

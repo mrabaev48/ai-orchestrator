@@ -1,2 +1,2 @@
-export * from './default-roles.ts';
-export * from './registry.ts';
+export * from './default-roles.js';
+export * from './registry.js';

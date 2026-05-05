@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 
 import type {
   BacklogExportView,
-} from '../../../../packages/application/src/read-models.ts';
+} from '@ai-orchestrator/application';
 import {
   ArtifactHistoryQueryDto,
   ApprovalDecisionBodyDto,
@@ -14,8 +14,8 @@ import {
   RunStepEvidenceQueryDto,
   AuditExportQueryDto,
   TraceAuditQueryDto,
-} from './dashboard-query.dto.ts';
-import { DashboardReadApiService } from './dashboard-query.service.ts';
+} from './dashboard-query.dto.js';
+import { DashboardReadApiService } from './dashboard-query.service.js';
 
 @Controller('api')
 export class DashboardQueryController {
@@ -94,12 +94,17 @@ export class DashboardQueryController {
     );
   }
 
+  @Get('readiness/production-review')
   async getLatestProductionReadinessReview(@Query() query: HistoryQueryDto) {
     return await this.dashboardReadApiService.getLatestProductionReadinessReview(
       query.orgId,
       query.projectId,
       query.runId,
     );
+  }
+
+  @Get('approvals')
+  async getApprovals(@Query() query: ApprovalHistoryQueryDto) {
     return await this.dashboardReadApiService.getApprovals(query.status);
   }
 

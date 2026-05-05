@@ -7,7 +7,7 @@ import {
 import type { ArgumentsHost } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
-import type { Logger } from '../../../../packages/shared/src/index.ts';
+import type { Logger } from '@ai-orchestrator/shared';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {

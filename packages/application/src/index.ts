@@ -1,37 +1,37 @@
-export * from './bootstrap-service.ts';
-export * from './architecture-service.ts';
-export * from './approval-gate-service.ts';
-export * from './control-plane-service.ts';
-export * from './dashboard-query-service.ts';
-export * from './documentation-service.ts';
-export * from './integration-export-service.ts';
-export * from './planning-service.ts';
-export * from './read-models.ts';
-export * from './release-readiness-service.ts';
-export * from './state-integrity-service.ts';
-export * from './runtime-factory.ts';
+export * from './bootstrap-service.js';
+export * from './architecture-service.js';
+export * from './approval-gate-service.js';
+export * from './control-plane-service.js';
+export * from './dashboard-query-service.js';
+export * from './documentation-service.js';
+export * from './integration-export-service.js';
+export * from './planning-service.js';
+export * from './read-models.js';
+export * from './release-readiness-service.js';
+export * from './state-integrity-service.js';
+export * from './runtime-factory.js';
 
-export * from './slo/slo-policy.ts';
-export * from './slo/slo-alerts.ts';
-export * from './policy-decision-contract.ts';
+export * from './slo/slo-policy.js';
+export * from './slo/slo-alerts.js';
+export * from './policy-decision-contract.js';
 
-export * from './policy/risk-mapper.ts';
+export * from './policy/risk-mapper.js';
 
-export * from './policy-engine/evaluate-policy.ts';
+export * from './policy-engine/evaluate-policy.js';
 
-export * from './run/preflight.ts';
+export * from './run/preflight.js';
 
-export * from './approval/routing.ts';
-export * from './approval/sla-escalation.ts';
+export * from './approval/routing.js';
+export * from './approval/sla-escalation.js';
 
-export * from './idempotency/dedup-registry-service.ts';
-export * from './authorization/evaluate-access.ts';
+export * from './idempotency/dedup-registry-service.js';
+export * from './authorization/evaluate-access.js';
 
-export * from './autonomy/level-controller.ts';
+export * from './autonomy/level-controller.js';
 
-export * from './safety/kill-switch.ts';
-export * from './safety/human-override.ts';
+export * from './safety/kill-switch.js';
+export * from './safety/human-override.js';
 
-export * from './rollout/gradual-rollout-policy.ts';
+export * from './rollout/gradual-rollout-policy.js';
 
-export * from './readiness/readiness-review.ts';
+export * from './readiness/readiness-review.js';

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { TesterRole } from '../packages/agents/src/index.ts';
-import type { RoleExecutionContext, RoleRequest } from '../packages/core/src/index.ts';
-import type { BacklogTask } from '../packages/core/src/index.ts';
-import { createLogger, type RuntimeConfig } from '../packages/shared/src/index.ts';
+import { TesterRole } from '@ai-orchestrator/agents';
+import type { RoleExecutionContext, RoleRequest } from '@ai-orchestrator/core';
+import type { BacklogTask } from '@ai-orchestrator/core';
+import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 
 function makeConfig(): RuntimeConfig {
   return {

@@ -5,7 +5,7 @@ import {
   assertRunStepTransitionAllowed,
   getAllowedRunStepTransitions,
   RUN_STEP_TRANSITION_TABLE,
-} from '../packages/core/src/index.ts';
+} from '@ai-orchestrator/core';
 
 test('run-step transition table is closed and explicit for every known status', () => {
   assert.deepEqual(Object.keys(RUN_STEP_TRANSITION_TABLE).sort(), [

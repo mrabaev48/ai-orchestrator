@@ -5,8 +5,8 @@ import type {
   ToolExecutionOptions,
   UnifiedToolAdapter,
   UnifiedToolRequest,
-} from '../contracts.ts';
-import type { ToolPolicyAdapter } from '../policy/adapter.ts';
+} from '../contracts.js';
+import type { ToolPolicyAdapter } from '../policy/adapter.js';
 
 export interface FileSystemTool {
   readFile: (filePath: string, options?: { signal?: AbortSignal }) => Promise<string>;

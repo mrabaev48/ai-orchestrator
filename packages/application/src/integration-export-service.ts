@@ -6,15 +6,15 @@ import {
   type IntegrationExportPayload,
   type IntegrationExportRecord,
   type ProjectState,
-} from '../../core/src/index.ts';
-import { buildIntegrationExportPrompt } from '../../prompts/src/index.ts';
-import type { RoleRegistry } from '../../agents/src/index.ts';
-import type { Logger } from '../../shared/src/index.ts';
-import type { StateStore } from '../../state/src/index.ts';
-import { createLocalToolSet } from '../../tools/src/index.ts';
-import type { RuntimeConfig } from '../../shared/src/index.ts';
-import type { RoleRequest } from '../../core/src/roles.ts';
-import { assertRoleOutput } from './role-output-validation.ts';
+} from '@ai-orchestrator/core';
+import { buildIntegrationExportPrompt } from '@ai-orchestrator/prompts';
+import type { RoleRegistry } from '@ai-orchestrator/agents';
+import type { Logger } from '@ai-orchestrator/shared';
+import type { StateStore } from '@ai-orchestrator/state';
+import { createLocalToolSet } from '@ai-orchestrator/tools';
+import type { RuntimeConfig } from '@ai-orchestrator/shared';
+import type { RoleRequest } from '@ai-orchestrator/core';
+import { assertRoleOutput } from './role-output-validation.js';
 
 export class IntegrationExportService {
   private readonly stateStore: StateStore;

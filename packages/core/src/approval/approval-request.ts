@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { ApprovalRequestedAction, ApprovalStatus } from '../approvals.ts';
+import type { ApprovalRequestedAction, ApprovalStatus } from '../approvals.js';
 
 export interface ImmutableApprovalRequest {
   readonly id: string;

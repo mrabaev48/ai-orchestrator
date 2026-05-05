@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { redactSecrets } from '../packages/tools/src/secrets/redaction.ts';
-import { buildImmutableAuditLog } from '../packages/state/src/audit/immutable-audit-log.ts';
-import { makeEvent } from '../packages/core/src/events.ts';
+import { redactSecrets } from '@ai-orchestrator/tools';
+import { buildImmutableAuditLog } from '@ai-orchestrator/state';
+import { makeEvent } from '@ai-orchestrator/core';
 
 test('redactSecrets redacts secret keys and secret-like values', () => {
   const input = {

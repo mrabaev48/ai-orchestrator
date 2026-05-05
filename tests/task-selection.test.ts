@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
-import { selectNextTask } from '../packages/workflow/src/index.ts';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import { selectNextTask } from '@ai-orchestrator/workflow';
 
 test('selectNextTask respects dependencies and priority', () => {
   const state = createEmptyProjectState({

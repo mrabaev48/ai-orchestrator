@@ -1,4 +1,4 @@
-import type { RepoMutationPipelineContext, RepoMutationStageResult } from '../../repo-mutation-pipeline.ts';
+import type { RepoMutationPipelineContext, RepoMutationStageResult } from '../../repo-mutation-pipeline.js';
 
 export interface PrDraftPrepareStageInput {
   context: RepoMutationPipelineContext;

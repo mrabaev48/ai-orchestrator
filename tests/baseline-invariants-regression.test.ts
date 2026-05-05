@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defaultExecutionPolicyEngine } from '../packages/core/src/execution-policy-engine.ts';
-import { computeRunStepChecksum, createEmptyProjectState, type RunStepLogEntry } from '../packages/core/src/index.ts';
-import { completeSideEffect, reserveSideEffect } from '../packages/execution/src/idempotency/side-effect-dedup-guard.ts';
-import { StepCancelledError, StepTimeoutError, createLogger } from '../packages/shared/src/index.ts';
-import { InMemoryStateStore } from '../packages/state/src/in-memory/InMemoryStateStore.ts';
+import { defaultExecutionPolicyEngine } from '@ai-orchestrator/core';
+import { computeRunStepChecksum, createEmptyProjectState, type RunStepLogEntry } from '@ai-orchestrator/core';
+import { completeSideEffect, reserveSideEffect } from '@ai-orchestrator/execution';
+import { StepCancelledError, StepTimeoutError, createLogger } from '@ai-orchestrator/shared';
+import { InMemoryStateStore } from '@ai-orchestrator/state';
 
 const logger = createLogger({
   llm: { provider: 'mock', model: 'm', temperature: 0, timeoutMs: 500 },

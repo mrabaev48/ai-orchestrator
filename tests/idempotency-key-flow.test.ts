@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildIdempotencyKey, createEmptyProjectState } from '../packages/core/src/index.ts';
-import { completeSideEffect, reserveSideEffect } from '../packages/execution/src/idempotency/side-effect-dedup-guard.ts';
+import { buildIdempotencyKey, createEmptyProjectState } from '@ai-orchestrator/core';
+import { completeSideEffect, reserveSideEffect } from '@ai-orchestrator/execution';
 
 test('buildIdempotencyKey is stable for canonical input', () => {
   const input = {

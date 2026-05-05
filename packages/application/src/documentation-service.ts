@@ -1,13 +1,13 @@
 import path from 'node:path';
 
-import type { RoleRegistry } from '../../agents/src/index.ts';
-import { defaultExecutionPolicyEngine } from '../../core/src/index.ts';
-import { buildDocsWriterPrompt } from '../../prompts/src/index.ts';
-import type { Logger, RuntimeConfig } from '../../shared/src/index.ts';
-import type { StateStore } from '../../state/src/index.ts';
-import { createLocalToolSet } from '../../tools/src/index.ts';
-import type { RoleRequest } from '../../core/src/roles.ts';
-import { assertRoleOutput } from './role-output-validation.ts';
+import type { RoleRegistry } from '@ai-orchestrator/agents';
+import { defaultExecutionPolicyEngine } from '@ai-orchestrator/core';
+import { buildDocsWriterPrompt } from '@ai-orchestrator/prompts';
+import type { Logger, RuntimeConfig } from '@ai-orchestrator/shared';
+import type { StateStore } from '@ai-orchestrator/state';
+import { createLocalToolSet } from '@ai-orchestrator/tools';
+import type { RoleRequest } from '@ai-orchestrator/core';
+import { assertRoleOutput } from './role-output-validation.js';
 
 interface DocumentationOutput {
   summary: string;

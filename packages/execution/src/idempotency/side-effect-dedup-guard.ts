@@ -1,5 +1,5 @@
-import type { DedupRegistryRecord } from '../../../core/src/index.ts';
-import { finalizeDedupEntry, reserveDedupEntry } from '../../../state/src/idempotency/dedup-registry.ts';
+import type { DedupRegistryRecord } from '@ai-orchestrator/core';
+import { finalizeDedupEntry, reserveDedupEntry } from '@ai-orchestrator/state';
 
 export function reserveSideEffect(
   registry: Record<string, DedupRegistryRecord>,

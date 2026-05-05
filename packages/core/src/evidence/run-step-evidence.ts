@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { RunStepLogEntry } from '../project-state.ts';
+import type { RunStepLogEntry } from '../project-state.js';
 
 interface CanonicalObject {
   [key: string]: CanonicalValue;

@@ -1,4 +1,4 @@
-import { ToolExecutionContractError, type ToolErrorEnvelope } from '../contracts.ts';
+import { ToolExecutionContractError, type ToolErrorEnvelope } from '../contracts.js';
 
 function isAbortLikeError(error: unknown): error is { name?: string; message?: string } {
   return typeof error === 'object' && error !== null && 'name' in error;

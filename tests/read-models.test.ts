@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
 import {
   toArtifactHistoryView,
   toBacklogExportView,
@@ -10,8 +10,8 @@ import {
   toLatestRunSummaryView,
   toMilestoneListView,
   toStateSummaryView,
-} from '../packages/application/src/index.ts';
-import { makeEvent } from '../packages/core/src/index.ts';
+} from '@ai-orchestrator/application';
+import { makeEvent } from '@ai-orchestrator/core';
 
 test('toStateSummaryView maps raw state into a stable read model', () => {
   const state = createEmptyProjectState({

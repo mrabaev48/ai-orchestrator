@@ -1,6 +1,6 @@
 import { ConsoleLogger, Injectable, type LoggerService } from '@nestjs/common';
 
-import type { Logger } from '../../../../packages/shared/src/index.ts';
+import type { Logger } from '@ai-orchestrator/shared';
 
 @Injectable()
 export class NestStructuredLogger implements LoggerService {

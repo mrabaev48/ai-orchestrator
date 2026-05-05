@@ -1,13 +1,13 @@
 import {
   createApplicationContext,
-} from '../../../packages/application/src/index.ts';
+} from '@ai-orchestrator/application';
 import {
   ConfigError,
   createLogger,
   loadRuntimeConfig,
   OrchestratorError,
-} from '../../../packages/shared/src/index.ts';
-import { WorkerRunner } from './worker-runner.ts';
+} from '@ai-orchestrator/shared';
+import { WorkerRunner } from './worker-runner.js';
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
 const DEFAULT_IDLE_BACKOFF_MS = 2_000;

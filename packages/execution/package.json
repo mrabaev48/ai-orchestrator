@@ -1,0 +1,28 @@
+{
+  "name": "@ai-orchestrator/execution",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "lint": "eslint src --ignore-pattern \"**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@ai-orchestrator/core": "workspace:*",
+    "@ai-orchestrator/shared": "workspace:*",
+    "@ai-orchestrator/state": "workspace:*",
+    "@ai-orchestrator/tools": "workspace:*",
+    "@ai-orchestrator/workflow": "workspace:*",
+    "@ai-orchestrator/agents": "workspace:*"
+  }
+}

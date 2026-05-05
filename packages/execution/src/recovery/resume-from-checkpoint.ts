@@ -1,5 +1,5 @@
-import { WorkflowPolicyError } from '../../../shared/src/index.ts';
-import type { RecoveryCheckpointStore } from '../../../state/src/recovery/recovery-checkpoint.store.ts';
+import { WorkflowPolicyError } from '@ai-orchestrator/shared';
+import type { RecoveryCheckpointStore } from '@ai-orchestrator/state';
 
 export interface ResumeFromCheckpointInput {
   taskId: string;

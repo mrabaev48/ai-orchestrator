@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluateControlPlaneAccess } from '../packages/application/src/authorization/evaluate-access.ts';
-import { authorizeControlPlaneCommand } from '../apps/control-plane/src/authz/rbac-abac.ts';
-import { SafetyViolationError } from '../packages/shared/src/index.ts';
+import { evaluateControlPlaneAccess } from '@ai-orchestrator/application';
+import { authorizeControlPlaneCommand } from '@ai-orchestrator/control-plane';
+import { SafetyViolationError } from '@ai-orchestrator/shared';
 
 test('RBAC/ABAC allows operator on same team in local environment', () => {
   const decision = evaluateControlPlaneAccess({

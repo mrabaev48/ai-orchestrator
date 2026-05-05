@@ -3,8 +3,8 @@ import test from 'node:test';
 
 import {
   buildArchitectureAnalysisPrompt,
-} from '../packages/prompts/src/index.ts';
-import { createEmptyProjectDiscovery } from '../packages/core/src/index.ts';
+} from '@ai-orchestrator/prompts';
+import { createEmptyProjectDiscovery } from '@ai-orchestrator/core';
 
 test('buildArchitectureAnalysisPrompt exposes schema for structured findings', () => {
   const discovery = createEmptyProjectDiscovery();

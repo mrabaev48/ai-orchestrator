@@ -1,0 +1,51 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "tsBuildInfoFile": "../build/tests.tsbuildinfo"
+  },
+  "include": [
+    "**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../packages/shared"
+    },
+    {
+      "path": "../packages/core"
+    },
+    {
+      "path": "../packages/workflow"
+    },
+    {
+      "path": "../packages/prompts"
+    },
+    {
+      "path": "../packages/agents"
+    },
+    {
+      "path": "../packages/state"
+    },
+    {
+      "path": "../packages/tools"
+    },
+    {
+      "path": "../packages/execution"
+    },
+    {
+      "path": "../packages/application"
+    },
+    {
+      "path": "../packages/llm"
+    },
+    {
+      "path": "../apps/control-plane"
+    },
+    {
+      "path": "../apps/dashboard-api"
+    },
+    {
+      "path": "../apps/worker"
+    }
+  ]
+}

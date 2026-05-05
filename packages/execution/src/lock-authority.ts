@@ -1,5 +1,5 @@
-import { ConfigError, WorkflowPolicyError } from '../../shared/src/index.ts';
-import type { RuntimeConfig } from '../../shared/src/index.ts';
+import { ConfigError, WorkflowPolicyError } from '@ai-orchestrator/shared';
+import type { RuntimeConfig } from '@ai-orchestrator/shared';
 
 export interface RunLockHandle {
   release: () => Promise<void>;
@@ -18,13 +18,18 @@ interface PgClientLike {
   release: () => void;
 }
 
-type PgModule = {
+interface PgModule {
   Pool: new (options: { connectionString: string }) => PgPoolLike;
-};
+}
 
 interface RedisLike {
+  connect?: () => Promise<void>;
   set: (key: string, value: string, options?: { NX?: boolean; PX?: number }) => Promise<unknown>;
   eval: (script: string, options: { keys: string[]; arguments: string[] }) => Promise<unknown>;
+}
+
+interface RedisModule {
+  createClient: (options: { url: string }) => RedisLike & { connect: () => Promise<void> };
 }
 
 interface RedisLockAuthorityOptions {
@@ -40,6 +45,10 @@ interface EtcdLeaseLike {
 
 interface EtcdClientLike {
   lease: (ttlSeconds: number) => EtcdLeaseLike;
+}
+
+interface EtcdModule {
+  Etcd3: new (options: { hosts: string }) => EtcdClientLike;
 }
 
 interface EtcdLockAuthorityOptions {
@@ -242,7 +251,7 @@ export class EtcdLockAuthority implements LockAuthority {
 async function loadPostgresPool(connectionString: string): Promise<PgPoolLike> {
   let module: PgModule;
   try {
-    module = await import('pg');
+    module = asPgModule(await importOptionalModule('pg'));
   } catch (error) {
     throw new ConfigError(
       'PostgreSQL run lock provider requires `pg` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
@@ -254,13 +263,9 @@ async function loadPostgresPool(connectionString: string): Promise<PgPoolLike> {
 }
 
 async function loadRedisClient(dsn: string): Promise<RedisLike> {
-  type RedisModule = {
-    createClient: (options: { url: string }) => RedisLike & { connect: () => Promise<void> };
-  };
-
   let module: RedisModule;
   try {
-    module = await import('redis');
+    module = asRedisModule(await importOptionalModule('redis'));
   } catch (error) {
     throw new ConfigError(
       'Redis run lock provider requires `redis` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
@@ -274,13 +279,9 @@ async function loadRedisClient(dsn: string): Promise<RedisLike> {
 }
 
 async function loadEtcdClient(dsn: string): Promise<EtcdClientLike> {
-  type EtcdModule = {
-    Etcd3: new (options: { hosts: string }) => EtcdClientLike;
-  };
-
   let module: EtcdModule;
   try {
-    module = await import('etcd3');
+    module = asEtcdModule(await importOptionalModule('etcd3'));
   } catch (error) {
     throw new ConfigError(
       'Etcd run lock provider requires `etcd3` package; install it or switch WORKFLOW_RUN_LOCK_PROVIDER',
@@ -289,6 +290,35 @@ async function loadEtcdClient(dsn: string): Promise<EtcdClientLike> {
   }
 
   return new module.Etcd3({ hosts: dsn });
+}
+
+async function importOptionalModule(moduleName: string): Promise<unknown> {
+  return await import(moduleName);
+}
+
+function asPgModule(module: unknown): PgModule {
+  if (isRecord(module) && typeof module.Pool === 'function') {
+    return module as unknown as PgModule;
+  }
+  throw new ConfigError('PostgreSQL run lock provider loaded an invalid `pg` module');
+}
+
+function asRedisModule(module: unknown): RedisModule {
+  if (isRecord(module) && typeof module.createClient === 'function') {
+    return module as unknown as RedisModule;
+  }
+  throw new ConfigError('Redis run lock provider loaded an invalid `redis` module');
+}
+
+function asEtcdModule(module: unknown): EtcdModule {
+  if (isRecord(module) && typeof module.Etcd3 === 'function') {
+    return module as unknown as EtcdModule;
+  }
+  throw new ConfigError('Etcd run lock provider loaded an invalid `etcd3` module');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function isRedisLockAcquired(result: unknown): boolean {

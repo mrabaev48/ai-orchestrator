@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { splitTaskForRetry } from '../packages/workflow/src/index.ts';
+import { splitTaskForRetry } from '@ai-orchestrator/workflow';
 
 test('splitTaskForRetry creates traceable child tasks with narrowed dependencies', () => {
   const result = splitTaskForRetry(

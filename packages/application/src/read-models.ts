@@ -7,8 +7,8 @@ import type {
   ApprovalRequest,
   Milestone,
   ProjectState,
-} from '../../core/src/index.ts';
-import { redactSecrets } from '../../shared/src/index.ts';
+} from '@ai-orchestrator/core';
+import { redactSecrets } from '@ai-orchestrator/shared';
 
 export interface StateSummaryView {
   orgId: string;
@@ -164,6 +164,31 @@ export interface MetricRollupItemView {
   lastValue: number;
   lastSeenAt: string;
   tags: Record<string, string>;
+}
+
+export interface ProductionReadinessReviewIssueView {
+  checkId: string;
+  title: string;
+  details: string;
+}
+
+export interface ProductionReadinessReviewEvidenceView {
+  blockerCount: number;
+  warningCount: number;
+  totalChecks?: number;
+  passedChecks?: number;
+  failedChecks?: number;
+}
+
+export interface ProductionReadinessReviewView {
+  artifactId: string;
+  artifactCreatedAt: string;
+  verdict: 'ready' | 'not_ready';
+  blockers: ProductionReadinessReviewIssueView[];
+  warnings: ProductionReadinessReviewIssueView[];
+  evidence: ProductionReadinessReviewEvidenceView;
+  runId?: string;
+  reviewDateIso?: string;
 }
 
 export interface SpanAuditItemView {

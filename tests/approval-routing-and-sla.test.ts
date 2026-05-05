@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   ApprovalRoutingService,
   ApprovalSlaEscalationService,
-} from '../packages/application/src/index.ts';
+} from '@ai-orchestrator/application';
 
 test('ApprovalRoutingService routes by action using explicit mapping', () => {
   const service = new ApprovalRoutingService();

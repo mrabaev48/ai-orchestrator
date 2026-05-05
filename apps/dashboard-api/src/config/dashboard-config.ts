@@ -6,7 +6,7 @@ import {
   loadRuntimeConfig,
   type Logger,
   type RuntimeConfig,
-} from '../../../../packages/shared/src/index.ts';
+} from '@ai-orchestrator/shared';
 
 const dashboardEnvSchema = z.object({
   DASHBOARD_API_HOST: z.string().trim().min(1).default('127.0.0.1'),

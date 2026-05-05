@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { LogEntry, Logger } from '../../../shared/src/index.ts';
-import { InMemoryDistributedLockStore } from '../../../state/src/locks/distributed-lock.store.ts';
-import { createFencingTokenGuard } from './fencing-token-guard.ts';
+import type { LogEntry, Logger } from '@ai-orchestrator/shared';
+import { InMemoryDistributedLockStore } from '@ai-orchestrator/state';
+import { createFencingTokenGuard } from './fencing-token-guard.js';
 
 const noop = (): void => undefined;
 

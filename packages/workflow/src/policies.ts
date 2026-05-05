@@ -1,9 +1,9 @@
-import type { BacklogTask } from '../../core/src/backlog.ts';
-import { isExecutableTask, priorityWeight } from '../../core/src/backlog.ts';
-import type { ProjectState } from '../../core/src/project-state.ts';
-import type { ReviewResult } from '../../core/src/review.ts';
-import type { AgentRoleName } from '../../core/src/roles.ts';
-import type { TestExecutionResult } from '../../core/src/testing.ts';
+import type { BacklogTask } from '@ai-orchestrator/core';
+import { isExecutableTask, priorityWeight } from '@ai-orchestrator/core';
+import type { ProjectState } from '@ai-orchestrator/core';
+import type { ReviewResult } from '@ai-orchestrator/core';
+import type { AgentRoleName } from '@ai-orchestrator/core';
+import type { TestExecutionResult } from '@ai-orchestrator/core';
 
 export interface StopConditionResult {
   stop: boolean;

@@ -1,7 +1,7 @@
-import type { BacklogTask } from '../../core/src/backlog.ts';
-import type { FailureRecord } from '../../core/src/failures.ts';
-import type { AgentRoleName } from '../../core/src/roles.ts';
-import { redactSecrets } from '../../shared/src/index.ts';
+import type { BacklogTask } from '@ai-orchestrator/core';
+import type { FailureRecord } from '@ai-orchestrator/core';
+import type { AgentRoleName } from '@ai-orchestrator/core';
+import { redactSecrets } from '@ai-orchestrator/shared';
 
 export interface OptimizedPrompt {
   id: string;

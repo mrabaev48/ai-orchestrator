@@ -1,4 +1,9 @@
 node_modules/
+build/
+dist/
+.turbo/
+**/dist/
+**/.turbo/
 .ai-orchestrator/
 .env
 .DS_Store

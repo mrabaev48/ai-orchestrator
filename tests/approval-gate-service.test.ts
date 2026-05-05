@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ApprovalGateService } from '../packages/application/src/index.ts';
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
-import { InMemoryStateStore } from '../packages/state/src/index.ts';
+import { ApprovalGateService } from '@ai-orchestrator/application';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import { InMemoryStateStore } from '@ai-orchestrator/state';
 
 test('ApprovalGateService supports pending -> approve -> resume lifecycle', async () => {
   const state = createEmptyProjectState({

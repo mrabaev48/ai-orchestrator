@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { IntegrationManagerRole } from '../packages/agents/src/index.ts';
+import { IntegrationManagerRole } from '@ai-orchestrator/agents';
 
 test('IntegrationManagerRole produces export-ready payloads with blockers and traceability', async () => {
   const role = new IntegrationManagerRole();

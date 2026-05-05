@@ -1,5 +1,5 @@
-import type { AgentRole, AgentRoleName } from '../../core/src/roles.ts';
-import { WorkflowPolicyError } from '../../shared/src/index.ts';
+import type { AgentRole, AgentRoleName } from '@ai-orchestrator/core';
+import { WorkflowPolicyError } from '@ai-orchestrator/shared';
 
 export class RoleRegistry {
   private readonly roles = new Map<AgentRoleName, AgentRole<unknown, unknown>>();

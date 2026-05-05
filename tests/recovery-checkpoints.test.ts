@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createEmptyProjectState } from '../packages/core/src/index.ts';
-import { InMemoryStateStore } from '../packages/state/src/index.ts';
-import { createRecoveryCheckpointStore } from '../packages/state/src/recovery/recovery-checkpoint.store.ts';
-import { resumeFromCheckpoint } from '../packages/execution/src/recovery/resume-from-checkpoint.ts';
+import { createEmptyProjectState } from '@ai-orchestrator/core';
+import { InMemoryStateStore } from '@ai-orchestrator/state';
+import { createRecoveryCheckpointStore } from '@ai-orchestrator/state';
+import { resumeFromCheckpoint } from '@ai-orchestrator/execution';
 
 function makeStore() {
   return new InMemoryStateStore(createEmptyProjectState({

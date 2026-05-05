@@ -10,9 +10,9 @@ import {
   type ProjectState,
   type RunStepLogEntry,
   type ExecutionPolicyDecision,
-} from '../../../core/src/index.ts';
-import type { ListEventsQuery, ListRunStepsQuery, PolicyDecisionQuery, RecordFailureInput, StateStore } from '../StateStore.ts';
-import { StateStoreError } from '../../../shared/src/index.ts';
+} from '@ai-orchestrator/core';
+import type { ListEventsQuery, ListRunStepsQuery, PolicyDecisionQuery, RecordFailureInput, StateStore } from '../StateStore.js';
+import { StateStoreError } from '@ai-orchestrator/shared';
 
 export class InMemoryStateStore implements StateStore {
   readonly events: DomainEvent[] = [];

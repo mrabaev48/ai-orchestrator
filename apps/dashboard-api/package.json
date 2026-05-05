@@ -1,0 +1,40 @@
+{
+  "name": "@ai-orchestrator/dashboard-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "lint": "eslint src --ignore-pattern \"**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "@ai-orchestrator/application": "workspace:*",
+    "@ai-orchestrator/core": "workspace:*",
+    "@ai-orchestrator/state": "workspace:*",
+    "@ai-orchestrator/shared": "workspace:*",
+    "@nestjs/common": "^11.1.16",
+    "@nestjs/core": "^11.1.16",
+    "@nestjs/platform-express": "^11.1.16",
+    "@nestjs/terminus": "^11.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.16",
+    "supertest": "^7.2.2",
+    "@types/supertest": "^7.2.0",
+    "@types/express": "^5.0.6"
+  }
+}

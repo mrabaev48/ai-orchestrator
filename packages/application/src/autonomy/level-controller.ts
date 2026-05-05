@@ -1,11 +1,11 @@
-import type { ExecutionPolicyRiskLevel } from '../../../core/src/execution-policy-decision.ts';
+import type { ExecutionPolicyRiskLevel } from '@ai-orchestrator/core';
 import {
   autonomyLevelSchema,
   getAutonomyPolicyProfile,
   type AutonomyLevel,
   type AutonomyPolicyProfile,
-} from '../../../core/src/autonomy/autonomy-level.ts';
-import type { PolicyOutcome } from '../../../core/src/policy/policy-outcome.ts';
+} from '@ai-orchestrator/core';
+import type { PolicyOutcome } from '@ai-orchestrator/core';
 
 export interface AutonomyLevelControllerInput {
   readonly autonomyLevel: AutonomyLevel;

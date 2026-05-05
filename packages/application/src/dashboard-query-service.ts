@@ -1,4 +1,4 @@
-import type { StateStore } from '../../state/src/index.ts';
+import type { StateStore } from '@ai-orchestrator/state';
 import type {
   ArtifactHistoryItemView,
   BacklogExportView,
@@ -15,7 +15,8 @@ import type {
   SpanAuditItemView,
   ReviewBundleView,
   ReadinessScorecardView,
-} from './read-models.ts';
+  ProductionReadinessReviewView,
+} from './read-models.js';
 import {
   toArtifactHistoryView,
   toBacklogExportView,
@@ -28,7 +29,7 @@ import {
   toMilestoneListView,
   toApprovalRequestView,
   toReadinessScorecardView,
-} from './read-models.ts';
+} from './read-models.js';
 
 export interface TenantScopeInput {
   orgId?: string;
@@ -215,44 +216,87 @@ export class DashboardQueryService {
   async getLatestProductionReadinessReview(
     query: TenantScopeInput & { runId?: string } = {},
   ): Promise<ProductionReadinessReviewView | null> {
+    const state = await this.stateStore.load();
     assertTenantScope(state, query);
-      .filter((artifact) => (query.runId ? artifact.metadata.runId === query.runId : true))
-    const parsed = parseProductionReadinessReviewPayload(payload);
-    if (!parsed) {
-      return null;
-    }
-        value?: number;
-        tags?: Record<string, string>;
-      };
-      if (typeof payload.name !== 'string' || typeof payload.value !== 'number') {
+
+    const releaseArtifacts = [...state.artifacts]
+      .filter((artifact) => artifact.type === 'release_assessment')
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+    for (const artifact of releaseArtifacts) {
+      const payload = artifact.metadata.productionReadinessReview;
+      if (!payload) {
         continue;
       }
-      const metricType = payload.metricType ?? 'counter';
-      const tags = payload.tags ?? {};
-      const key = `${metricType}:${payload.name}:${JSON.stringify(tags)}`;
+
+      const parsed = parseProductionReadinessReviewPayload(payload);
+      if (!parsed) {
+        continue;
+      }
+
+      const runId = parsed.runId ?? artifact.metadata.runId;
+      if (query.runId && runId !== query.runId) {
+        continue;
+      }
+
+      return {
+        artifactId: artifact.id,
+        artifactCreatedAt: artifact.createdAt,
+        verdict: parsed.verdict,
+        blockers: parsed.blockers,
+        warnings: parsed.warnings,
+        evidence: parsed.evidence,
+        ...(runId ? { runId } : {}),
+        ...(parsed.reviewDateIso ? { reviewDateIso: parsed.reviewDateIso } : {}),
+      };
+    }
+
+    return null;
+  }
+
+  async getMetricsAudit(query: HistoryQueryInput = {}): Promise<PaginatedView<MetricRollupItemView>> {
+    const { limit, offset } = normalizeHistoryQuery(query);
+    const events = await this.stateStore.listEvents({ eventType: 'METRIC_RECORDED' });
+    const buckets = new Map<string, MetricRollupItemView>();
+
+    for (const event of events) {
+      const payload = event.payload;
+      const metricName = typeof payload.name === 'string' ? payload.name : null;
+      const metricType = parseMetricType(payload.metricType);
+      const metricValue = typeof payload.value === 'number' ? payload.value : null;
+
+      if (!metricName || !metricType || metricValue === null) {
+        continue;
+      }
+
+      const tags = parseStringRecord(payload.tags);
+      const key = `${metricType}:${metricName}:${JSON.stringify(tags)}`;
       const existing = buckets.get(key);
       if (!existing) {
         buckets.set(key, {
-          name: payload.name,
+          name: metricName,
           metricType,
-          total: payload.value,
+          total: metricValue,
           sampleCount: 1,
-          lastValue: payload.value,
+          lastValue: metricValue,
           lastSeenAt: event.createdAt,
           tags,
         });
         continue;
       }
-      existing.total += payload.value;
+
+      existing.total += metricValue;
       existing.sampleCount += 1;
-      existing.lastValue = payload.value;
+      existing.lastValue = metricValue;
       existing.lastSeenAt = event.createdAt;
     }
+
     const items = applyPagination(
-      [...buckets.values()].sort((l, r) => r.lastSeenAt.localeCompare(l.lastSeenAt)),
+      [...buckets.values()].sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt)),
       offset,
       limit,
     );
+
     return { total: buckets.size, limit, offset, items };
   }
 
@@ -263,6 +307,7 @@ export class DashboardQueryService {
       .map((event) => {
         const payload = event.payload;
         const metricName = typeof payload.name === 'string' ? payload.name : null;
+        const tags = parseStringRecord(payload.tags);
         if (payload.metricType !== 'histogram' || !metricName?.startsWith('span_')) {
           return null;
         }
@@ -271,9 +316,12 @@ export class DashboardQueryService {
           ...(event.runId ? { runId: event.runId } : {}),
           ...(event.correlationId ? { correlationId: event.correlationId } : {}),
           ...(typeof payload.taskId === 'string' ? { taskId: payload.taskId } : {}),
+          ...(typeof payload.taskId !== 'string' && tags.taskId ? { taskId: tags.taskId } : {}),
           ...(typeof payload.role === 'string' ? { role: payload.role } : {}),
+          ...(typeof payload.role !== 'string' && tags.role ? { role: tags.role } : {}),
           ...(typeof payload.toolName === 'string' ? { toolName: payload.toolName } : {}),
-          status: payload.status === 'error' ? 'error' : 'ok',
+          ...(typeof payload.toolName !== 'string' && tags.toolName ? { toolName: tags.toolName } : {}),
+          status: payload.status === 'error' || tags.status === 'error' ? 'error' : 'ok',
           durationMs: typeof payload.value === 'number' ? payload.value : 0,
           createdAt: event.createdAt,
         };
@@ -366,10 +414,17 @@ function normalizeHistoryQuery(query: HistoryQueryInput): { limit: number; offse
 
 interface ProductionReadinessReviewPayload {
   runId?: string;
+  reviewDateIso?: string;
   verdict: 'ready' | 'not_ready';
   blockers: { checkId: string; title: string; details: string }[];
   warnings: { checkId: string; title: string; details: string }[];
-  evidence: { blockerCount: number; warningCount: number };
+  evidence: {
+    blockerCount: number;
+    warningCount: number;
+    totalChecks?: number;
+    passedChecks?: number;
+    failedChecks?: number;
+  };
 }
 
 function parseProductionReadinessReviewPayload(payload: string): ProductionReadinessReviewPayload | null {
@@ -400,14 +455,19 @@ function parseProductionReadinessReviewPayload(payload: string): ProductionReadi
     return null;
   }
   const runId = typeof candidate.runId === 'string' ? candidate.runId : undefined;
+  const reviewDateIso = typeof candidate.reviewDateIso === 'string' ? candidate.reviewDateIso : undefined;
   return {
     ...(runId ? { runId } : {}),
+    ...(reviewDateIso ? { reviewDateIso } : {}),
     verdict: candidate.verdict,
     blockers,
     warnings,
     evidence: {
       blockerCount: evidenceRecord.blockerCount,
       warningCount: evidenceRecord.warningCount,
+      ...(typeof evidenceRecord.totalChecks === 'number' ? { totalChecks: evidenceRecord.totalChecks } : {}),
+      ...(typeof evidenceRecord.passedChecks === 'number' ? { passedChecks: evidenceRecord.passedChecks } : {}),
+      ...(typeof evidenceRecord.failedChecks === 'number' ? { failedChecks: evidenceRecord.failedChecks } : {}),
     },
   };
 }
@@ -432,6 +492,29 @@ function parseIssueList(value: unknown): { checkId: string; title: string; detai
 
 function applyPagination<TItem>(items: TItem[], offset: number, limit: number): TItem[] {
   return items.slice(offset, offset + limit);
+}
+
+function parseMetricType(value: unknown): MetricRollupItemView['metricType'] | null {
+  if (value === 'counter' || value === 'histogram' || value === 'gauge') {
+    return value;
+  }
+
+  return null;
+}
+
+function parseStringRecord(value: unknown): Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {};
+  }
+
+  const result: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === 'string') {
+      result[key] = item;
+    }
+  }
+
+  return result;
 }
 
 

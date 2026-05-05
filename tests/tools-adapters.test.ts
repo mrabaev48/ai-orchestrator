@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { createLocalToolSet } from '../packages/tools/src/index.ts';
+import { createLocalToolSet } from '@ai-orchestrator/tools';
 
 test('tools adapter executes legacy file operations via unified contract', async () => {
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'toolset-'));

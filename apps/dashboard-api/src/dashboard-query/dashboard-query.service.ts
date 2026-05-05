@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { STATE_STORE } from '../dashboard-api.tokens.ts';
+import { STATE_STORE } from '../dashboard-api.tokens.js';
 
 import {
   ApprovalGateService,
   DashboardQueryService as ApplicationDashboardQueryService,
-} from '../../../../packages/application/src/index.ts';
-import type { DomainEventType } from '../../../../packages/core/src/index.ts';
-import { buildImmutableAuditLog, type StateStore } from '../../../../packages/state/src/index.ts';
+} from '@ai-orchestrator/application';
+import type { DomainEventType } from '@ai-orchestrator/core';
+import { buildImmutableAuditLog, type StateStore } from '@ai-orchestrator/state';
 
 interface TraceAuditQueryInput {
   limit?: number;
@@ -107,6 +107,10 @@ export class DashboardReadApiService {
       ...(projectId ? { projectId } : {}),
       ...(runId ? { runId } : {}),
     });
+  }
+
+  async getMetricsAudit(limit?: number, offset?: number) {
+    return await this.dashboardQueryService.getMetricsAudit({
       ...(limit === undefined ? {} : { limit }),
       ...(offset === undefined ? {} : { offset }),
     });

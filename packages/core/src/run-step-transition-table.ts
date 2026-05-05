@@ -1,4 +1,4 @@
-import type { RunStepLogEntry } from './project-state.ts';
+import type { RunStepLogEntry } from './project-state.js';
 
 export type RunStepStatus = RunStepLogEntry['status'];
 

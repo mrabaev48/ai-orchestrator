@@ -1,12 +1,16 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
+    "//#boundaries": {
+      "outputs": []
+    },
     "lint": {
       "outputs": []
     },
     "typecheck": {
       "dependsOn": [
-        "lint"
+        "^build",
+        "//#boundaries"
       ],
       "outputs": []
     },
@@ -18,16 +22,12 @@
     },
     "build": {
       "dependsOn": [
-        "test",
-        "baseline-invariants"
-      ],
-      "outputs": []
-    },
-    "baseline-invariants": {
-      "dependsOn": [
+        "^build",
         "typecheck"
       ],
-      "outputs": []
+      "outputs": [
+        "dist/**"
+      ]
     }
   }
 }

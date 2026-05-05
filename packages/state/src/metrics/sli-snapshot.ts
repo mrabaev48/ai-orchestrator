@@ -1,5 +1,4 @@
-import type { DomainEvent } from '../../../core/src/index.ts';
-import type { SliSnapshot } from '../../../application/src/slo/slo-policy.ts';
+import type { DomainEvent, SliSnapshot } from '@ai-orchestrator/core';
 
 function percentile95(values: number[]): number {
   if (values.length === 0) {

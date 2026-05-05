@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildBootstrapAnalysisPrompt } from '../packages/prompts/src/index.ts';
+import { buildBootstrapAnalysisPrompt } from '@ai-orchestrator/prompts';
 
 test('buildBootstrapAnalysisPrompt exposes bootstrap role schema and repository context', () => {
   const prompt = buildBootstrapAnalysisPrompt({

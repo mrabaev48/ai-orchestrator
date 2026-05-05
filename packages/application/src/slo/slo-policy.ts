@@ -1,10 +1,4 @@
-export interface SliSnapshot {
-  successRatePercent: number;
-  timeoutRatePercent: number;
-  cancellationRatePercent: number;
-  p95LatencyMs: number;
-  sampleSize: number;
-}
+import type { SliSnapshot } from '@ai-orchestrator/core';
 
 export interface SloThresholds {
   minSuccessRatePercent: number;

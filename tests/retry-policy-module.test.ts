@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getRetrySchedule, resolveRetryPolicy } from '../packages/core/src/retry/retry-policy.ts';
-import { executeWithRetry } from '../packages/execution/src/retry/execute-with-retry.ts';
+import { getRetrySchedule, resolveRetryPolicy } from '@ai-orchestrator/core';
+import { executeWithRetry } from '@ai-orchestrator/execution';
 
 test('retry policy: computes bounded exponential backoff with jitter', () => {
   const policy = resolveRetryPolicy({ maxAttempts: 4, baseDelayMs: 100, maxDelayMs: 250, backoffMultiplier: 2, jitterRatio: 0.1 });

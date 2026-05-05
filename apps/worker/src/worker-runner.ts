@@ -1,6 +1,6 @@
 import { setTimeout as sleepTimer } from 'node:timers/promises';
 
-import type { Logger } from '../../../packages/shared/src/index.ts';
+import type { Logger } from '@ai-orchestrator/shared';
 
 export interface WorkerRunnerOptions {
   pollIntervalMs: number;
