@@ -26,3 +26,5 @@ export * from './approval/sla-escalation.ts';
 
 export * from './idempotency/dedup-registry-service.ts';
 export * from './authorization/evaluate-access.ts';
+
+export * from './autonomy/level-controller.ts';
