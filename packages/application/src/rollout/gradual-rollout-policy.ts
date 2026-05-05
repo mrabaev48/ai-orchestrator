@@ -1,4 +1,4 @@
-import type { RolloutConfigStore, RolloutRiskTier, GradualRolloutRule } from '@ai-orchestrator/state';
+import type { GradualRolloutRule, RolloutConfigStore, RolloutRiskTier } from '../ports.js';
 
 export interface GradualRolloutRequest {
   tenantId: string;

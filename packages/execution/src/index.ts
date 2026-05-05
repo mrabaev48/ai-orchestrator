@@ -1,4 +1,5 @@
 export * from './orchestrator.js';
+export * from './run-cycle-types.js';
 export * from './lock-authority.js';
 export * from './telemetry.js';
 export * from './workspace-manager.js';
@@ -23,3 +24,10 @@ export * from './locks/fencing-token-guard.js';
 export * from './idempotency/side-effect-dedup-guard.js';
 export * from './cancellation/propagate-abort.js';
 export * from './locks/distributed-lock-store-factory.js';
+export * from './roles/role-runner.js';
+export * from './persistence/run-step-recorder.js';
+export * from './persistence/policy-decision-recorder.js';
+export * from './failure/failure-handler.js';
+export * from './git/git-lifecycle-coordinator.js';
+export * from './workspace/workspace-run-coordinator.js';
+export * from './task/task-runner.js';

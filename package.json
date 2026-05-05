@@ -61,6 +61,7 @@
     "@ai-orchestrator/execution": "workspace:*",
     "@ai-orchestrator/llm": "workspace:*",
     "@ai-orchestrator/prompts": "workspace:*",
+    "@ai-orchestrator/runtime": "workspace:*",
     "@ai-orchestrator/shared": "workspace:*",
     "@ai-orchestrator/state": "workspace:*",
     "@ai-orchestrator/tools": "workspace:*",

@@ -13,6 +13,7 @@ import {
   TaskManagerRole,
   TesterRole,
 } from '@ai-orchestrator/agents';
+import type { ApplicationRoleRegistry, ApplicationStateStore } from '@ai-orchestrator/application';
 import { createEmptyProjectState, type ProjectState } from '@ai-orchestrator/core';
 import { Orchestrator } from '@ai-orchestrator/execution';
 import type { Logger, RuntimeConfig } from '@ai-orchestrator/shared';
@@ -22,14 +23,14 @@ import {
   type StateStore,
 } from '@ai-orchestrator/state';
 
-export interface ApplicationContext {
+export interface RuntimeApplicationContext {
   initialState: ProjectState;
-  stateStore: StateStore;
-  roleRegistry: RoleRegistry;
+  stateStore: ApplicationStateStore;
+  roleRegistry: ApplicationRoleRegistry;
   orchestrator: Orchestrator;
 }
 
-export function createApplicationContext(input: {
+export function createRuntimeApplicationContext(input: {
   config: RuntimeConfig;
   logger: Logger;
   initialStateInput?: {
@@ -37,7 +38,7 @@ export function createApplicationContext(input: {
     projectName: string;
     summary: string;
   };
-}): ApplicationContext {
+}): RuntimeApplicationContext {
   const initialState = createEmptyProjectState({
     projectId: input.initialStateInput?.projectId ?? 'ai-orchestrator',
     projectName: input.initialStateInput?.projectName ?? 'AI Orchestrator',

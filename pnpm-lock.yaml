@@ -69,6 +69,9 @@ importers:
       '@ai-orchestrator/prompts':
         specifier: workspace:*
         version: link:packages/prompts
+      '@ai-orchestrator/runtime':
+        specifier: workspace:*
+        version: link:packages/runtime
       '@ai-orchestrator/shared':
         specifier: workspace:*
         version: link:packages/shared
@@ -117,6 +120,9 @@ importers:
       '@ai-orchestrator/application':
         specifier: workspace:*
         version: link:../../packages/application
+      '@ai-orchestrator/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@ai-orchestrator/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -129,6 +135,9 @@ importers:
       '@ai-orchestrator/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@ai-orchestrator/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@ai-orchestrator/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -178,6 +187,9 @@ importers:
       '@ai-orchestrator/application':
         specifier: workspace:*
         version: link:../../packages/application
+      '@ai-orchestrator/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@ai-orchestrator/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -199,24 +211,15 @@ importers:
 
   packages/application:
     dependencies:
-      '@ai-orchestrator/agents':
-        specifier: workspace:*
-        version: link:../agents
       '@ai-orchestrator/core':
         specifier: workspace:*
         version: link:../core
-      '@ai-orchestrator/execution':
-        specifier: workspace:*
-        version: link:../execution
       '@ai-orchestrator/prompts':
         specifier: workspace:*
         version: link:../prompts
       '@ai-orchestrator/shared':
         specifier: workspace:*
         version: link:../shared
-      '@ai-orchestrator/state':
-        specifier: workspace:*
-        version: link:../state
       '@ai-orchestrator/tools':
         specifier: workspace:*
         version: link:../tools
@@ -261,6 +264,27 @@ importers:
       '@ai-orchestrator/shared':
         specifier: workspace:*
         version: link:../shared
+
+  packages/runtime:
+    dependencies:
+      '@ai-orchestrator/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@ai-orchestrator/application':
+        specifier: workspace:*
+        version: link:../application
+      '@ai-orchestrator/core':
+        specifier: workspace:*
+        version: link:../core
+      '@ai-orchestrator/execution':
+        specifier: workspace:*
+        version: link:../execution
+      '@ai-orchestrator/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@ai-orchestrator/state':
+        specifier: workspace:*
+        version: link:../state
 
   packages/shared:
     dependencies:

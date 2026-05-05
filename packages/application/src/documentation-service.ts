@@ -1,12 +1,11 @@
 import path from 'node:path';
 
-import type { RoleRegistry } from '@ai-orchestrator/agents';
 import { defaultExecutionPolicyEngine } from '@ai-orchestrator/core';
 import { buildDocsWriterPrompt } from '@ai-orchestrator/prompts';
 import type { Logger, RuntimeConfig } from '@ai-orchestrator/shared';
-import type { StateStore } from '@ai-orchestrator/state';
 import { createLocalToolSet } from '@ai-orchestrator/tools';
 import type { RoleRequest } from '@ai-orchestrator/core';
+import type { ApplicationRoleRegistry, ApplicationStateStore } from './ports.js';
 import { assertRoleOutput } from './role-output-validation.js';
 
 interface DocumentationOutput {
@@ -19,15 +18,15 @@ interface DocumentationOutput {
 }
 
 export class DocumentationService {
-  private readonly stateStore: StateStore;
-  private readonly roleRegistry: RoleRegistry;
+  private readonly stateStore: ApplicationStateStore;
+  private readonly roleRegistry: ApplicationRoleRegistry;
   private readonly logger: Logger;
   private readonly toolSet: ReturnType<typeof createLocalToolSet>;
   private readonly allowedWritePaths: string[];
 
   constructor(
-    stateStore: StateStore,
-    roleRegistry: RoleRegistry,
+    stateStore: ApplicationStateStore,
+    roleRegistry: ApplicationRoleRegistry,
     config: RuntimeConfig,
     logger: Logger,
   ) {
@@ -142,7 +141,7 @@ function makeDocsWriterRequest(
   };
 }
 
-function collectAffectedModules(state: Awaited<ReturnType<StateStore['load']>>): string[] {
+function collectAffectedModules(state: Awaited<ReturnType<ApplicationStateStore['load']>>): string[] {
   const modules = new Set<string>();
 
   for (const finding of state.architecture.findings) {
@@ -162,7 +161,7 @@ function collectAffectedModules(state: Awaited<ReturnType<StateStore['load']>>):
   return [...modules].sort();
 }
 
-function collectBehaviorChanges(state: Awaited<ReturnType<StateStore['load']>>): string[] {
+function collectBehaviorChanges(state: Awaited<ReturnType<ApplicationStateStore['load']>>): string[] {
   const changes: string[] = [];
 
   if (state.architecture.findings.length > 0) {
@@ -180,11 +179,11 @@ function collectBehaviorChanges(state: Awaited<ReturnType<StateStore['load']>>):
   return changes;
 }
 
-function collectDesignRationale(state: Awaited<ReturnType<StateStore['load']>>): string[] {
+function collectDesignRationale(state: Awaited<ReturnType<ApplicationStateStore['load']>>): string[] {
   return state.decisions.map((decision) => `${decision.title}: ${decision.rationale}`);
 }
 
-function collectFollowUpGaps(state: Awaited<ReturnType<StateStore['load']>>): string[] {
+function collectFollowUpGaps(state: Awaited<ReturnType<ApplicationStateStore['load']>>): string[] {
   if (state.execution.blockedTaskIds.length === 0) {
     return ['No blocked tasks currently require documentation follow-up.'];
   }

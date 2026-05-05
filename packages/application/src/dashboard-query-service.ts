@@ -1,4 +1,3 @@
-import type { StateStore } from '@ai-orchestrator/state';
 import type {
   ArtifactHistoryItemView,
   BacklogExportView,
@@ -17,6 +16,7 @@ import type {
   ReadinessScorecardView,
   ProductionReadinessReviewView,
 } from './read-models.js';
+import type { ApplicationStateStore } from './ports.js';
 import {
   toArtifactHistoryView,
   toBacklogExportView,
@@ -51,7 +51,7 @@ export interface TraceAuditQueryInput extends HistoryQueryInput {
 }
 
 export interface EventHistoryQueryInput extends HistoryQueryInput {
-  eventType?: NonNullable<Parameters<StateStore['listEvents']>[0]>['eventType'];
+  eventType?: NonNullable<Parameters<ApplicationStateStore['listEvents']>[0]>['eventType'];
 }
 
 export interface FailureHistoryQueryInput extends HistoryQueryInput {
@@ -88,10 +88,13 @@ export interface ReadinessScorecardAuditContext {
 }
 
 export class DashboardQueryService {
-  private readonly stateStore: StateStore;
+  private readonly stateStore: ApplicationStateStore;
   private readonly readinessPolicy: ReadinessScorecardPolicy;
 
-  constructor(stateStore: StateStore, readinessPolicy: ReadinessScorecardPolicy = DEFAULT_READINESS_SCORECARD_POLICY) {
+  constructor(
+    stateStore: ApplicationStateStore,
+    readinessPolicy: ReadinessScorecardPolicy = DEFAULT_READINESS_SCORECARD_POLICY,
+  ) {
     this.stateStore = stateStore;
     this.readinessPolicy = readinessPolicy;
   }

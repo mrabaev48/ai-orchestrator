@@ -10,11 +10,11 @@ import {
   DocumentationService,
   PlanningService,
   ReleaseReadinessService,
-  createRoleRegistry,
 } from '@ai-orchestrator/application';
 import { createEmptyProjectState } from '@ai-orchestrator/core';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 import { InMemoryStateStore } from '@ai-orchestrator/state';
+import { createTestApplicationRoleRegistry } from './support/application-role-registry.js';
 
 function makeRuntimeConfig(allowedWritePath: string): RuntimeConfig {
   return {
@@ -75,7 +75,7 @@ test('ReleaseReadinessService generates structured assessment artifact', async (
     state.repoHealth.lint = 'passing';
 
     const store = new InMemoryStateStore(state);
-    const roleRegistry = createRoleRegistry();
+    const roleRegistry = createTestApplicationRoleRegistry();
     const logger = createLogger(makeRuntimeConfig(tempDir), { sink: () => {} });
 
     await new BootstrapService(store, roleRegistry, logger, tempDir).bootstrap(state, true);

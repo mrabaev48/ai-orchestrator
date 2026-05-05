@@ -1,18 +1,17 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { makeEvent, type ProjectState } from '@ai-orchestrator/core';
-import { selectReplayCheckpoint } from '@ai-orchestrator/execution';
+import { makeEvent, type FailureRecord, type ProjectState } from '@ai-orchestrator/core';
 import { WorkflowPolicyError } from '@ai-orchestrator/shared';
 import type { Logger } from '@ai-orchestrator/shared';
-import type { StateStore } from '@ai-orchestrator/state';
+import type { ApplicationStateStore } from './ports.js';
 import { toBacklogExportView, toStateSummaryView, type StateSummaryView } from './read-models.js';
 
 export class ControlPlaneService {
-  private readonly stateStore: StateStore;
+  private readonly stateStore: ApplicationStateStore;
   private readonly logger: Logger;
 
-  constructor(stateStore: StateStore, logger: Logger) {
+  constructor(stateStore: ApplicationStateStore, logger: Logger) {
     this.stateStore = stateStore;
     this.logger = logger;
   }
@@ -123,5 +122,27 @@ export class ControlPlaneService {
     ]);
 
     return replay;
+  }
+}
+
+interface ReplaySelection {
+  taskId: string;
+  runId?: string;
+}
+
+function selectReplayCheckpoint(failure: FailureRecord): ReplaySelection {
+  assertReplayableFailure(failure);
+  return {
+    taskId: failure.taskId,
+    ...(failure.checkpointRunId ? { runId: failure.checkpointRunId } : {}),
+  };
+}
+
+function assertReplayableFailure(failure: FailureRecord): void {
+  const status = failure.status ?? 'retryable';
+  if (status !== 'dead_lettered') {
+    throw new WorkflowPolicyError(`Failure ${failure.id} is not dead-lettered`, {
+      details: { failureId: failure.id, status, operation: 'replay_failure' },
+    });
   }
 }

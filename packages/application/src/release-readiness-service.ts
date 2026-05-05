@@ -1,19 +1,18 @@
 import { buildReleaseAssessmentPrompt } from '@ai-orchestrator/prompts';
 import { defaultExecutionPolicyEngine, makeEvent, type ReleaseAssessment } from '@ai-orchestrator/core';
-import type { RoleRegistry } from '@ai-orchestrator/agents';
 import type { Logger } from '@ai-orchestrator/shared';
-import type { StateStore } from '@ai-orchestrator/state';
 import type { RoleRequest } from '@ai-orchestrator/core';
+import type { ApplicationRoleRegistry, ApplicationStateStore } from './ports.js';
 import { assertRoleOutput } from './role-output-validation.js';
 
 export class ReleaseReadinessService {
-  private readonly stateStore: StateStore;
-  private readonly roleRegistry: RoleRegistry;
+  private readonly stateStore: ApplicationStateStore;
+  private readonly roleRegistry: ApplicationRoleRegistry;
   private readonly logger: Logger;
 
   constructor(
-    stateStore: StateStore,
-    roleRegistry: RoleRegistry,
+    stateStore: ApplicationStateStore,
+    roleRegistry: ApplicationRoleRegistry,
     logger: Logger,
   ) {
     this.stateStore = stateStore;
@@ -95,7 +94,7 @@ function makeReleaseRequest(
 }
 
 function collectBlockers(
-  state: Awaited<ReturnType<StateStore['load']>>,
+  state: Awaited<ReturnType<ApplicationStateStore['load']>>,
 ): string[] {
   const blockers: string[] = [];
 
@@ -115,7 +114,7 @@ function collectBlockers(
 }
 
 function collectWarnings(
-  state: Awaited<ReturnType<StateStore['load']>>,
+  state: Awaited<ReturnType<ApplicationStateStore['load']>>,
 ): string[] {
   const warnings: string[] = [];
 
@@ -139,7 +138,7 @@ function collectWarnings(
 }
 
 function collectEvidence(
-  state: Awaited<ReturnType<StateStore['load']>>,
+  state: Awaited<ReturnType<ApplicationStateStore['load']>>,
 ): string[] {
   const evidence = [
     `Repo health: build=${state.repoHealth.build} tests=${state.repoHealth.tests} lint=${state.repoHealth.lint} typecheck=${state.repoHealth.typecheck}`,

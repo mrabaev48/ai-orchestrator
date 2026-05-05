@@ -1,6 +1,4 @@
-import {
-  createApplicationContext,
-} from '@ai-orchestrator/application';
+import { createRuntimeApplicationContext } from '@ai-orchestrator/runtime';
 import {
   ConfigError,
   createLogger,
@@ -21,7 +19,7 @@ async function main(): Promise<void> {
   const logger = createLogger(runtimeConfig);
   const args = parseArgs(process.argv.slice(2));
 
-  const application = createApplicationContext({
+  const application = createRuntimeApplicationContext({
     config: runtimeConfig,
     logger,
     initialStateInput: {

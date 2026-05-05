@@ -6,10 +6,10 @@ export * from './dashboard-query-service.js';
 export * from './documentation-service.js';
 export * from './integration-export-service.js';
 export * from './planning-service.js';
+export * from './ports.js';
 export * from './read-models.js';
 export * from './release-readiness-service.js';
 export * from './state-integrity-service.js';
-export * from './runtime-factory.js';
 
 export * from './slo/slo-policy.js';
 export * from './slo/slo-alerts.js';
@@ -18,8 +18,6 @@ export * from './policy-decision-contract.js';
 export * from './policy/risk-mapper.js';
 
 export * from './policy-engine/evaluate-policy.js';
-
-export * from './run/preflight.js';
 
 export * from './approval/routing.js';
 export * from './approval/sla-escalation.js';

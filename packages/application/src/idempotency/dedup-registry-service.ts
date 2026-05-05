@@ -1,4 +1,4 @@
-import type { DedupFinalizeCommand, DedupRegistryPort, DedupReserveCommand } from '@ai-orchestrator/state';
+import type { DedupFinalizeCommand, DedupRegistryPort, DedupReserveCommand } from '../ports.js';
 
 export class DedupRegistryService {
   private readonly dedupRegistry: DedupRegistryPort;

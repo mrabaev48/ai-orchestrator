@@ -7,11 +7,11 @@ import test from 'node:test';
 import {
   ArchitectureService,
   BootstrapService,
-  createRoleRegistry,
 } from '@ai-orchestrator/application';
 import { createEmptyProjectState } from '@ai-orchestrator/core';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 import { InMemoryStateStore } from '@ai-orchestrator/state';
+import { createTestApplicationRoleRegistry } from './support/application-role-registry.js';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -68,7 +68,7 @@ test('ArchitectureService persists architect findings after bootstrap baseline',
       summary: 'Summary',
     });
     const store = new InMemoryStateStore(state);
-    const roleRegistry = createRoleRegistry();
+    const roleRegistry = createTestApplicationRoleRegistry();
     const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
     const bootstrapService = new BootstrapService(store, roleRegistry, logger, tempDir);
     const architectureService = new ArchitectureService(store, roleRegistry, logger, tempDir);

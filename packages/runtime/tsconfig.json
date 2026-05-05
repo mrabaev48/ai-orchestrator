@@ -1,0 +1,38 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "dist"
+  ],
+  "references": [
+    {
+      "path": "../../packages/agents"
+    },
+    {
+      "path": "../../packages/application"
+    },
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/execution"
+    },
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/state"
+    }
+  ]
+}

@@ -4,20 +4,19 @@ import { defaultExecutionPolicyEngine,
   type StateIntegrityAssessment,
 } from '@ai-orchestrator/core';
 import { buildStateIntegrityPrompt } from '@ai-orchestrator/prompts';
-import type { RoleRegistry } from '@ai-orchestrator/agents';
 import type { Logger } from '@ai-orchestrator/shared';
-import type { StateStore } from '@ai-orchestrator/state';
 import type { RoleRequest } from '@ai-orchestrator/core';
+import type { ApplicationRoleRegistry, ApplicationStateStore } from './ports.js';
 import { assertRoleOutput } from './role-output-validation.js';
 
 export class StateIntegrityService {
-  private readonly stateStore: StateStore;
-  private readonly roleRegistry: RoleRegistry;
+  private readonly stateStore: ApplicationStateStore;
+  private readonly roleRegistry: ApplicationRoleRegistry;
   private readonly logger: Logger;
 
   constructor(
-    stateStore: StateStore,
-    roleRegistry: RoleRegistry,
+    stateStore: ApplicationStateStore,
+    roleRegistry: ApplicationRoleRegistry,
     logger: Logger,
   ) {
     this.stateStore = stateStore;

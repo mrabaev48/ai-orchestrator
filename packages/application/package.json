@@ -20,10 +20,7 @@
   "dependencies": {
     "@ai-orchestrator/core": "workspace:*",
     "@ai-orchestrator/shared": "workspace:*",
-    "@ai-orchestrator/state": "workspace:*",
-    "@ai-orchestrator/agents": "workspace:*",
     "@ai-orchestrator/prompts": "workspace:*",
-    "@ai-orchestrator/tools": "workspace:*",
-    "@ai-orchestrator/execution": "workspace:*"
+    "@ai-orchestrator/tools": "workspace:*"
   }
 }

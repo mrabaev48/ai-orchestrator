@@ -1,4 +1,3 @@
-import type { RoleRegistry } from '@ai-orchestrator/agents';
 import { defaultExecutionPolicyEngine,
   assertProjectState,
   makeEvent,
@@ -9,8 +8,8 @@ import { defaultExecutionPolicyEngine,
 } from '@ai-orchestrator/core';
 import { buildPlanningPrompt } from '@ai-orchestrator/prompts';
 import type { Logger } from '@ai-orchestrator/shared';
-import type { StateStore } from '@ai-orchestrator/state';
 import type { RoleRequest } from '@ai-orchestrator/core';
+import type { ApplicationRoleRegistry, ApplicationStateStore } from './ports.js';
 import { assertRoleOutput } from './role-output-validation.js';
 
 interface PlanningOutput {
@@ -43,13 +42,13 @@ interface PlanningOutput {
 }
 
 export class PlanningService {
-  private readonly stateStore: StateStore;
-  private readonly roleRegistry: RoleRegistry;
+  private readonly stateStore: ApplicationStateStore;
+  private readonly roleRegistry: ApplicationRoleRegistry;
   private readonly logger: Logger;
 
   constructor(
-    stateStore: StateStore,
-    roleRegistry: RoleRegistry,
+    stateStore: ApplicationStateStore,
+    roleRegistry: ApplicationRoleRegistry,
     logger: Logger,
   ) {
     this.stateStore = stateStore;

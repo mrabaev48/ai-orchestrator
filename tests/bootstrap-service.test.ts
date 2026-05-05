@@ -7,11 +7,11 @@ import test from 'node:test';
 import {
   BootstrapService,
   collectBootstrapRepositorySnapshot,
-  createRoleRegistry,
 } from '@ai-orchestrator/application';
 import { createEmptyProjectState } from '@ai-orchestrator/core';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 import { InMemoryStateStore } from '@ai-orchestrator/state';
+import { createTestApplicationRoleRegistry } from './support/application-role-registry.js';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -87,7 +87,7 @@ test('BootstrapService persists discovery output and bootstrap artifact', async 
     const store = new InMemoryStateStore(state);
     const bootstrapService = new BootstrapService(
       store,
-      createRoleRegistry(),
+      createTestApplicationRoleRegistry(),
       createLogger(makeRuntimeConfig(), { sink: () => {} }),
       tempDir,
     );

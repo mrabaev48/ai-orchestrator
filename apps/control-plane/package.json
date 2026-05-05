@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@ai-orchestrator/application": "workspace:*",
+    "@ai-orchestrator/runtime": "workspace:*",
     "@ai-orchestrator/shared": "workspace:*"
   }
 }

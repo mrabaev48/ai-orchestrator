@@ -4,9 +4,9 @@ import {
   ApprovalGateService,
   DEFAULT_READINESS_SCORECARD_POLICY,
   DashboardQueryService,
-  createStateStore,
 } from '@ai-orchestrator/application';
 import { createEmptyProjectState } from '@ai-orchestrator/core';
+import { createStateStore } from '@ai-orchestrator/runtime';
 import type { StateStore } from '@ai-orchestrator/state';
 import { DASHBOARD_CONFIG, STATE_STORE } from '../dashboard-api.tokens.js';
 import type { DashboardApiConfig } from '../config/dashboard-config.js';

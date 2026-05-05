@@ -23,19 +23,10 @@
       "path": "../../packages/shared"
     },
     {
-      "path": "../../packages/state"
-    },
-    {
-      "path": "../../packages/agents"
-    },
-    {
       "path": "../../packages/prompts"
     },
     {
       "path": "../../packages/tools"
-    },
-    {
-      "path": "../../packages/execution"
     }
   ]
 }

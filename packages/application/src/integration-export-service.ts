@@ -8,24 +8,23 @@ import {
   type ProjectState,
 } from '@ai-orchestrator/core';
 import { buildIntegrationExportPrompt } from '@ai-orchestrator/prompts';
-import type { RoleRegistry } from '@ai-orchestrator/agents';
 import type { Logger } from '@ai-orchestrator/shared';
-import type { StateStore } from '@ai-orchestrator/state';
 import { createLocalToolSet } from '@ai-orchestrator/tools';
 import type { RuntimeConfig } from '@ai-orchestrator/shared';
 import type { RoleRequest } from '@ai-orchestrator/core';
+import type { ApplicationRoleRegistry, ApplicationStateStore } from './ports.js';
 import { assertRoleOutput } from './role-output-validation.js';
 
 export class IntegrationExportService {
-  private readonly stateStore: StateStore;
-  private readonly roleRegistry: RoleRegistry;
+  private readonly stateStore: ApplicationStateStore;
+  private readonly roleRegistry: ApplicationRoleRegistry;
   private readonly logger: Logger;
   private readonly toolSet: ReturnType<typeof createLocalToolSet>;
   private readonly allowedWritePaths: string[];
 
   constructor(
-    stateStore: StateStore,
-    roleRegistry: RoleRegistry,
+    stateStore: ApplicationStateStore,
+    roleRegistry: ApplicationRoleRegistry,
     config: RuntimeConfig,
     logger: Logger,
   ) {

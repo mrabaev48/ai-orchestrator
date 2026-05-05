@@ -71,25 +71,34 @@ const ALLOWED_WORKSPACE_DEPENDENCIES = new Map<string, ReadonlySet<string>>([
     new Set([
       '@ai-orchestrator/core',
       '@ai-orchestrator/shared',
-      '@ai-orchestrator/state',
-      '@ai-orchestrator/agents',
       '@ai-orchestrator/prompts',
       '@ai-orchestrator/tools',
+    ]),
+  ],
+  [
+    '@ai-orchestrator/runtime',
+    new Set([
+      '@ai-orchestrator/agents',
+      '@ai-orchestrator/application',
+      '@ai-orchestrator/core',
       '@ai-orchestrator/execution',
+      '@ai-orchestrator/shared',
+      '@ai-orchestrator/state',
     ]),
   ],
   ['@ai-orchestrator/llm', new Set()],
-  ['@ai-orchestrator/control-plane', new Set(['@ai-orchestrator/application', '@ai-orchestrator/shared'])],
+  ['@ai-orchestrator/control-plane', new Set(['@ai-orchestrator/application', '@ai-orchestrator/runtime', '@ai-orchestrator/shared'])],
   [
     '@ai-orchestrator/dashboard-api',
     new Set([
       '@ai-orchestrator/application',
       '@ai-orchestrator/core',
+      '@ai-orchestrator/runtime',
       '@ai-orchestrator/state',
       '@ai-orchestrator/shared',
     ]),
   ],
-  ['@ai-orchestrator/worker', new Set(['@ai-orchestrator/application', '@ai-orchestrator/shared'])],
+  ['@ai-orchestrator/worker', new Set(['@ai-orchestrator/application', '@ai-orchestrator/runtime', '@ai-orchestrator/shared'])],
 ]);
 
 export function checkPackageBoundaries(rootDir: string = process.cwd()): BoundaryCheckResult {

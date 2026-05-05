@@ -20,6 +20,7 @@
   "dependencies": {
     "@ai-orchestrator/application": "workspace:*",
     "@ai-orchestrator/core": "workspace:*",
+    "@ai-orchestrator/runtime": "workspace:*",
     "@ai-orchestrator/state": "workspace:*",
     "@ai-orchestrator/shared": "workspace:*",
     "@nestjs/common": "^11.1.16",

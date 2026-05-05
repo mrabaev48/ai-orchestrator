@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { InMemoryRolloutConfigStore } from '@ai-orchestrator/state';
+import type { GradualRolloutRule, RolloutConfigStore } from '../ports.js';
 import { evaluateGradualRolloutPolicy } from './gradual-rollout-policy.js';
 
+class TestRolloutConfigStore implements RolloutConfigStore {
+  readonly #rules: readonly GradualRolloutRule[];
+
+  constructor(rules: readonly GradualRolloutRule[]) {
+    this.#rules = rules;
+  }
+
+  listRules(): readonly GradualRolloutRule[] {
+    return this.#rules;
+  }
+}
+
 void test('GradualRolloutPolicy: enables rollout for matching tenant/project rule', () => {
-  const store = new InMemoryRolloutConfigStore([
+  const store = new TestRolloutConfigStore([
     { ruleId: 'global-low', riskTier: 'low', enabled: true, rolloutPercent: 0, createdAt: '2026-05-05T00:00:00.000Z' },
     { ruleId: 'tenant-project-low', riskTier: 'low', enabled: true, rolloutPercent: 100, tenantId: 'tenant-a', projectId: 'proj-a', createdAt: '2026-05-05T00:00:00.000Z' },
   ]);
@@ -19,7 +31,7 @@ void test('GradualRolloutPolicy: enables rollout for matching tenant/project rul
 });
 
 void test('GradualRolloutPolicy: returns not configured when matching risk-tier rule does not exist', () => {
-  const store = new InMemoryRolloutConfigStore([
+  const store = new TestRolloutConfigStore([
     { ruleId: 'global-high', riskTier: 'high', enabled: true, rolloutPercent: 25, createdAt: '2026-05-05T00:00:00.000Z' },
   ]);
 
@@ -30,7 +42,7 @@ void test('GradualRolloutPolicy: returns not configured when matching risk-tier 
 });
 
 void test('GradualRolloutPolicy: is deterministic for identical rollout key and config', () => {
-  const store = new InMemoryRolloutConfigStore([
+  const store = new TestRolloutConfigStore([
     { ruleId: 'global-medium', riskTier: 'medium', enabled: true, rolloutPercent: 50, createdAt: '2026-05-05T00:00:00.000Z' },
   ]);
 
@@ -43,7 +55,7 @@ void test('GradualRolloutPolicy: is deterministic for identical rollout key and 
 });
 
 void test('GradualRolloutPolicy: returns invalid input for missing required fields', () => {
-  const store = new InMemoryRolloutConfigStore([]);
+  const store = new TestRolloutConfigStore([]);
   const decision = evaluateGradualRolloutPolicy({ tenantId: '', projectId: 'p', riskTier: 'low', rolloutKey: '' }, store);
 
   assert.equal(decision.status, 'disabled');

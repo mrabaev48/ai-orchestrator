@@ -4,7 +4,7 @@ import {
   type ApprovalStatus,
 } from '@ai-orchestrator/core';
 import { WorkflowPolicyError } from '@ai-orchestrator/shared';
-import type { StateStore } from '@ai-orchestrator/state';
+import type { ApplicationStateStore } from './ports.js';
 
 export interface ApprovalHistoryQueryInput {
   status?: ApprovalStatus;
@@ -16,9 +16,9 @@ export interface ApprovalDecisionLinkInput {
 }
 
 export class ApprovalGateService {
-  private readonly stateStore: StateStore;
+  private readonly stateStore: ApplicationStateStore;
 
-  constructor(stateStore: StateStore) {
+  constructor(stateStore: ApplicationStateStore) {
     this.stateStore = stateStore;
   }
 

@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import {
   StateIntegrityService,
-  createRoleRegistry,
 } from '@ai-orchestrator/application';
 import {
   createEmptyProjectState,
@@ -15,6 +14,7 @@ import {
 } from '@ai-orchestrator/core';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 import type { RecordFailureInput, StateStore } from '@ai-orchestrator/state';
+import { createTestApplicationRoleRegistry } from './support/application-role-registry.js';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -105,7 +105,7 @@ test('StateIntegrityService persists explainable integrity report for invalid st
   };
   const report = await new StateIntegrityService(
     store,
-    createRoleRegistry(),
+    createTestApplicationRoleRegistry(),
     createLogger(makeRuntimeConfig(), { sink: () => {} }),
   ).inspect();
 

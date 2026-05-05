@@ -47,6 +47,9 @@
       "@ai-orchestrator/application": [
         "packages/application/src/index.ts"
       ],
+      "@ai-orchestrator/runtime": [
+        "packages/runtime/src/index.ts"
+      ],
       "@ai-orchestrator/llm": [
         "packages/llm/src/index.ts"
       ],

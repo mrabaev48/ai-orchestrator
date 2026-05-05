@@ -132,6 +132,125 @@ test('package boundary checker rejects forbidden layer dependencies', () => {
   }
 });
 
+test('package boundary checker rejects application depending on runtime adapters', () => {
+  const fixtureRoot = createFixture([
+    {
+      scope: 'packages',
+      directoryName: 'agents',
+      packageName: '@ai-orchestrator/agents',
+      files: {
+        'src/index.ts': 'export const agentValue = 1;\n',
+      },
+    },
+    {
+      scope: 'packages',
+      directoryName: 'application',
+      packageName: '@ai-orchestrator/application',
+      dependencies: { '@ai-orchestrator/agents': 'workspace:*' },
+      files: {
+        'src/index.ts': "import { agentValue } from '@ai-orchestrator/agents';\nexport const appValue = agentValue;\n",
+      },
+    },
+  ]);
+
+  try {
+    const result = runBoundaryChecker(fixtureRoot);
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /FORBIDDEN_LAYER_DEPENDENCY/u);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('package boundary checker rejects application depending on outer runtime composition', () => {
+  const fixtureRoot = createFixture([
+    {
+      scope: 'packages',
+      directoryName: 'runtime',
+      packageName: '@ai-orchestrator/runtime',
+      files: {
+        'src/index.ts': 'export const runtimeValue = 1;\n',
+      },
+    },
+    {
+      scope: 'packages',
+      directoryName: 'application',
+      packageName: '@ai-orchestrator/application',
+      dependencies: { '@ai-orchestrator/runtime': 'workspace:*' },
+      files: {
+        'src/index.ts': "import { runtimeValue } from '@ai-orchestrator/runtime';\nexport const appValue = runtimeValue;\n",
+      },
+    },
+  ]);
+
+  try {
+    const result = runBoundaryChecker(fixtureRoot);
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /FORBIDDEN_LAYER_DEPENDENCY/u);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('package boundary checker accepts runtime as the outer composition root', () => {
+  const fixtureRoot = createFixture([
+    {
+      scope: 'packages',
+      directoryName: 'application',
+      packageName: '@ai-orchestrator/application',
+      files: {
+        'src/index.ts': 'export const appValue = 1;\n',
+      },
+    },
+    {
+      scope: 'packages',
+      directoryName: 'agents',
+      packageName: '@ai-orchestrator/agents',
+      files: {
+        'src/index.ts': 'export const agentValue = 1;\n',
+      },
+    },
+    {
+      scope: 'packages',
+      directoryName: 'execution',
+      packageName: '@ai-orchestrator/execution',
+      files: {
+        'src/index.ts': 'export const executionValue = 1;\n',
+      },
+    },
+    {
+      scope: 'packages',
+      directoryName: 'state',
+      packageName: '@ai-orchestrator/state',
+      files: {
+        'src/index.ts': 'export const stateValue = 1;\n',
+      },
+    },
+    {
+      scope: 'packages',
+      directoryName: 'runtime',
+      packageName: '@ai-orchestrator/runtime',
+      dependencies: {
+        '@ai-orchestrator/application': 'workspace:*',
+        '@ai-orchestrator/agents': 'workspace:*',
+        '@ai-orchestrator/execution': 'workspace:*',
+        '@ai-orchestrator/state': 'workspace:*',
+      },
+      files: {
+        'src/index.ts': "import { appValue } from '@ai-orchestrator/application';\nimport { agentValue } from '@ai-orchestrator/agents';\nimport { executionValue } from '@ai-orchestrator/execution';\nimport { stateValue } from '@ai-orchestrator/state';\nexport const runtimeValue = appValue + agentValue + executionValue + stateValue;\n",
+      },
+    },
+  ]);
+
+  try {
+    const result = runBoundaryChecker(fixtureRoot);
+    assert.equal(result.status, 0);
+    assert.match(result.output, /Package boundary check passed/u);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test('package boundary checker rejects workspace package subpaths', () => {
   const fixtureRoot = createFixture([
     {

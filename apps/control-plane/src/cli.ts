@@ -9,8 +9,8 @@ import {
   StateIntegrityService,
   evaluateHumanOverride,
   evaluateKillSwitch,
-  createApplicationContext,
 } from '@ai-orchestrator/application';
+import { createRuntimeApplicationContext } from '@ai-orchestrator/runtime';
 import {
   createLogger,
   loadRuntimeConfig,
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
       ...(ownerTeam ? { ownerTeam } : {}),
     },
   });
-  const application = createApplicationContext({
+  const application = createRuntimeApplicationContext({
     config: runtimeConfig,
     logger,
     initialStateInput: {
