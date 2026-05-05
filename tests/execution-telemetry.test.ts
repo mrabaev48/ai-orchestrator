@@ -63,8 +63,9 @@ test('StateStoreExecutionTelemetry persists METRIC_RECORDED events', async () =>
     metricType: 'counter',
     name: 'run_lock_contention_total',
     value: 1,
-    tags: { lock_resource: 'global-run-cycle' },
+    tags: { lock_resource: 'global-run-cycle', runId: 'run-1' },
   });
+  assert.equal(store.events[0]?.correlationId, 'run-1');
 });
 
 test('StateStoreExecutionTelemetry persists histogram metrics for span traces', async () => {
@@ -87,8 +88,9 @@ test('StateStoreExecutionTelemetry persists histogram metrics for span traces', 
     metricType: 'histogram',
     name: 'span_tool_invocation_duration_ms',
     value: 25,
-    tags: { toolName: 'file_read', status: 'ok' },
+    tags: { toolName: 'file_read', status: 'ok', runId: 'run-1' },
   });
+  assert.equal(store.events[0]?.correlationId, 'run-1');
 });
 
 test('StateStoreExecutionTelemetry degrades safely when metric persistence fails', async () => {

@@ -6,6 +6,7 @@ export interface CounterMetricInput {
   name: string;
   value?: number;
   runId?: string;
+  correlationId?: string;
   tags?: Record<string, string>;
 }
 
@@ -39,9 +40,16 @@ export class StateStoreExecutionTelemetry implements ExecutionTelemetry {
         metricType,
         name: input.name,
         value: metricValue,
-        tags: input.tags ?? {},
+        tags: {
+          ...(input.tags ?? {}),
+          ...(input.runId ? { runId: input.runId } : {}),
+          ...(input.correlationId ? { correlationId: input.correlationId } : {}),
+        },
       },
-      input.runId ? { runId: input.runId } : {},
+      {
+        ...(input.runId ? { runId: input.runId } : {}),
+        ...(input.correlationId ? { correlationId: input.correlationId } : {}),
+      },
     );
 
     try {
