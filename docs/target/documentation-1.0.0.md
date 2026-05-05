@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.50.0
+# AI Orchestrator — Documentation 1.51.0
 
 ## 1. Что это за проект
 
@@ -73,6 +73,16 @@
 - добавлены regression-тесты на success/failure/emergency-stop и инвариант детерминированности профилей.
 
 Изменение аддитивное и не ломает существующие policy/evaluation контракты.
+
+
+### 3.1.4 Kill-switch and human override protocol (1.51.0)
+
+Добавлен production-ready safety протокол для control-plane операций:
+- в `packages/application` добавлены typed evaluators `evaluateKillSwitch(...)` и `evaluateHumanOverride(...)` с явными reason codes и structured evidence;
+- в `apps/control-plane` перед authorization слоем добавлен enforcement kill-switch для restricted команд (`bootstrap`, `run-cycle`, `run-task`, replay/resume и другие mutating операции);
+- при активном kill-switch выполнение restricted-команд допускается только при валидном human override (token, reason, ticket id, expiration в будущем), иначе выбрасывается `SafetyViolationError` с диагностическим payload.
+
+Изменение аддитивное и обратно совместимое: read-only команды (`show-state`, `export-backlog`) продолжают работать даже при активном kill-switch.
 
 ### 3.1.1 Dead-letter and controlled replay hardening (1.40.0)
 

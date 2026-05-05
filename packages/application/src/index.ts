@@ -28,3 +28,6 @@ export * from './idempotency/dedup-registry-service.ts';
 export * from './authorization/evaluate-access.ts';
 
 export * from './autonomy/level-controller.ts';
+
+export * from './safety/kill-switch.ts';
+export * from './safety/human-override.ts';
