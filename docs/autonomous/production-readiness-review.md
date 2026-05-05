@@ -25,3 +25,6 @@ Output (`ReadinessReviewResult`):
 ## Usage
 
 Use this module as the final readiness gate after verification and before release/publish side effects.
+
+- Schema guard: invalid `productionReadinessReview` payload is treated as unavailable (`null`) on read path.
+- Endpoint filters: `/api/readiness/review` supports `orgId`, `projectId`, `runId`.

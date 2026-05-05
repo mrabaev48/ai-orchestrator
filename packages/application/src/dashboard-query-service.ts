@@ -212,14 +212,15 @@ export class DashboardQueryService {
     return toApprovalRequestView(approvals);
   }
 
-  async getMetricsAudit(query: HistoryQueryInput = {}): Promise<PaginatedView<MetricRollupItemView>> {
-    const { limit, offset } = normalizeHistoryQuery(query);
-    const events = await this.stateStore.listEvents({ eventType: 'METRIC_RECORDED' });
-    const buckets = new Map<string, MetricRollupItemView>();
-    for (const event of events) {
-      const payload = event.payload as {
-        metricType?: 'counter' | 'histogram' | 'gauge';
-        name?: string;
+  async getLatestProductionReadinessReview(
+    query: TenantScopeInput & { runId?: string } = {},
+  ): Promise<ProductionReadinessReviewView | null> {
+    assertTenantScope(state, query);
+      .filter((artifact) => (query.runId ? artifact.metadata.runId === query.runId : true))
+    const parsed = parseProductionReadinessReviewPayload(payload);
+    if (!parsed) {
+      return null;
+    }
         value?: number;
         tags?: Record<string, string>;
       };
@@ -361,6 +362,72 @@ function normalizeHistoryQuery(query: HistoryQueryInput): { limit: number; offse
     limit: query.limit ?? 25,
     offset: query.offset ?? 0,
   };
+}
+
+interface ProductionReadinessReviewPayload {
+  runId?: string;
+  verdict: 'ready' | 'not_ready';
+  blockers: { checkId: string; title: string; details: string }[];
+  warnings: { checkId: string; title: string; details: string }[];
+  evidence: { blockerCount: number; warningCount: number };
+}
+
+function parseProductionReadinessReviewPayload(payload: string): ProductionReadinessReviewPayload | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null;
+  }
+  const candidate = parsed as Record<string, unknown>;
+  if (candidate.verdict !== 'ready' && candidate.verdict !== 'not_ready') {
+    return null;
+  }
+  const evidence = candidate.evidence;
+  if (typeof evidence !== 'object' || evidence === null) {
+    return null;
+  }
+  const evidenceRecord = evidence as Record<string, unknown>;
+  if (typeof evidenceRecord.blockerCount !== 'number' || typeof evidenceRecord.warningCount !== 'number') {
+    return null;
+  }
+  const blockers = parseIssueList(candidate.blockers);
+  const warnings = parseIssueList(candidate.warnings);
+  if (!blockers || !warnings) {
+    return null;
+  }
+  const runId = typeof candidate.runId === 'string' ? candidate.runId : undefined;
+  return {
+    ...(runId ? { runId } : {}),
+    verdict: candidate.verdict,
+    blockers,
+    warnings,
+    evidence: {
+      blockerCount: evidenceRecord.blockerCount,
+      warningCount: evidenceRecord.warningCount,
+    },
+  };
+}
+
+function parseIssueList(value: unknown): { checkId: string; title: string; details: string }[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const items: { checkId: string; title: string; details: string }[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) {
+      return null;
+    }
+    const record = item as Record<string, unknown>;
+    if (typeof record.checkId !== 'string' || typeof record.title !== 'string' || typeof record.details !== 'string') {
+      return null;
+    }
+    items.push({ checkId: record.checkId, title: record.title, details: record.details });
+  }
+  return items;
 }
 
 function applyPagination<TItem>(items: TItem[], offset: number, limit: number): TItem[] {

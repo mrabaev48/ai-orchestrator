@@ -101,8 +101,12 @@ export class DashboardReadApiService {
     return await this.dashboardQueryService.getApprovals(status ? { status } : {});
   }
 
-  async getMetricsAudit(limit?: number, offset?: number) {
-    return await this.dashboardQueryService.getMetricsAudit({
+  async getLatestProductionReadinessReview(orgId?: string, projectId?: string, runId?: string) {
+    return await this.dashboardQueryService.getLatestProductionReadinessReview({
+      ...(orgId ? { orgId } : {}),
+      ...(projectId ? { projectId } : {}),
+      ...(runId ? { runId } : {}),
+    });
       ...(limit === undefined ? {} : { limit }),
       ...(offset === undefined ? {} : { offset }),
     });

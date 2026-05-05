@@ -94,8 +94,12 @@ export class DashboardQueryController {
     );
   }
 
-  @Get('approvals')
-  async getApprovals(@Query() query: ApprovalHistoryQueryDto) {
+  async getLatestProductionReadinessReview(@Query() query: HistoryQueryDto) {
+    return await this.dashboardReadApiService.getLatestProductionReadinessReview(
+      query.orgId,
+      query.projectId,
+      query.runId,
+    );
     return await this.dashboardReadApiService.getApprovals(query.status);
   }
 
