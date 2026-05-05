@@ -21,3 +21,5 @@ export * from './leases/lease-store.ts';
 export * from './queue/dead-letter-replay.store.ts';
 
 export * from './locks/distributed-lock.store.ts';
+
+export * from './audit/immutable-audit-log.ts';

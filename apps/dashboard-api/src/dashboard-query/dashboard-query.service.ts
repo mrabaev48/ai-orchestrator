@@ -7,7 +7,7 @@ import {
   DashboardQueryService as ApplicationDashboardQueryService,
 } from '../../../../packages/application/src/index.ts';
 import type { DomainEventType } from '../../../../packages/core/src/index.ts';
-import type { StateStore } from '../../../../packages/state/src/index.ts';
+import { buildImmutableAuditLog, type StateStore } from '../../../../packages/state/src/index.ts';
 
 @Injectable()
 export class DashboardReadApiService {
@@ -102,6 +102,13 @@ export class DashboardReadApiService {
       ...(limit === undefined ? {} : { limit }),
       ...(offset === undefined ? {} : { offset }),
     });
+  }
+
+
+  async getImmutableAuditExport(runId?: string) {
+    const events = await this.stateStore.listEvents();
+    const filtered = runId ? events.filter((event) => event.runId === runId) : events;
+    return buildImmutableAuditLog(filtered);
   }
 
   async getReviewBundle(runId?: string) {

@@ -166,3 +166,5 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
 }
 
 export * from './verification/run-verification-suite.ts';
+
+export * from './secrets/redaction.ts';
