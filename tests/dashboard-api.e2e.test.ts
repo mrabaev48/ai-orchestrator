@@ -149,7 +149,7 @@ test('dashboard api evidence endpoint filters by runId/taskId deterministically'
     const stateStore = app.get<StateStore>(STATE_STORE);
 
     const base = {
-      tenantId: 'tenant-1', projectId: 'dashboard-api', stepId: 'step-1', attempt: 0, role: 'tester', input: 'in', output: 'out',
+      tenantId: 'default-org', projectId: 'dashboard-api', stepId: 'step-1', attempt: 0, role: 'tester', input: 'in', output: 'out',
       status: 'succeeded' as const, idempotencyKey: 'k-1', traceId: 'trace-1', durationMs: 1, createdAt: new Date().toISOString(),
     };
     const step1: RunStepLogEntry = { id: 'ev-1', runId: 'run-a', taskId: 'task-a', ...base, checksum: '' };
@@ -186,7 +186,7 @@ test('dashboard api evidence endpoint surfaces EVIDENCE_INTEGRITY_VIOLATION for 
     const stateStore = app.get<StateStore>(STATE_STORE);
 
     const now = Date.now();
-    const base = { tenantId: 'tenant-1', projectId: 'dashboard-api', runId: 'run-tampered', stepId: 'step-x', attempt: 0, taskId: 'task-x', role: 'tester', input: 'in', output: 'out', status: 'cancellation_requested' as const, idempotencyKey: 'key-1', traceId: 'run-tampered', durationMs: 1 };
+    const base = { tenantId: 'default-org', projectId: 'dashboard-api', runId: 'run-tampered', stepId: 'step-x', attempt: 0, taskId: 'task-x', role: 'tester', input: 'in', output: 'out', status: 'cancellation_requested' as const, idempotencyKey: 'key-1', traceId: 'run-tampered', durationMs: 1 };
     const first: RunStepLogEntry = { id: 'ev-1', ...base, createdAt: new Date(now).toISOString(), checksum: '' };
     first.checksum = computeRunStepChecksum({ evidenceId: first.id, tenantId: first.tenantId, projectId: first.projectId, runId: first.runId, stepId: first.stepId, attempt: first.attempt, status: first.status, idempotencyKey: first.idempotencyKey, createdAt: first.createdAt, traceId: first.traceId });
     await stateStore.recordRunStep(first);

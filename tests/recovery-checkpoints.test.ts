@@ -17,7 +17,7 @@ function makeStore() {
 test('recovery checkpoint success path: returns deterministic resume pointer', async () => {
   const stateStore = makeStore();
   await stateStore.recordRunStep({
-    id: 'ev-1', tenantId: 'tenant-1', projectId: 'proj-1', runId: 'run-1', stepId: 'step-1', attempt: 2,
+    id: 'ev-1', tenantId: 'default-org', projectId: 'proj-1', runId: 'run-1', stepId: 'step-1', attempt: 2,
     taskId: 'task-1', role: 'coder', input: 'in', output: 'out', status: 'failed', idempotencyKey: 'run-1:step-1',
     checksum: 'checksum-1', traceId: 'trace-1', durationMs: 10, createdAt: new Date().toISOString(),
   });
@@ -44,12 +44,12 @@ test('recovery checkpoint regression: ignores succeeded entries and keeps latest
   const stateStore = makeStore();
   const now = Date.now();
   await stateStore.recordRunStep({
-    id: 'ev-1', tenantId: 'tenant-1', projectId: 'proj-1', runId: 'run-old', stepId: 'step-1', attempt: 0,
+    id: 'ev-1', tenantId: 'default-org', projectId: 'proj-1', runId: 'run-old', stepId: 'step-1', attempt: 0,
     taskId: 'task-2', role: 'coder', input: 'in', output: 'out', status: 'failed', idempotencyKey: 'k1',
     checksum: 'checksum-1', traceId: 'trace-1', durationMs: 10, createdAt: new Date(now).toISOString(),
   });
   await stateStore.recordRunStep({
-    id: 'ev-2', tenantId: 'tenant-1', projectId: 'proj-1', runId: 'run-new', stepId: 'step-2', attempt: 0,
+    id: 'ev-2', tenantId: 'default-org', projectId: 'proj-1', runId: 'run-new', stepId: 'step-2', attempt: 0,
     taskId: 'task-2', role: 'coder', input: 'in', output: 'out', status: 'succeeded', idempotencyKey: 'k2',
     checksum: 'checksum-2', traceId: 'trace-2', durationMs: 10, createdAt: new Date(now + 1000).toISOString(),
   });
@@ -63,7 +63,7 @@ test('recovery checkpoint regression: ignores succeeded entries and keeps latest
 test('recovery checkpoint retry path: increments attempt for timed_out and keeps traceability', async () => {
   const stateStore = makeStore();
   await stateStore.recordRunStep({
-    id: 'ev-timeout', tenantId: 'tenant-1', projectId: 'proj-1', runId: 'run-3', stepId: 'step-timeout', attempt: 1,
+    id: 'ev-timeout', tenantId: 'default-org', projectId: 'proj-1', runId: 'run-3', stepId: 'step-timeout', attempt: 1,
     taskId: 'task-3', role: 'tester', input: 'in', output: 'out', status: 'timed_out', idempotencyKey: 'run-3:step-timeout:1',
     checksum: 'checksum-timeout', traceId: 'trace-timeout', durationMs: 1000, createdAt: new Date().toISOString(),
   });

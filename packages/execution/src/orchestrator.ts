@@ -132,6 +132,9 @@ export class Orchestrator {
     this.currentRunTokenEstimate = 0;
     this.currentRunCostUsdMicro = 0;
     const runId = crypto.randomUUID();
+    const state = await this.stateStore.load();
+    this.currentEvidenceTenantId = state.orgId;
+    this.currentEvidenceProjectId = state.projectId;
     const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle', {
       tenantId: state.orgId,
       projectId: state.projectId,
@@ -175,7 +178,6 @@ export class Orchestrator {
     }
 
     try {
-      const state = await this.stateStore.load();
       const fencingValidation = await fencingHandle.validate(new Date().toISOString());
       if (!fencingValidation.valid) {
         throw new WorkflowPolicyError('Fencing lock validation failed before cycle execution', {
