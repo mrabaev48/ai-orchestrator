@@ -32,18 +32,26 @@ export interface DomainEvent<TPayload = Record<string, unknown>> {
   createdAt: string;
   payload: TPayload;
   runId?: string;
+  correlationId?: string;
+}
+
+export interface EventContext {
+  runId?: string;
+  correlationId?: string;
 }
 
 export function makeEvent<TPayload>(
   eventType: DomainEventType,
   payload: TPayload,
-  context: { runId?: string } = {},
+  context: EventContext = {},
 ): DomainEvent<TPayload> {
+  const correlationId = context.correlationId ?? context.runId;
   return {
     id: crypto.randomUUID(),
     eventType,
     createdAt: new Date().toISOString(),
     payload,
     ...(context.runId ? { runId: context.runId } : {}),
+    ...(correlationId ? { correlationId } : {}),
   };
 }

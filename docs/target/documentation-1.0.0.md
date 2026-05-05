@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.45.0
+# AI Orchestrator — Documentation 1.46.0
 
 ## 1. Что это за проект
 
@@ -104,6 +104,15 @@ Execution-слой включает:
 Это снижает риск stale-owner выполнения и фиксирует явный контракт single-active-run поверх distributed lock механизма.
 
 Обновление 1.42.0: default wiring Orchestrator теперь использует shared fencing store для `runLockProvider=redis`; TTL fencing вынесен в runtime config (`workflow.fencingTtlMs` / `WORKFLOW_FENCING_TTL_MS`) для операционного тюнинга.
+
+### 3.2.0 Correlation IDs standardization (1.46.0)
+
+Добавлена унификация correlation ID для доменных telemetry/event потоков:
+- `DomainEvent` теперь поддерживает `correlationId` как first-class поле;
+- `makeEvent(...)` автоматически наследует `correlationId` из `runId`, если явный `correlationId` не задан;
+- execution telemetry (`METRIC_RECORDED`) прикрепляет `correlationId` в event-контекст и в metric tags для корректной склейки run/task/step/tool сигналов в observability-пайплайне.
+
+Изменение аддитивное: существующие вызовы `makeEvent` без `correlationId` сохраняют совместимость и получают детерминированный fallback на `runId`.
 
 ### 3.2.1 Run-step evidence integrity
 

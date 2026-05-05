@@ -33,4 +33,5 @@ test('buildImmutableAuditLog creates linked checksums', () => {
   assert.equal(log[0].previousChecksum, null);
   assert.equal(log[1].previousChecksum, log[0].checksum);
   assert.notEqual(log[0].checksum, log[1].checksum);
+  assert.equal(second.correlationId, 'run-1');
 });
