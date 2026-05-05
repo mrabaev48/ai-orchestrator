@@ -44,6 +44,28 @@ void test('FencingTokenGuard: returns null on contention', async () => {
   assert.equal(second, null);
 });
 
+
+void test('FencingTokenGuard: release throws structured WorkflowPolicyError when lease becomes stale', async () => {
+  const store = new InMemoryDistributedLockStore();
+  const guard = createFencingTokenGuard(store, new TestLogger(), { ttlMs: 5000 });
+
+  const first = await guard.acquire('global-run-cycle', 'run-1', '2026-01-01T00:00:00.000Z');
+  assert.ok(first);
+
+  await first.release();
+  const second = await guard.acquire('global-run-cycle', 'run-2', '2026-01-01T00:00:01.000Z');
+  assert.ok(second);
+
+  await assert.rejects(
+    async () => first.release(),
+    (error: unknown) => {
+      assert.equal((error as { code?: string }).code, 'WORKFLOW_POLICY_ERROR');
+      assert.match(String((error as { message?: string }).message), /Unable to release fencing lock/);
+      return true;
+    },
+  );
+});
+
 void test('FencingTokenGuard: validate reports expired lease', async () => {
   const store = new InMemoryDistributedLockStore();
   const guard = createFencingTokenGuard(store, new TestLogger(), { ttlMs: 1000 });
