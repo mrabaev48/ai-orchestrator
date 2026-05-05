@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.44.0
+# AI Orchestrator — Documentation 1.45.0
 
 ## 1. Что это за проект
 
@@ -514,6 +514,8 @@ pnpm run dashboard-api:start
 
 - Structured logging через shared logger.
 - Секреты редактируются (redaction) в runtime-config/logging pipeline.
+- Добавлен типизированный pipeline `redactSecrets(...)` для маскировки secret-like ключей/значений перед аудит-экспортом и логированием.
+- Добавлен immutable audit export с hash-chain (`/api/audit/export`) для детерминированного forensic/audit replay.
 - Dashboard API имеет liveness/readiness probes.
 - Orchestrator пишет run-step log и telemetry-метрики/трейсоподобные записи.
 - Для run-step log включена integrity-проверка цепочки на read-path (`listRunSteps` по `runId`) и сигнализация `EVIDENCE_INTEGRITY_VIOLATION`.

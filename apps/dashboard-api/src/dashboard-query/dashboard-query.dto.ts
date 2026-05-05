@@ -117,3 +117,10 @@ export class RunStepEvidenceQueryDto extends HistoryQueryDto {
   @IsString()
   taskId?: string;
 }
+
+
+export class AuditExportQueryDto extends HistoryQueryDto {
+  @IsOptional()
+  @IsIn(['json'])
+  format?: 'json';
+}

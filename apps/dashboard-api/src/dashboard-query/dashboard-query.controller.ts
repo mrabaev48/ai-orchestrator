@@ -12,6 +12,7 @@ import {
   FailureHistoryQueryDto,
   HistoryQueryDto,
   RunStepEvidenceQueryDto,
+  AuditExportQueryDto,
 } from './dashboard-query.dto.ts';
 import { DashboardReadApiService } from './dashboard-query.service.ts';
 
@@ -100,6 +101,15 @@ export class DashboardQueryController {
   @Get('audit/metrics')
   async getMetricsAudit(@Query() query: HistoryQueryDto) {
     return await this.dashboardReadApiService.getMetricsAudit(query.limit, query.offset);
+  }
+
+
+  @Get('audit/export')
+  async getImmutableAuditExport(@Query() query: AuditExportQueryDto) {
+    return {
+      format: query.format ?? 'json',
+      items: await this.dashboardReadApiService.getImmutableAuditExport(query.runId),
+    };
   }
 
   @Get('audit/traces')
