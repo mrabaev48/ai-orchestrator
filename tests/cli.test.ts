@@ -91,3 +91,48 @@ test('run-task fails with deterministic error for missing task in state', () => 
   assert.match(result.stderr, /WORKFLOW_POLICY_ERROR/);
   assert.match(result.stderr, /invalid_task_id/);
 });
+
+
+test('run-task is blocked by kill-switch without human override', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['--experimental-strip-types', cliPath, 'run-task', '--task-id', 't-1'],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        STATE_BACKEND: 'memory',
+        TOOL_ALLOWED_WRITE_PATHS: '.',
+        CONTROL_PLANE_KILL_SWITCH_ACTIVE: 'true',
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 8);
+  assert.match(result.stderr, /Kill-switch active/);
+});
+
+test('run-task accepts human override while kill-switch is active', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['--experimental-strip-types', cliPath, 'run-task', '--task-id', 'missing-task'],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        STATE_BACKEND: 'memory',
+        TOOL_ALLOWED_WRITE_PATHS: '.',
+        CONTROL_PLANE_KILL_SWITCH_ACTIVE: 'true',
+        CONTROL_PLANE_HUMAN_OVERRIDE_TOKEN: 'override-token',
+        CONTROL_PLANE_HUMAN_OVERRIDE_REASON: 'incident commander approved',
+        CONTROL_PLANE_HUMAN_OVERRIDE_TICKET_ID: 'INC-42',
+        CONTROL_PLANE_HUMAN_OVERRIDE_EXPIRES_AT: '2099-01-01T00:00:00.000Z',
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 4);
+  assert.match(result.stderr, /invalid_task_id/);
+});

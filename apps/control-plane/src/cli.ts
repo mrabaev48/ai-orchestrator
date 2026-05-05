@@ -7,6 +7,8 @@ import {
   PlanningService,
   ReleaseReadinessService,
   StateIntegrityService,
+  evaluateHumanOverride,
+  evaluateKillSwitch,
   createApplicationContext,
 } from '../../../packages/application/src/index.ts';
 import {
@@ -14,10 +16,25 @@ import {
   loadRuntimeConfig,
   OrchestratorError,
   ConfigError,
+  SafetyViolationError,
 } from '../../../packages/shared/src/index.ts';
 import { authorizeControlPlaneCommand } from './authz/rbac-abac.ts';
 
 type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'run-task' | 'show-state' | 'export-backlog' | 'resume-failure' | 'replay-failure';
+
+const RESTRICTED_COMMANDS = new Set<CommandName>([
+  'bootstrap',
+  'analyze-architecture',
+  'plan-backlog',
+  'generate-docs',
+  'assess-release',
+  'check-state',
+  'prepare-export',
+  'run-cycle',
+  'run-task',
+  'resume-failure',
+  'replay-failure',
+]);
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2) as [CommandName | undefined, ...string[]];
@@ -30,11 +47,31 @@ async function main(): Promise<void> {
   const args = parseArgs(rest);
   const actorTeam = args['actor-team'] ?? process.env.CONTROL_PLANE_ACTOR_TEAM;
   const ownerTeam = args['project-owner-team'] ?? process.env.CONTROL_PLANE_PROJECT_OWNER_TEAM;
+  const actorSubject = args['actor-subject'] ?? process.env.CONTROL_PLANE_ACTOR_SUBJECT ?? 'local-operator';
+
+  const killSwitchReason = args['kill-switch-reason'] ?? process.env.CONTROL_PLANE_KILL_SWITCH_REASON;
+  const killSwitchActivatedAt = args['kill-switch-activated-at'] ?? process.env.CONTROL_PLANE_KILL_SWITCH_ACTIVATED_AT;
+  const overrideToken = args['human-override-token'] ?? process.env.CONTROL_PLANE_HUMAN_OVERRIDE_TOKEN;
+  const overrideReason = args['human-override-reason'] ?? process.env.CONTROL_PLANE_HUMAN_OVERRIDE_REASON;
+  const overrideTicketId = args['human-override-ticket-id'] ?? process.env.CONTROL_PLANE_HUMAN_OVERRIDE_TICKET_ID;
+  const overrideExpiresAt = args['human-override-expires-at'] ?? process.env.CONTROL_PLANE_HUMAN_OVERRIDE_EXPIRES_AT;
+
+  enforceKillSwitchAndHumanOverride({
+    command,
+    actorSubject,
+    killSwitchActive: parseBoolean(args['kill-switch-active'] ?? process.env.CONTROL_PLANE_KILL_SWITCH_ACTIVE),
+    ...(killSwitchReason ? { killSwitchReason } : {}),
+    ...(killSwitchActivatedAt ? { killSwitchActivatedAt } : {}),
+    ...(overrideToken ? { overrideToken } : {}),
+    ...(overrideReason ? { overrideReason } : {}),
+    ...(overrideTicketId ? { overrideTicketId } : {}),
+    ...(overrideExpiresAt ? { overrideExpiresAt } : {}),
+  });
 
   authorizeControlPlaneCommand({
     command,
     principal: {
-      subject: args['actor-subject'] ?? process.env.CONTROL_PLANE_ACTOR_SUBJECT ?? 'local-operator',
+      subject: actorSubject,
       roles: parseRoles(args['actor-roles'] ?? process.env.CONTROL_PLANE_ACTOR_ROLES ?? 'control-plane.admin,control-plane.operator,control-plane.viewer'),
       ...(actorTeam ? { team: actorTeam } : {}),
     },
@@ -216,6 +253,60 @@ async function checkStateIntegrity(service: StateIntegrityService): Promise<void
 async function prepareExport(service: IntegrationExportService, out?: string): Promise<void> {
   const outputPath = await service.prepare(out);
   console.log(outputPath);
+}
+
+
+function enforceKillSwitchAndHumanOverride(input: {
+  command: CommandName;
+  actorSubject: string;
+  killSwitchActive: boolean;
+  killSwitchReason?: string;
+  killSwitchActivatedAt?: string;
+  overrideToken?: string;
+  overrideReason?: string;
+  overrideTicketId?: string;
+  overrideExpiresAt?: string;
+}): void {
+  const killSwitchDecision = evaluateKillSwitch({
+    command: input.command,
+    commandPolicy: RESTRICTED_COMMANDS.has(input.command) ? 'restricted' : 'read_only',
+    killSwitch: {
+      active: input.killSwitchActive,
+      ...(input.killSwitchReason ? { reason: input.killSwitchReason } : {}),
+      ...(input.killSwitchActivatedAt ? { activatedAt: input.killSwitchActivatedAt } : {}),
+    },
+  });
+
+  if (killSwitchDecision.allowed) {
+    return;
+  }
+
+  const overrideDecision = evaluateHumanOverride({
+    actorSubject: input.actorSubject,
+    ...(input.overrideToken ? { overrideToken: input.overrideToken } : {}),
+    ...(input.overrideReason ? { overrideReason: input.overrideReason } : {}),
+    ...(input.overrideTicketId ? { overrideTicketId: input.overrideTicketId } : {}),
+    ...(input.overrideExpiresAt ? { overrideExpiresAt: input.overrideExpiresAt } : {}),
+    nowIso: new Date().toISOString(),
+  });
+
+  if (overrideDecision.allowed) {
+    return;
+  }
+
+  throw new SafetyViolationError('Kill-switch active: human override is required for restricted command.', {
+    details: {
+      command: input.command,
+      killSwitch: killSwitchDecision.evidence,
+      override: overrideDecision.evidence,
+      reason: overrideDecision.reasonCode,
+    },
+    needsHumanDecision: true,
+  });
+}
+
+function parseBoolean(raw: string | undefined): boolean {
+  return raw === '1' || raw === 'true';
 }
 
 function parseRoles(raw: string): string[] {
