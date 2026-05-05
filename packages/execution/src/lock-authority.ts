@@ -6,7 +6,7 @@ export interface RunLockHandle {
 }
 
 export interface LockAuthority {
-  acquireRunLock: (key: string) => Promise<RunLockHandle | null>;
+  acquireRunLock: (key: string, scope?: { tenantId: string; projectId: string }) => Promise<RunLockHandle | null>;
 }
 
 interface PgPoolLike {
@@ -78,7 +78,9 @@ export class NoopLockAuthority implements LockAuthority {
    * This authority never coordinates across workers and must not be used for
    * multi-worker execution.
    */
-  async acquireRunLock(): Promise<RunLockHandle> {
+  async acquireRunLock(key: string, scope?: { tenantId: string; projectId: string }): Promise<RunLockHandle> {
+    void key;
+    void scope;
     return {
       release: async () => {},
     };
@@ -94,13 +96,14 @@ export class PostgresLockAuthority implements LockAuthority {
     this.poolPromise = loadPostgresPool(dsn);
   }
 
-  async acquireRunLock(key: string): Promise<RunLockHandle | null> {
+  async acquireRunLock(key: string, scope?: { tenantId: string; projectId: string }): Promise<RunLockHandle | null> {
+    const lockKey = `ai-orchestrator:run-lock:${formatScopedRunLockKey(key, scope)}`
     const pool = await this.poolPromise;
     const client = await pool.connect();
     try {
       const result = (await client.query(
         'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked',
-        [key],
+        [lockKey],
       )) as { rows: { locked: boolean }[] };
 
       if (!result.rows[0]?.locked) {
@@ -110,7 +113,7 @@ export class PostgresLockAuthority implements LockAuthority {
 
       return {
         release: async () => {
-          await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [key]);
+          await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [lockKey]);
           client.release();
         },
       };
@@ -131,11 +134,11 @@ export class RedisLockAuthority implements LockAuthority {
     this.clientPromise = (options.loadClient ?? loadRedisClient)(dsn);
   }
 
-  async acquireRunLock(key: string): Promise<RunLockHandle | null> {
+  async acquireRunLock(key: string, scope?: { tenantId: string; projectId: string }): Promise<RunLockHandle | null> {
+    const lockKey = `ai-orchestrator:run-lock:${formatScopedRunLockKey(key, scope)}`
     const client = await this.clientPromise;
     const token = crypto.randomUUID();
-    const lockKey = `ai-orchestrator:run-lock:${key}`;
-
+    
     let acquired: unknown;
     try {
       acquired = await client.set(lockKey, token, { NX: true, PX: this.ttlMs });
@@ -191,13 +194,14 @@ export class EtcdLockAuthority implements LockAuthority {
     this.clientPromise = (options.loadClient ?? loadEtcdClient)(dsn);
   }
 
-  async acquireRunLock(key: string): Promise<RunLockHandle | null> {
+  async acquireRunLock(key: string, scope?: { tenantId: string; projectId: string }): Promise<RunLockHandle | null> {
+    const lockKey = formatScopedRunLockKey(key, scope);
     const client = await this.clientPromise;
     const lease = client.lease(this.ttlSeconds);
     const value = crypto.randomUUID();
 
     try {
-      await lease.put(`ai-orchestrator/run-lock/${key}`).value(value, { prevNoExist: true });
+      await lease.put(`ai-orchestrator/run-lock/${lockKey}`).value(value, { prevNoExist: true });
     } catch (error) {
       await lease.revoke().catch(() => undefined);
       if (isEtcdLockContention(error)) {
@@ -298,4 +302,12 @@ function isEtcdLockContention(error: unknown): boolean {
 
   const message = error.message.toLowerCase();
   return message.includes('already exists') || message.includes('compare failed');
+}
+
+function formatScopedRunLockKey(key: string, scope?: { tenantId: string; projectId: string }): string {
+  if (!scope) {
+    return key;
+  }
+
+  return `${scope.tenantId}:${scope.projectId}:${key}`;
 }

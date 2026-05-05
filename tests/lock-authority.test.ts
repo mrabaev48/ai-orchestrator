@@ -79,13 +79,13 @@ test('RedisLockAuthority acquires and releases lock with ownership token', async
     }),
   });
 
-  const handle = await authority.acquireRunLock('run-a');
+  const handle = await authority.acquireRunLock('run-a', { tenantId: 'tenant-1', projectId: 'project-1' });
   assert.notEqual(handle, null);
   await handle?.release();
 
-  assert.deepEqual(events[0], { type: 'set', key: 'ai-orchestrator:run-lock:run-a' });
+  assert.deepEqual(events[0], { type: 'set', key: 'ai-orchestrator:run-lock:tenant-1:project-1:run-a' });
   assert.equal(events[1]?.type, 'eval');
-  assert.equal(events[1]?.key, 'ai-orchestrator:run-lock:run-a');
+  assert.equal(events[1]?.key, 'ai-orchestrator:run-lock:tenant-1:project-1:run-a');
   assert.equal(events[1]?.args?.length, 1);
 });
 
