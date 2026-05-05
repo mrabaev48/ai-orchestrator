@@ -169,6 +169,7 @@ export interface MetricRollupItemView {
 export interface SpanAuditItemView {
   spanName: string;
   runId?: string;
+  correlationId?: string;
   taskId?: string;
   role?: string;
   toolName?: string;

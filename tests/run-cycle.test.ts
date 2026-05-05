@@ -528,12 +528,17 @@ test('runCycle returns deterministic idle reason when global run lock is unavail
   assert.notEqual(idleRecord, undefined);
   assert.equal(idleRecord?.message, 'Run cycle skipped because global run lock is unavailable');
   assert.notEqual(metricEvent, undefined);
-  assert.deepEqual(metricEvent?.payload, {
-    metricType: 'counter',
-    name: 'run_lock_contention_total',
-    value: 1,
-    tags: { lock_resource: 'global-run-cycle' },
-  });
+  const metricPayload = metricEvent?.payload as {
+    metricType: string;
+    name: string;
+    value: number;
+    tags: { lock_resource: string; runId?: string };
+  } | undefined;
+  assert.equal(metricPayload?.metricType, 'counter');
+  assert.equal(metricPayload?.name, 'run_lock_contention_total');
+  assert.equal(metricPayload?.value, 1);
+  assert.equal(metricPayload?.tags.lock_resource, 'global-run-cycle');
+  assert.equal(typeof metricPayload?.tags.runId, 'string');
 });
 
 test('runSingleTask executes the requested task when executable', async () => {

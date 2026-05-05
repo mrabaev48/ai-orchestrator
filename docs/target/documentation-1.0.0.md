@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.46.0
+# AI Orchestrator — Documentation 1.47.0
 
 ## 1. Что это за проект
 
@@ -70,6 +70,14 @@
 - Replay path is now explicitly gated: `replay-failure` works only for `dead_lettered` failures.
 - Replay checkpoint selection is isolated in execution queue controller (`selectReplayCheckpoint`) to keep policy/validation deterministic and typed.
 - Queue recovery contracts are now explicit in state layer via `DeadLetterReplayStore` interface for adapter-safe extensions.
+
+
+### 3.3.0 Tracing read-model/API filters for dashboard observability (1.47.0)
+
+Усилен end-to-end tracing slice для Dashboard API:
+- trace-аудит (`GET /api/audit/traces`) теперь поддерживает фильтры `runId`, `correlationId`, `taskId`, `role`, `toolName`, `status`;
+- trace read-model возвращает `correlationId`, что упрощает склейку span/event цепочек между execution telemetry и API-слоем;
+- изменения аддитивные и обратно совместимые: старые запросы без фильтров продолжают работать.
 
 ## 3.2 Orchestrator runtime
 

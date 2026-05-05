@@ -9,6 +9,17 @@ import {
 import type { DomainEventType } from '../../../../packages/core/src/index.ts';
 import { buildImmutableAuditLog, type StateStore } from '../../../../packages/state/src/index.ts';
 
+interface TraceAuditQueryInput {
+  limit?: number;
+  offset?: number;
+  runId?: string;
+  correlationId?: string;
+  taskId?: string;
+  role?: string;
+  toolName?: string;
+  status?: 'ok' | 'error';
+}
+
 @Injectable()
 export class DashboardReadApiService {
   private readonly dashboardQueryService: ApplicationDashboardQueryService;
@@ -97,11 +108,18 @@ export class DashboardReadApiService {
     });
   }
 
-  async getTraceAudit(limit?: number, offset?: number) {
-    return await this.dashboardQueryService.getTraceAudit({
-      ...(limit === undefined ? {} : { limit }),
-      ...(offset === undefined ? {} : { offset }),
-    });
+  async getTraceAudit(query: TraceAuditQueryInput = {}) {
+    const normalized: TraceAuditQueryInput = {
+      ...(query.limit === undefined ? {} : { limit: query.limit }),
+      ...(query.offset === undefined ? {} : { offset: query.offset }),
+      ...(query.runId === undefined ? {} : { runId: query.runId }),
+      ...(query.correlationId === undefined ? {} : { correlationId: query.correlationId }),
+      ...(query.taskId === undefined ? {} : { taskId: query.taskId }),
+      ...(query.role === undefined ? {} : { role: query.role }),
+      ...(query.toolName === undefined ? {} : { toolName: query.toolName }),
+      ...(query.status === undefined ? {} : { status: query.status }),
+    };
+    return await this.dashboardQueryService.getTraceAudit(normalized);
   }
 
 

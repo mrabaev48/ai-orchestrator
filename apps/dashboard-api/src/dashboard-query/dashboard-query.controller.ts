@@ -13,6 +13,7 @@ import {
   HistoryQueryDto,
   RunStepEvidenceQueryDto,
   AuditExportQueryDto,
+  TraceAuditQueryDto,
 } from './dashboard-query.dto.ts';
 import { DashboardReadApiService } from './dashboard-query.service.ts';
 
@@ -113,8 +114,8 @@ export class DashboardQueryController {
   }
 
   @Get('audit/traces')
-  async getTraceAudit(@Query() query: HistoryQueryDto) {
-    return await this.dashboardReadApiService.getTraceAudit(query.limit, query.offset);
+  async getTraceAudit(@Query() query: TraceAuditQueryDto) {
+    return await this.dashboardReadApiService.getTraceAudit(query);
   }
 
   @Get('runs/review-bundle')
