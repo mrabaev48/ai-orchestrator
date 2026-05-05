@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.48.0
+# AI Orchestrator — Documentation 1.49.0
 
 ## 1. Что это за проект
 
@@ -413,6 +413,16 @@ NestJS API предоставляет:
 - health endpoints `/health/live` и `/health/ready`.
 
 API защищается через API key и/или JWT. Без настроенной auth-конфигурации сервис не стартует.
+
+
+
+### 3.2.9 Chaos and load test suite for retry/cancel/recovery (1.49.0)
+
+Добавлен production-ready baseline-набор chaos/load тестов для execution safety сценариев:
+- `tests/chaos/retry-timeout-cancel.chaos.test.ts` проверяет cancel-before-attempt, cancel-during-backoff и non-retriable stop без лишних попыток;
+- `tests/load/autonomous-run.load.test.ts` выполняет batch-нагрузку для retry-loop (детерминированный успех на bounded attempts) и массовую проверку recovery-pointer через `resumeFromCheckpoint`;
+- тесты фиксируют инварианты retry/timeout/cancellation/recovery в виде воспроизводимых regression-checks и уменьшают риск дрейфа поведения между релизами.
+
 
 ---
 
