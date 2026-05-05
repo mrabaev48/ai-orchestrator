@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.49.0
+# AI Orchestrator — Documentation 1.50.0
 
 ## 1. Что это за проект
 
@@ -64,6 +64,15 @@
 
 Изменение аддитивно: неизвестные команды не валятся на auth layer, существующие локальные сценарии сохраняют работоспособность по default admin/operator/viewer роли.
 
+
+### 3.1.3 Autonomy level controller L0-L5 (1.50.0)
+
+Добавлен typed autonomy-level controller для production policy mapping:
+- в `packages/core` зафиксирован контракт `AutonomyLevel` (`L0..L5`) и детерминированный профиль политики для каждого уровня (risk threshold, approval, automation, side-effects);
+- в `packages/application` реализован `evaluateAutonomyLevel(...)`, который возвращает нормализованный `PolicyOutcome` и явные reason codes для deny/approval/defer/allow;
+- добавлены regression-тесты на success/failure/emergency-stop и инвариант детерминированности профилей.
+
+Изменение аддитивное и не ломает существующие policy/evaluation контракты.
 
 ### 3.1.1 Dead-letter and controlled replay hardening (1.40.0)
 
