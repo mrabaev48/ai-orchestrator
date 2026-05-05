@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.43.0
+# AI Orchestrator — Documentation 1.44.0
 
 ## 1. Что это за проект
 
@@ -54,6 +54,15 @@
 - `run-task --task-id <id>` — исполнение конкретной задачи.
 - `resume-failure --failure-id <id>` — возврат dead-lettered failure в resumed.
 - `replay-failure --failure-id <id>` — replay task из checkpoint.
+
+### 3.1.2 RBAC/ABAC authorization for control-plane actions (1.44.0)
+
+Добавлен минимальный production-ready слой авторизации control-plane команд:
+- в `packages/application` введён typed evaluator `evaluateControlPlaneAccess(...)` с явным `ControlPlaneAction`, RBAC-правилами и ABAC-политиками (team boundary + production admin guard);
+- в `apps/control-plane` добавлен adapter `authorizeControlPlaneCommand(...)`, который нормализует request и выбрасывает структурированную `SafetyViolationError` при deny;
+- поддержана конфигурация actor/resource через CLI args/env (`actor-subject`, `actor-roles`, `actor-team`, `project-owner-team`, `environment`) при безопасных default для локальной разработки.
+
+Изменение аддитивно: неизвестные команды не валятся на auth layer, существующие локальные сценарии сохраняют работоспособность по default admin/operator/viewer роли.
 
 
 ### 3.1.1 Dead-letter and controlled replay hardening (1.40.0)
