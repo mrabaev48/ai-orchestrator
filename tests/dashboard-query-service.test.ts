@@ -118,11 +118,12 @@ test('DashboardQueryService returns metrics and trace audit views', async () => 
 
   const service = new DashboardQueryService(store);
   const metrics = await service.getMetricsAudit();
-  const traces = await service.getTraceAudit();
+  const traces = await service.getTraceAudit({ status: 'ok', runId: 'run-1', correlationId: 'run-1' });
 
   assert.equal(metrics.items.some((item) => item.name === 'span_tool_invocation_duration_ms'), true);
   assert.equal(metrics.items.some((item) => item.name === 'task_run_total'), true);
   assert.equal(traces.items[0]?.spanName, 'span_tool_invocation_duration_ms');
+  assert.equal(traces.items[0]?.correlationId, 'run-1');
   assert.equal(traces.items[0]?.durationMs, 42);
 });
 

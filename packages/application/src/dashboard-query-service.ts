@@ -38,6 +38,15 @@ export interface TenantScopeInput {
 export interface HistoryQueryInput extends TenantScopeInput {
   limit?: number;
   offset?: number;
+  runId?: string;
+  correlationId?: string;
+}
+
+export interface TraceAuditQueryInput extends HistoryQueryInput {
+  taskId?: string;
+  role?: string;
+  toolName?: string;
+  status?: 'ok' | 'error';
 }
 
 export interface EventHistoryQueryInput extends HistoryQueryInput {
@@ -246,7 +255,7 @@ export class DashboardQueryService {
     return { total: buckets.size, limit, offset, items };
   }
 
-  async getTraceAudit(query: HistoryQueryInput = {}): Promise<PaginatedView<SpanAuditItemView>> {
+  async getTraceAudit(query: TraceAuditQueryInput = {}): Promise<PaginatedView<SpanAuditItemView>> {
     const { limit, offset } = normalizeHistoryQuery(query);
     const events = await this.stateStore.listEvents({ eventType: 'METRIC_RECORDED' });
     const spans = events
@@ -259,6 +268,7 @@ export class DashboardQueryService {
         return {
           spanName: metricName,
           ...(event.runId ? { runId: event.runId } : {}),
+          ...(event.correlationId ? { correlationId: event.correlationId } : {}),
           ...(typeof payload.taskId === 'string' ? { taskId: payload.taskId } : {}),
           ...(typeof payload.role === 'string' ? { role: payload.role } : {}),
           ...(typeof payload.toolName === 'string' ? { toolName: payload.toolName } : {}),
@@ -267,7 +277,13 @@ export class DashboardQueryService {
           createdAt: event.createdAt,
         };
       })
-      .filter((item): item is SpanAuditItemView => item !== null);
+      .filter((item): item is SpanAuditItemView => item !== null)
+      .filter((item) => (query.runId ? item.runId === query.runId : true))
+      .filter((item) => (query.correlationId ? item.correlationId === query.correlationId : true))
+      .filter((item) => (query.taskId ? item.taskId === query.taskId : true))
+      .filter((item) => (query.role ? item.role === query.role : true))
+      .filter((item) => (query.toolName ? item.toolName === query.toolName : true))
+      .filter((item) => (query.status ? item.status === query.status : true));
     const items = applyPagination(spans, offset, limit);
     return { total: spans.length, limit, offset, items };
   }

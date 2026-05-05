@@ -119,6 +119,25 @@ export class RunStepEvidenceQueryDto extends HistoryQueryDto {
 }
 
 
+
+export class TraceAuditQueryDto extends HistoryQueryDto {
+  @IsOptional()
+  @IsString()
+  taskId?: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsString()
+  toolName?: string;
+
+  @IsOptional()
+  @IsIn(['ok', 'error'])
+  status?: 'ok' | 'error';
+}
+
 export class AuditExportQueryDto extends HistoryQueryDto {
   @IsOptional()
   @IsIn(['json'])
