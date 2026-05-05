@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.47.0
+# AI Orchestrator — Documentation 1.48.0
 
 ## 1. Что это за проект
 
@@ -652,6 +652,17 @@ pnpm run build
 
 Изменение additively расширяет stage coverage без изменения публичных runtime контрактов pipeline.
 
+
+
+### 3.2.17 SLO alerting and operator runbooks (1.48.0)
+
+Добавлен минимальный production-ready слой alerting/runbook для автономных прогонов:
+- в `packages/application` введён typed alert builder `buildSloAlertBatch(...)`, который преобразует SLO assessment в incident-классы и severity (`warning|critical`);
+- поддержаны major incident classes: `success_rate_breach`, `timeout_rate_breach`, `cancellation_rate_breach`, `latency_breach`, `error_budget_burn_warning`, `error_budget_exhausted`;
+- каждый alert содержит structured evidence и ссылку на операторский runbook path, что упрощает triage и снижает MTTR;
+- добавлен runbook `docs/runbooks/autonomous-incidents.md` с immediate actions, diagnostics и exit criteria для каждого класса инцидентов.
+
+Изменение аддитивное и не меняет существующие публичные контракты SLO policy assessment.
 
 ### 3.2.16 Queue lease/heartbeat worker ownership protocol
 
