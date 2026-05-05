@@ -18,7 +18,7 @@ test('StaticWorkspaceManager returns deterministic workspace without cleanup sid
   const rootPath = path.resolve('/tmp/static-workspace');
   const manager = new StaticWorkspaceManager(rootPath);
 
-  const workspace = await manager.allocate({ runId: 'run-1' });
+  const workspace = await manager.allocate({ runId: 'run-1', tenantId: 'tenant-1', projectId: 'project-1' });
 
   assert.equal(workspace.rootPath, rootPath);
   assert.equal(workspace.initialDiff, '');
@@ -36,7 +36,7 @@ test('GitWorktreeWorkspaceManager allocates isolated workspace and cleanup remov
   await execFileAsync('git', ['commit', '-m', 'init'], { cwd: repoRoot });
 
   const manager = new GitWorktreeWorkspaceManager(repoRoot, 24);
-  const workspace = await manager.allocate({ runId: 'run-42' });
+  const workspace = await manager.allocate({ runId: 'run-42', tenantId: 'tenant-1', projectId: 'project-1' });
 
   const markerPath = path.join(workspace.rootPath, 'marker.txt');
   await writeFile(markerPath, 'changed', 'utf8');
@@ -68,7 +68,7 @@ test('GitWorktreeWorkspaceManager prunes stale orchestrator branches using ttl',
   await execFileAsync('git', ['checkout', 'main'], { cwd: repoRoot });
 
   const manager = new GitWorktreeWorkspaceManager(repoRoot, 1);
-  const workspace = await manager.allocate({ runId: 'run-ttl' });
+  const workspace = await manager.allocate({ runId: 'run-ttl', tenantId: 'tenant-1', projectId: 'project-1' });
 
   await workspace.cleanup();
   const branches = await execFileAsync('git', ['branch', '--list', 'orchestrator/run-stale'], { cwd: repoRoot });

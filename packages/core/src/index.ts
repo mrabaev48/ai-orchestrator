@@ -29,3 +29,5 @@ export * from './transition-guards.ts';
 export * from './run-step-transition-table.ts';
 
 export * from './retry/retry-policy.ts';
+
+export * from './multitenancy-tenant-scope.ts';

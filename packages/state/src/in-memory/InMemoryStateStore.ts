@@ -155,6 +155,18 @@ export class InMemoryStateStore implements StateStore {
     const current = await this.load();
     current.execution.runStepLog ??= [];
 
+
+    if (step.tenantId !== current.orgId || step.projectId !== current.projectId) {
+      throw new StateStoreError('TENANT_PARTITION_GUARD_VIOLATION', {
+        details: {
+          expectedTenantId: current.orgId,
+          expectedProjectId: current.projectId,
+          receivedTenantId: step.tenantId,
+          receivedProjectId: step.projectId,
+        },
+      });
+    }
+
     const previous = current.execution.runStepLog
       .filter((entry) => entry.runId === step.runId && entry.stepId === step.stepId && entry.attempt === step.attempt)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];

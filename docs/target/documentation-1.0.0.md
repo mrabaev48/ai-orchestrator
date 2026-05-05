@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.42.0
+# AI Orchestrator — Documentation 1.43.0
 
 ## 1. Что это за проект
 
@@ -75,6 +75,17 @@ Execution-слой включает:
 
 
 ### 3.2.2 Distributed run lock fencing tokens (1.41.0)
+
+
+### 3.2.3 Tenant isolation guards for workspace/state/locks (1.43.0)
+
+В production-контуре добавлены явные guard-механизмы tenant/project scope:
+- `WorkspaceManager.allocate(...)` теперь требует `tenantId` и `projectId`; имена временных worktree получают scope-aware prefix, что снижает риск пересечения рабочих директорий между арендаторами.
+- `InMemoryStateStore.recordRunStep(...)` валидирует соответствие `step.tenantId/projectId` текущему `ProjectState` (`orgId/projectId`) и выбрасывает `TENANT_PARTITION_GUARD_VIOLATION` при нарушении.
+- `LockAuthority.acquireRunLock(...)` поддерживает scope (`tenantId/projectId`) и формирует lock key с tenant/project-префиксом, чтобы исключить межтенантную конкуренцию за один и тот же `runId`/ключ.
+
+Изменения сделаны аддитивно по контракту lock API (scope optional) и совместимы с существующими вызовами без scope.
+
 
 Добавлен минимальный production-ready слой fencing для distributed lock:
 - в `packages/state` добавлен typed-контракт `DistributedLockStore` + `InMemoryDistributedLockStore` с монотонным `fencingToken`;

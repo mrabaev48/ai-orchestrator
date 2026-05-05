@@ -132,7 +132,10 @@ export class Orchestrator {
     this.currentRunTokenEstimate = 0;
     this.currentRunCostUsdMicro = 0;
     const runId = crypto.randomUUID();
-    const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle');
+    const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle', {
+      tenantId: state.orgId,
+      projectId: state.projectId,
+    });
     if (!lockHandle) {
       await this.telemetry.incrementCounter({
         name: 'run_lock_contention_total',
@@ -206,7 +209,12 @@ export class Orchestrator {
         };
       }
 
-      const workspace = await this.workspaceManager.allocate({ runId, taskId: task.id });
+      const workspace = await this.workspaceManager.allocate({
+        runId,
+        tenantId: state.orgId,
+        projectId: state.projectId,
+        taskId: task.id,
+      });
       const workspaceTools = createLocalToolSet({
         allowedWritePaths: [workspace.rootPath],
         allowedShellCommands: this.config.tools.allowedShellCommands,

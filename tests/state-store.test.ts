@@ -83,7 +83,7 @@ test('InMemoryStateStore enforces closed run-step status transitions per attempt
   const now = Date.now();
 
   const base = {
-    tenantId: 'tenant-1',
+    tenantId: 'default-org',
     projectId: 'proj-1',
     runId: 'run-1',
     stepId: 'step-1',
@@ -111,6 +111,33 @@ test('InMemoryStateStore enforces closed run-step status transitions per attempt
         createdAt: new Date(now + 2_000).toISOString(),
       }),
     /Illegal run step status transition/,
+  );
+});
+
+
+
+test('InMemoryStateStore rejects run-step records from a different tenant/project scope', async () => {
+  const store = new InMemoryStateStore(makeState());
+  await assert.rejects(
+    async () =>
+      store.recordRunStep({
+        id: 'ev-cross-tenant',
+        tenantId: 'other-tenant',
+        projectId: 'proj-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        attempt: 0,
+        role: 'tester',
+        input: 'input',
+        output: 'output',
+        status: 'running',
+        idempotencyKey: 'key-1',
+        checksum: 'checksum-1',
+        traceId: 'trace-1',
+        durationMs: 1,
+        createdAt: new Date().toISOString(),
+      }),
+    /TENANT_PARTITION_GUARD_VIOLATION/,
   );
 });
 

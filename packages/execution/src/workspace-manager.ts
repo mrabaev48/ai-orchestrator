@@ -8,6 +8,8 @@ const execFileAsync = promisify(execFile);
 
 export interface WorkspaceAllocationInput {
   runId: string;
+  tenantId: string;
+  projectId: string;
   taskId?: string;
 }
 
@@ -71,7 +73,8 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
   }
 
   async allocate(input: WorkspaceAllocationInput): Promise<ManagedWorkspace> {
-    const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), `ai-orchestrator-${input.runId}-`));
+    const prefix = `${sanitizeScope(input.tenantId)}-${sanitizeScope(input.projectId)}-${sanitizeScope(input.runId)}`;
+    const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), `ai-orchestrator-${prefix}-`));
     const timestamp = Date.now();
     const branchName = `orchestrator/run-${timestamp}-${input.runId}`;
 
@@ -195,4 +198,13 @@ export function parsePrunedWorktreeCount(output: string): number {
     .filter((line) => line.length > 0)
     .filter((line) => PRUNED_WORKTREE_PATTERNS.some((pattern) => pattern.test(line)))
     .length;
+}
+
+function sanitizeScope(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new WorkspaceManagerError('Tenant/project/run scope must be non-empty');
+  }
+
+  return trimmed.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
