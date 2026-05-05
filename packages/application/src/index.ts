@@ -31,3 +31,5 @@ export * from './autonomy/level-controller.ts';
 
 export * from './safety/kill-switch.ts';
 export * from './safety/human-override.ts';
+
+export * from './rollout/gradual-rollout-policy.ts';
