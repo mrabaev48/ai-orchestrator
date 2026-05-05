@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.51.0
+# AI Orchestrator — Documentation 1.52.0
 
 ## 1. Что это за проект
 
@@ -83,6 +83,18 @@
 - при активном kill-switch выполнение restricted-команд допускается только при валидном human override (token, reason, ticket id, expiration в будущем), иначе выбрасывается `SafetyViolationError` с диагностическим payload.
 
 Изменение аддитивное и обратно совместимое: read-only команды (`show-state`, `export-backlog`) продолжают работать даже при активном kill-switch.
+
+
+
+### 3.1.5 Gradual rollout policy by tenant/project/risk tier (1.52.0)
+
+Добавлен минимальный production-ready слой gradual rollout policy:
+- в `packages/state` введён typed store контракт `RolloutConfigStore` + in-memory реализация `InMemoryRolloutConfigStore` для хранения rollout-правил;
+- в `packages/application` добавлен evaluator `evaluateGradualRolloutPolicy(...)`, который детерминированно выбирает наиболее специфичное правило (`tenant+project` > `tenant` > `global`) по `riskTier`;
+- решение принимает stable-bucketing (`0..99`) от `rolloutKey`, возвращает структурированный `reasonCode` и evidence (`selectedRuleId`, `selectedScope`, `rolloutPercent`, `bucket`) для diagnosability;
+- добавлены тесты success/failure/regression path (детерминизм).
+
+Изменение аддитивное и обратно совместимое: при отсутствии правил возвращается `ROLLOUT_NOT_CONFIGURED`, без изменения существующих policy/evaluation контрактов.
 
 ### 3.1.1 Dead-letter and controlled replay hardening (1.40.0)
 
