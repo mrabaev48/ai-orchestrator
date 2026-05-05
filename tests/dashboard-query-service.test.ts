@@ -187,3 +187,27 @@ test('DashboardQueryService returns readiness scorecard with go/no-go verdict', 
   assert.equal(scorecard.criteria.some((criterion) => criterion.status === 'fail'), false);
   assert.equal(typeof scorecard.generatedAt, 'string');
 });
+  const review = await service.getLatestProductionReadinessReview({ runId: 'run-44' });
+
+test('DashboardQueryService returns null for invalid production readiness review JSON payload', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'project-1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  state.artifacts.push({
+    id: 'release-assessment-2',
+    type: 'release_assessment',
+    title: 'Release readiness assessment',
+    metadata: {
+      verdict: 'blocked',
+      confidence: '0.2',
+      productionReadinessReview: '{"verdict":"not_ready","blockers":"invalid"}',
+    },
+    createdAt: '2026-05-05T01:00:00.000Z',
+  });
+
+  const service = new DashboardQueryService(new InMemoryStateStore(state));
+  const review = await service.getLatestProductionReadinessReview();
+  assert.equal(review, null);
+});

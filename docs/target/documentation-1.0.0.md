@@ -1,4 +1,4 @@
-# AI Orchestrator — Documentation 1.52.0
+# AI Orchestrator — Documentation 1.55.0
 
 ## 1. Что это за проект
 
@@ -95,6 +95,25 @@
 - добавлены тесты success/failure/regression path (детерминизм).
 
 Изменение аддитивное и обратно совместимое: при отсутствии правил возвращается `ROLLOUT_NOT_CONFIGURED`, без изменения существующих policy/evaluation контрактов.
+
+
+### 3.1.6 Production readiness final review and blockers report (1.53.0)
+
+Добавлен минимальный production-ready финальный review-gate:
+- в `packages/application` добавлен typed evaluator `evaluateProductionReadinessReview(...)` с закрытым verdict-контрактом (`ready|not_ready`);
+- проваленные проверки классифицируются в `blocker` и `warning` с нормализованными полями (`checkId`, `title`, `details`);
+- возвращается structured evidence (`total/passed/failed/blockerCount/warningCount`) для операторской диагностики и аудита release gate.
+
+Изменение аддитивное и обратно совместимое: новый модуль не изменяет существующие release/policy API и может быть подключён как финальный этап production readiness проверки.
+
+### 3.1.8 Readiness review schema guard + scoped API filters (1.55.0)
+
+Усилены production safety и multi-tenant read-фильтры для readiness review:
+- read-model `getLatestProductionReadinessReview(...)` теперь валидирует JSON payload через strict runtime guard; некорректные payload возвращаются как `null` без падения read path;
+- endpoint `GET /api/readiness/review` поддерживает scoped query filters `orgId`, `projectId`, `runId`;
+- на application-слое добавлена фильтрация release assessment artifacts по `runId` и tenant/project scope.
+
+Изменение аддитивное и обратно совместимое для существующих клиентов API.
 
 ### 3.1.1 Dead-letter and controlled replay hardening (1.40.0)
 
