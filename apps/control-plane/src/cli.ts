@@ -15,6 +15,7 @@ import {
   OrchestratorError,
   ConfigError,
 } from '../../../packages/shared/src/index.ts';
+import { authorizeControlPlaneCommand } from './authz/rbac-abac.ts';
 
 type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'run-task' | 'show-state' | 'export-backlog' | 'resume-failure' | 'replay-failure';
 
@@ -27,6 +28,22 @@ async function main(): Promise<void> {
   const runtimeConfig = loadRuntimeConfig();
   const logger = createLogger(runtimeConfig);
   const args = parseArgs(rest);
+  const actorTeam = args['actor-team'] ?? process.env.CONTROL_PLANE_ACTOR_TEAM;
+  const ownerTeam = args['project-owner-team'] ?? process.env.CONTROL_PLANE_PROJECT_OWNER_TEAM;
+
+  authorizeControlPlaneCommand({
+    command,
+    principal: {
+      subject: args['actor-subject'] ?? process.env.CONTROL_PLANE_ACTOR_SUBJECT ?? 'local-operator',
+      roles: parseRoles(args['actor-roles'] ?? process.env.CONTROL_PLANE_ACTOR_ROLES ?? 'control-plane.admin,control-plane.operator,control-plane.viewer'),
+      ...(actorTeam ? { team: actorTeam } : {}),
+    },
+    resource: {
+      projectId: args['project-id'] ?? 'ai-orchestrator',
+      environment: parseEnvironment(args.environment ?? process.env.CONTROL_PLANE_ENVIRONMENT),
+      ...(ownerTeam ? { ownerTeam } : {}),
+    },
+  });
   const application = createApplicationContext({
     config: runtimeConfig,
     logger,
@@ -199,6 +216,18 @@ async function checkStateIntegrity(service: StateIntegrityService): Promise<void
 async function prepareExport(service: IntegrationExportService, out?: string): Promise<void> {
   const outputPath = await service.prepare(out);
   console.log(outputPath);
+}
+
+function parseRoles(raw: string): string[] {
+  return raw.split(',').map((part) => part.trim()).filter((part) => part.length > 0);
+}
+
+function parseEnvironment(raw: string | undefined): 'local' | 'ci' | 'prod' {
+  if (raw === 'ci' || raw === 'prod') {
+    return raw;
+  }
+
+  return 'local';
 }
 
 function parseArgs(argv: string[]): Record<string, string> {

@@ -130,7 +130,7 @@ test('InMemoryStateStore rejects run-step records from a different tenant/projec
         role: 'tester',
         input: 'input',
         output: 'output',
-        status: 'running',
+        status: 'succeeded',
         idempotencyKey: 'key-1',
         checksum: 'checksum-1',
         traceId: 'trace-1',
