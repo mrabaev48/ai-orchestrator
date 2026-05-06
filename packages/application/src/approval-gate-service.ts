@@ -136,7 +136,7 @@ export class ApprovalGateService {
         },
         { runId: outcome.request.runId },
       ),
-    ]);
+    ], { expectedRevision: state.revision });
     return outcome.request;
   }
 }

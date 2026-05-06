@@ -171,5 +171,33 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
         `ALTER TABLE ${table('run_step_log')} ALTER COLUMN trace_id SET NOT NULL`
       ],
     },
+    {
+      id: 6,
+      name: 'project_snapshot_revisions',
+      statements: [
+        `ALTER TABLE ${table('project_snapshots')} ADD COLUMN IF NOT EXISTS revision BIGINT`,
+        `WITH ranked AS (
+          SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY org_id, project_id
+            ORDER BY created_at ASC, id ASC
+          ) AS computed_revision
+          FROM ${table('project_snapshots')}
+        )
+        UPDATE ${table('project_snapshots')} AS snapshot
+        SET revision = ranked.computed_revision,
+            snapshot_json = jsonb_set(
+              snapshot.snapshot_json,
+              '{revision}',
+              to_jsonb(ranked.computed_revision),
+              true
+            )
+        FROM ranked
+        WHERE snapshot.id = ranked.id
+          AND snapshot.revision IS NULL`,
+        `ALTER TABLE ${table('project_snapshots')} ALTER COLUMN revision SET NOT NULL`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS project_snapshots_tenant_revision_idx
+          ON ${table('project_snapshots')} (org_id, project_id, revision)`,
+      ],
+    },
   ];
 }

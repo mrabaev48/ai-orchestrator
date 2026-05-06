@@ -24,6 +24,7 @@ export interface RunEvidenceScope {
 export class RunStepRecorder {
   private readonly checksumByRunId = new Map<string, string>();
   private buffer: RunStepLogEntry[] | null = null;
+  private latestRevision: number | null = null;
   private evidenceScope: RunEvidenceScope = {
     tenantId: 'default-org',
     projectId: 'ai-orchestrator',
@@ -35,6 +36,7 @@ export class RunStepRecorder {
     this.checksumByRunId.delete(runId);
     this.evidenceScope = scope;
     this.buffer = [];
+    this.latestRevision = null;
   }
 
   clearBuffer(): void {
@@ -46,10 +48,11 @@ export class RunStepRecorder {
     const attempt = 0;
     const evidenceStore = createRunStepEvidenceStore(this.stateStore);
     const previousChecksum = this.checksumByRunId.get(input.runId);
-    const step = await appendRunStepEvidence(evidenceStore, {
+    const scope = await this.resolveEvidenceScope();
+    const result = await appendRunStepEvidence(evidenceStore, {
       evidenceId: stepId,
-      tenantId: this.evidenceScope.tenantId,
-      projectId: this.evidenceScope.projectId,
+      tenantId: scope.tenantId,
+      projectId: scope.projectId,
       runId: input.runId,
       stepId,
       attempt,
@@ -65,8 +68,9 @@ export class RunStepRecorder {
       durationMs: input.durationMs,
       createdAt: new Date().toISOString(),
     });
-    this.checksumByRunId.set(input.runId, step.checksum);
-    this.buffer?.push(step);
+    this.latestRevision = result.revision;
+    this.checksumByRunId.set(input.runId, result.checksum);
+    this.buffer?.push(result);
   }
 
   flushToState(state: ProjectState): void {
@@ -75,6 +79,21 @@ export class RunStepRecorder {
     }
     state.execution.runStepLog ??= [];
     state.execution.runStepLog.push(...this.buffer);
+    if (this.latestRevision != null) {
+      state.revision = Math.max(state.revision, this.latestRevision);
+    }
     this.buffer = [];
+    this.latestRevision = null;
+  }
+
+  private async resolveEvidenceScope(): Promise<RunEvidenceScope> {
+    if (this.buffer) {
+      return this.evidenceScope;
+    }
+    const state = await this.stateStore.load();
+    return {
+      tenantId: state.orgId,
+      projectId: state.projectId,
+    };
   }
 }

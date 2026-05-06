@@ -85,7 +85,7 @@ export class PlanningService {
     currentState.milestones[response.output.milestone.id] = response.output.milestone;
     currentState.currentMilestoneId = response.output.milestone.id;
     assertProjectState(currentState);
-    await this.stateStore.save(currentState);
+    await this.stateStore.save(currentState, { expectedRevision: currentState.revision });
 
     await this.stateStore.recordArtifact({
       id: crypto.randomUUID(),
@@ -97,7 +97,7 @@ export class PlanningService {
         milestoneId: response.output.milestone.id,
       },
       createdAt: new Date().toISOString(),
-    });
+    }, { expectedRevision: currentState.revision });
     await this.stateStore.recordEvent(
       makeEvent('BACKLOG_PLANNED', {
         taskCount: Object.keys(response.output.backlog.tasks).length,

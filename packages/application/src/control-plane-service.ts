@@ -18,7 +18,7 @@ export class ControlPlaneService {
 
   async bootstrap(state: ProjectState, snapshotOnBootstrap: boolean): Promise<void> {
     if (snapshotOnBootstrap) {
-      await this.stateStore.save(state);
+      await this.stateStore.save(state, { expectedRevision: state.revision });
     }
 
     await this.stateStore.recordEvent(
@@ -59,7 +59,7 @@ export class ControlPlaneService {
         format,
       },
       createdAt: new Date().toISOString(),
-    });
+    }, { expectedRevision: state.revision });
 
     return outputPath;
   }
@@ -91,7 +91,7 @@ export class ControlPlaneService {
         { failureId, taskId: failure.taskId },
         failure.checkpointRunId ? { runId: failure.checkpointRunId } : {},
       ),
-    ]);
+    ], { expectedRevision: state.revision });
   }
 
   async replayFromFailureCheckpoint(failureId: string): Promise<{ taskId: string; runId?: string }> {
@@ -119,7 +119,7 @@ export class ControlPlaneService {
         { taskId: failure.taskId, replayFromFailureId: failure.id },
         failure.checkpointRunId ? { runId: failure.checkpointRunId } : {},
       ),
-    ]);
+    ], { expectedRevision: state.revision });
 
     return replay;
   }

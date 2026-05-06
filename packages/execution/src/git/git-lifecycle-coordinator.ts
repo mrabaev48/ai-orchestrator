@@ -65,7 +65,11 @@ export class GitLifecycleCoordinator {
       stage: 'branch',
       branchName: input.branchName ?? 'unknown',
     });
-    await this.input.stateStore.recordArtifact(branchArtifact);
+    const branchArtifactResult = await this.input.stateStore.recordArtifact(
+      branchArtifact,
+      { expectedRevision: state.revision },
+    );
+    state.revision = branchArtifactResult.revision;
     state.artifacts.push(branchArtifact);
   }
 
@@ -222,7 +226,11 @@ export class GitLifecycleCoordinator {
       commitSha: truncateText(commitSha, 120),
       commitMessage: truncateText(commitMessage, 250),
     });
-    await this.input.stateStore.recordArtifact(commitArtifact);
+    const commitArtifactResult = await this.input.stateStore.recordArtifact(
+      commitArtifact,
+      { expectedRevision: state.revision },
+    );
+    state.revision = commitArtifactResult.revision;
     state.artifacts.push(commitArtifact);
 
     const prTitle = `[${input.taskId}] ${input.taskTitle}`;
@@ -304,7 +312,11 @@ export class GitLifecycleCoordinator {
       prTitle: truncateText(prTitle, 250),
       prBody: truncateText(prBody, 250),
     });
-    await this.input.stateStore.recordArtifact(prArtifact);
+    const prArtifactResult = await this.input.stateStore.recordArtifact(
+      prArtifact,
+      { expectedRevision: state.revision },
+    );
+    state.revision = prArtifactResult.revision;
     state.artifacts.push(prArtifact);
     if (isWaitingForApproval) {
       const resumeModeArtifact = makeArtifact('report', `Approval pending for ${input.taskId}`, {
@@ -313,7 +325,11 @@ export class GitLifecycleCoordinator {
         resumeMode: 'manual_run_cycle',
         note: 'Approve and resume by invoking the run cycle again from control plane',
       });
-      await this.input.stateStore.recordArtifact(resumeModeArtifact);
+      const resumeModeArtifactResult = await this.input.stateStore.recordArtifact(
+        resumeModeArtifact,
+        { expectedRevision: state.revision },
+      );
+      state.revision = resumeModeArtifactResult.revision;
       state.artifacts.push(resumeModeArtifact);
     }
     return isWaitingForApproval ? 'approval_pending' : 'ok';

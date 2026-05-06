@@ -9,7 +9,6 @@ import {
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
-  type FailureRecord,
   type ProjectState,
 } from '@ai-orchestrator/core';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
@@ -74,33 +73,38 @@ test('StateIntegrityService persists explainable integrity report for invalid st
   const store: StateStore = {
     load: async () => structuredClone(state),
     save: async (nextState: ProjectState) => {
-      void nextState;
+      nextState.revision += 1;
+      return { revision: nextState.revision };
     },
     saveWithEvents: async (nextState: ProjectState, nextEvents: readonly DomainEvent[]) => {
-      void nextState;
+      nextState.revision += 1;
       events.push(...nextEvents);
+      return { revision: nextState.revision };
     },
     listEvents: async () => [],
     listRunSteps: async () => [],
     recordEvent: async (event: DomainEvent) => {
       events.push(event);
     },
-    recordFailure: async (input: RecordFailureInput): Promise<FailureRecord> => {
+    recordFailure: async (input: RecordFailureInput) => {
       void input;
       throw new Error('not needed');
     },
     recordArtifact: async (artifact: ArtifactRecord) => {
       artifacts.push(artifact);
+      return { revision: state.revision };
     },
     recordDecision: async (decision: DecisionLogItem) => {
       void decision;
+      return { revision: state.revision };
     },
-    recordRunStep: async () => {},
-    recordPolicyDecision: async () => {},
+    recordRunStep: async () => ({ revision: state.revision }),
+    recordPolicyDecision: async () => ({ revision: state.revision }),
     getPolicyDecision: async () => null,
     markTaskDone: async (taskId: string, summary: string) => {
       void taskId;
       void summary;
+      return { revision: state.revision };
     },
   };
   const report = await new StateIntegrityService(

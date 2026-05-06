@@ -36,7 +36,7 @@ export class FailureHandler {
     const action = nextFailureAction(task, retryCount, this.input.config.workflow.maxRetriesPerTask);
     const now = new Date().toISOString();
 
-    const failure = await this.input.stateStore.recordFailure({
+    const failureResult = await this.input.stateStore.recordFailure({
       taskId: task.id,
       role,
       reason,
@@ -44,7 +44,9 @@ export class FailureHandler {
       status: action === 'block' ? 'dead_lettered' : 'retryable',
       checkpointRunId: runId,
       ...(action === 'block' ? { deadLetteredAt: now } : {}),
-    });
+    }, { expectedRevision: state.revision });
+    const { failure } = failureResult;
+    state.revision = failureResult.revision;
     state.failures.push(failure);
     state.execution.retryCounts[task.id] = (state.execution.retryCounts[task.id] ?? 0) + 1;
     delete state.execution.activeTaskId;
@@ -58,7 +60,7 @@ export class FailureHandler {
       return this.blockTaskForFailure(state, task, reason, runId);
     }
 
-    await this.input.stateStore.save(state);
+    await this.input.stateStore.save(state, { expectedRevision: state.revision });
     return { runId, taskId: task.id, status: 'idle', stopReason: reason };
   }
 
@@ -107,7 +109,7 @@ export class FailureHandler {
       },
       { runId },
     );
-    await this.input.stateStore.saveWithEvents(state, [taskSplitEvent]);
+    await this.input.stateStore.saveWithEvents(state, [taskSplitEvent], { expectedRevision: state.revision });
     return { runId, taskId: task.id, status: 'idle', stopReason: 'task_split' };
   }
 
@@ -126,9 +128,10 @@ export class FailureHandler {
       reason,
     });
     state.artifacts.push(artifact);
-    await this.input.stateStore.recordArtifact(artifact);
+    const artifactResult = await this.input.stateStore.recordArtifact(artifact, { expectedRevision: state.revision });
+    state.revision = artifactResult.revision;
     const taskBlockedEvent = makeEvent('TASK_BLOCKED', { taskId: task.id, reason }, { runId });
-    await this.input.stateStore.saveWithEvents(state, [taskBlockedEvent]);
+    await this.input.stateStore.saveWithEvents(state, [taskBlockedEvent], { expectedRevision: state.revision });
     return { runId, taskId: task.id, status: 'blocked', stopReason: reason };
   }
 }

@@ -61,9 +61,9 @@ export class ArchitectureService {
     currentState.architecture.findings = [...response.output.findings];
     currentState.architecture.analysisSummary = response.output.riskSummary;
     assertProjectState(currentState);
-    await this.stateStore.save(currentState);
+    await this.stateStore.save(currentState, { expectedRevision: currentState.revision });
 
-    await this.stateStore.recordArtifact({
+    const artifactResult = await this.stateStore.recordArtifact({
       id: crypto.randomUUID(),
       type: 'architecture_analysis',
       title: 'Architecture analysis',
@@ -72,7 +72,8 @@ export class ArchitectureService {
         findings: String(response.output.findings.length),
       },
       createdAt: new Date().toISOString(),
-    });
+    }, { expectedRevision: currentState.revision });
+    currentState.revision = artifactResult.revision;
 
     const highestRiskFinding = response.output.findings[0];
     if (highestRiskFinding) {
@@ -83,7 +84,7 @@ export class ArchitectureService {
         rationale: response.output.riskSummary,
         affectedAreas: highestRiskFinding.affectedModules,
         createdAt: new Date().toISOString(),
-      });
+      }, { expectedRevision: currentState.revision });
     }
 
     await this.stateStore.recordEvent(

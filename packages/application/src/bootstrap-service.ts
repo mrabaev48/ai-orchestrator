@@ -65,7 +65,7 @@ export class BootstrapService {
     assertProjectState(state);
 
     if (snapshotOnBootstrap) {
-      await this.stateStore.save(state);
+      await this.stateStore.save(state, { expectedRevision: state.revision });
     }
 
     await this.stateStore.recordArtifact({
@@ -78,7 +78,7 @@ export class BootstrapService {
         packageCount: String(response.output.packageInventory.length),
       },
       createdAt: new Date().toISOString(),
-    });
+    }, { expectedRevision: state.revision });
     await this.stateStore.recordEvent(
       makeEvent('DISCOVERY_COMPLETED', {
         packageCount: response.output.packageInventory.length,

@@ -55,7 +55,7 @@ export class ReleaseReadinessService {
         promptId: prompt.id,
       },
       createdAt: new Date().toISOString(),
-    });
+    }, { expectedRevision: state.revision });
     await this.stateStore.recordEvent(
       makeEvent('RELEASE_ASSESSED', {
         verdict: response.output.verdict,

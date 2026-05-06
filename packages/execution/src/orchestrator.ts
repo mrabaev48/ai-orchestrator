@@ -255,6 +255,7 @@ export class Orchestrator {
       input: { state },
       acceptanceCriteria: ['Return a single executable task or null'],
     }, this.makeContext('task_manager', runId, state, path.resolve(this.config.tools.allowedWritePaths[0] ?? process.cwd())));
+    state.revision = (await this.stateStore.load()).revision;
 
     return taskSelection.output;
   }

@@ -104,9 +104,9 @@ export function createTestApplicationRoleRegistry(): ApplicationRoleRegistry {
 }
 
 class TestApplicationRoleRegistry implements ApplicationRoleRegistry {
-  private readonly roles: ReadonlyMap<AgentRoleName, AgentRole<unknown, unknown>>;
+  private readonly roles: ReadonlyMap<AgentRoleName, unknown>;
 
-  constructor(roles: readonly AgentRole<unknown, unknown>[]) {
+  constructor(roles: readonly { readonly name: AgentRoleName }[]) {
     this.roles = new Map(roles.map((role) => [role.name, role]));
   }
 

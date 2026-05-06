@@ -7,7 +7,6 @@ import {
   type DecisionLogItem,
   type DomainEvent,
   type ExecutionPolicyDecision,
-  type FailureRecord,
   type ProjectState,
   type RunStepLogEntry,
 } from '@ai-orchestrator/core';
@@ -17,7 +16,10 @@ import type {
   ListEventsQuery,
   ListRunStepsQuery,
   PolicyDecisionQuery,
+  RecordFailureResult,
   RecordFailureInput,
+  StateMutationResult,
+  StateWriteOptions,
 } from './ports.js';
 
 void test('ApprovalGateService uses the application state store port without infrastructure constructors', async () => {
@@ -60,13 +62,21 @@ class TestApplicationStateStore implements ApplicationStateStore {
     return this.state;
   }
 
-  async save(state: ProjectState): Promise<void> {
+  async save(state: ProjectState, _options?: StateWriteOptions): Promise<StateMutationResult> {
+    state.revision += 1;
     this.savedState = state;
+    return { revision: state.revision };
   }
 
-  async saveWithEvents(state: ProjectState, events: readonly DomainEvent[]): Promise<void> {
+  async saveWithEvents(
+    state: ProjectState,
+    events: readonly DomainEvent[],
+    _options?: StateWriteOptions,
+  ): Promise<StateMutationResult> {
+    state.revision += 1;
     this.savedState = state;
     this.recordedEvents.push(...events);
+    return { revision: state.revision };
   }
 
   async listEvents(_query?: ListEventsQuery): Promise<DomainEvent[]> {
@@ -81,21 +91,38 @@ class TestApplicationStateStore implements ApplicationStateStore {
     this.recordedEvents.push(event);
   }
 
-  async recordFailure(_input: RecordFailureInput): Promise<FailureRecord> {
+  async recordFailure(_input: RecordFailureInput, _options?: StateWriteOptions): Promise<RecordFailureResult> {
     throw new Error('recordFailure is not needed for this test.');
   }
 
-  async recordArtifact(_artifact: ArtifactRecord): Promise<void> {}
+  async recordArtifact(_artifact: ArtifactRecord, _options?: StateWriteOptions): Promise<StateMutationResult> {
+    return { revision: this.state.revision };
+  }
 
-  async recordDecision(_decision: DecisionLogItem): Promise<void> {}
+  async recordDecision(_decision: DecisionLogItem, _options?: StateWriteOptions): Promise<StateMutationResult> {
+    return { revision: this.state.revision };
+  }
 
-  async recordRunStep(_step: RunStepLogEntry): Promise<void> {}
+  async recordRunStep(_step: RunStepLogEntry): Promise<StateMutationResult> {
+    return { revision: this.state.revision };
+  }
 
-  async recordPolicyDecision(_decision: ExecutionPolicyDecision): Promise<void> {}
+  async recordPolicyDecision(
+    _decision: ExecutionPolicyDecision,
+    _options?: StateWriteOptions,
+  ): Promise<StateMutationResult> {
+    return { revision: this.state.revision };
+  }
 
   async getPolicyDecision(_query: PolicyDecisionQuery): Promise<ExecutionPolicyDecision | null> {
     return null;
   }
 
-  async markTaskDone(_taskId: string, _summary: string): Promise<void> {}
+  async markTaskDone(
+    _taskId: string,
+    _summary: string,
+    _options?: StateWriteOptions,
+  ): Promise<StateMutationResult> {
+    return { revision: this.state.revision };
+  }
 }

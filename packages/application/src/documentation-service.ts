@@ -92,7 +92,7 @@ export class DocumentationService {
         affectedModules: String(response.output.affectedModules.length),
       },
       createdAt: new Date().toISOString(),
-    });
+    }, { expectedRevision: state.revision });
 
     this.logger.info('Documentation artifact generated', {
       event: 'documentation_generated',

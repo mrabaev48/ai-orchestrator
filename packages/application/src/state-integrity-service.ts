@@ -59,7 +59,7 @@ export class StateIntegrityService {
         promptId: prompt.id,
       },
       createdAt: new Date().toISOString(),
-    });
+    }, { expectedRevision: state.revision });
     await this.stateStore.recordEvent(
       makeEvent('STATE_INTEGRITY_CHECKED', {
         ok: response.output.ok,

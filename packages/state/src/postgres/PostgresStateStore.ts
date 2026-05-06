@@ -13,8 +13,18 @@ import {
   makeEvent,
 } from '@ai-orchestrator/core';
 import { StateStoreError, redactSecrets } from '@ai-orchestrator/shared';
-import type { ListEventsQuery, ListRunStepsQuery, PolicyDecisionQuery, RecordFailureInput, StateStore } from '../StateStore.js';
+import type {
+  ListEventsQuery,
+  ListRunStepsQuery,
+  PolicyDecisionQuery,
+  RecordFailureInput,
+  RecordFailureResult,
+  StateMutationResult,
+  StateStore,
+  StateWriteOptions,
+} from '../StateStore.js';
 import { createPostgresMigrations } from './migrations.js';
+import { expectedRevisionFor, stateRevisionConflict } from '../revision.js';
 
 interface PgPoolLike {
   connect: () => Promise<PgClientLike>;
@@ -51,13 +61,13 @@ export class PostgresStateStore implements StateStore {
     const pool = await this.poolPromise;
 
     const result = (await pool.query(
-      `SELECT snapshot_json
+      `SELECT snapshot_json, revision
        FROM ${this.table('project_snapshots')}
        WHERE org_id = $1 AND project_id = $2
-       ORDER BY created_at DESC
+       ORDER BY revision DESC, created_at DESC
        LIMIT 1`,
       [this.tenantScope.orgId, this.tenantScope.projectId],
-    )) as { rows: { snapshot_json: ProjectState }[] };
+    )) as { rows: { snapshot_json: ProjectState; revision: string | number }[] };
 
     const row = result.rows[0];
     if (!row?.snapshot_json) {
@@ -65,30 +75,41 @@ export class PostgresStateStore implements StateStore {
     }
 
     try {
-      assertProjectState(row.snapshot_json);
-      return structuredClone(row.snapshot_json);
+      const loaded = structuredClone(row.snapshot_json);
+      loaded.revision = Number(row.revision);
+      assertProjectState(loaded);
+      return loaded;
     } catch (error) {
       throw new StateStoreError('Unable to load project state snapshot', { cause: error });
     }
   }
 
-  async save(state: ProjectState): Promise<void> {
+  async save(state: ProjectState, options: StateWriteOptions = {}): Promise<StateMutationResult> {
     assertProjectState(state);
     await this.ensureInitialized();
-    await this.withTransaction(async (client) => {
-      await this.insertSnapshot(client, state);
+    const revision = await this.withTransaction(async (client) => {
+      return await this.insertSnapshot(client, state, options);
     });
+    state.revision = revision;
+    return { revision };
   }
 
-  async saveWithEvents(state: ProjectState, events: readonly DomainEvent[]): Promise<void> {
+  async saveWithEvents(
+    state: ProjectState,
+    events: readonly DomainEvent[],
+    options: StateWriteOptions = {},
+  ): Promise<StateMutationResult> {
     assertProjectState(state);
     await this.ensureInitialized();
-    await this.withTransaction(async (client) => {
-      await this.insertSnapshot(client, state);
+    const revision = await this.withTransaction(async (client) => {
+      const nextRevision = await this.insertSnapshot(client, state, options);
       for (const event of events) {
         await this.insertEvent(client, event);
       }
+      return nextRevision;
     });
+    state.revision = revision;
+    return { revision };
   }
 
   async listEvents(query: ListEventsQuery = {}): Promise<DomainEvent[]> {
@@ -228,7 +249,7 @@ export class PostgresStateStore implements StateStore {
     });
   }
 
-  async recordFailure(input: RecordFailureInput): Promise<FailureRecord> {
+  async recordFailure(input: RecordFailureInput, options: StateWriteOptions = {}): Promise<RecordFailureResult> {
     const current = await this.load();
     if (!current.backlog.tasks[input.taskId]) {
       throw new StateStoreError(`Cannot record failure for missing task ${input.taskId}`);
@@ -249,7 +270,7 @@ export class PostgresStateStore implements StateStore {
     current.execution.retryCounts[input.taskId] = (current.execution.retryCounts[input.taskId] ?? 0) + 1;
 
     await this.ensureInitialized();
-    await this.withTransaction(async (client) => {
+    const revision = await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('failure_log')} (
           id, org_id, project_id, task_id, role, reason, symptoms_json, bad_patterns_json, retry_suggested, created_at
@@ -267,13 +288,15 @@ export class PostgresStateStore implements StateStore {
           failure.createdAt,
         ],
       );
-      await this.insertSnapshot(client, current);
+      return await this.insertSnapshot(client, current, options.expectedRevision != null ? options : {
+        expectedRevision: current.revision,
+      });
     });
 
-    return failure;
+    return { failure, revision };
   }
 
-  async recordArtifact(artifact: ArtifactRecord): Promise<void> {
+  async recordArtifact(artifact: ArtifactRecord, options: StateWriteOptions = {}): Promise<StateMutationResult> {
     const issues = defaultArtifactSchemaRegistry.validate(artifact);
     if (issues.length > 0) {
       throw new StateStoreError('Artifact schema validation failed', {
@@ -282,10 +305,12 @@ export class PostgresStateStore implements StateStore {
     }
 
     const current = await this.load();
-    current.artifacts.push(structuredClone(artifact));
+    if (!current.artifacts.some((item) => item.id === artifact.id)) {
+      current.artifacts.push(structuredClone(artifact));
+    }
 
     await this.ensureInitialized();
-    await this.withTransaction(async (client) => {
+    const revision = await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('artifact_log')} (
           id, org_id, project_id, type, title, location, metadata_json, created_at
@@ -301,16 +326,19 @@ export class PostgresStateStore implements StateStore {
           artifact.createdAt,
         ],
       );
-      await this.insertSnapshot(client, current);
+      return await this.insertSnapshot(client, current, options.expectedRevision != null ? options : {
+        expectedRevision: current.revision,
+      });
     });
+    return { revision };
   }
 
-  async recordDecision(decision: DecisionLogItem): Promise<void> {
+  async recordDecision(decision: DecisionLogItem, options: StateWriteOptions = {}): Promise<StateMutationResult> {
     const current = await this.load();
     current.decisions.push(structuredClone(decision));
 
     await this.ensureInitialized();
-    await this.withTransaction(async (client) => {
+    const revision = await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('decision_log')} (
           id, org_id, project_id, created_at, title, decision, rationale, affected_areas_json
@@ -326,19 +354,28 @@ export class PostgresStateStore implements StateStore {
           JSON.stringify(decision.affectedAreas),
         ],
       );
-      await this.insertSnapshot(client, current);
+      return await this.insertSnapshot(client, current, options.expectedRevision != null ? options : {
+        expectedRevision: current.revision,
+      });
     });
+    return { revision };
   }
 
 
-  async recordPolicyDecision(decision: ExecutionPolicyDecision): Promise<void> {
+  async recordPolicyDecision(
+    decision: ExecutionPolicyDecision,
+    options: StateWriteOptions = {},
+  ): Promise<StateMutationResult> {
     const current = await this.load();
     current.policyDecisions.push(structuredClone(decision));
 
     await this.ensureInitialized();
-    await this.withTransaction(async (client) => {
-      await this.insertSnapshot(client, current);
+    const revision = await this.withTransaction(async (client) => {
+      return await this.insertSnapshot(client, current, options.expectedRevision != null ? options : {
+        expectedRevision: current.revision,
+      });
     });
+    return { revision };
   }
 
   async getPolicyDecision(query: PolicyDecisionQuery): Promise<ExecutionPolicyDecision | null> {
@@ -353,9 +390,9 @@ export class PostgresStateStore implements StateStore {
     return found ? structuredClone(found) : null;
   }
 
-  async recordRunStep(step: RunStepLogEntry): Promise<void> {
+  async recordRunStep(step: RunStepLogEntry): Promise<StateMutationResult> {
     await this.ensureInitialized();
-    await this.withTransaction(async (client) => {
+    const revision = await this.withTransaction(async (client) => {
       const previousResult = (await client.query(
         `SELECT status
          FROM ${this.table('run_step_log')}
@@ -409,10 +446,16 @@ export class PostgresStateStore implements StateStore {
           step.createdAt,
         ],
       );
+      return await this.lockAndLoadCurrentSnapshotRevision(client);
     });
+    return { revision };
   }
 
-  async markTaskDone(taskId: string, summary: string): Promise<void> {
+  async markTaskDone(
+    taskId: string,
+    summary: string,
+    options: StateWriteOptions = {},
+  ): Promise<StateMutationResult> {
     const current = await this.load();
     const task = current.backlog.tasks[taskId];
     if (!task) {
@@ -432,10 +475,13 @@ export class PostgresStateStore implements StateStore {
     );
 
     await this.ensureInitialized();
-    await this.withTransaction(async (client) => {
+    const revision = await this.withTransaction(async (client) => {
       await this.insertEvent(client, event);
-      await this.insertSnapshot(client, current);
+      return await this.insertSnapshot(client, current, options.expectedRevision != null ? options : {
+        expectedRevision: current.revision,
+      });
     });
+    return { revision };
   }
 
   private table(name: string): string {
@@ -464,13 +510,60 @@ export class PostgresStateStore implements StateStore {
     }
   }
 
-  private async insertSnapshot(client: PgClientLike, state: ProjectState): Promise<void> {
+  private async insertSnapshot(
+    client: PgClientLike,
+    state: ProjectState,
+    options: StateWriteOptions = {},
+  ): Promise<number> {
     assertProjectState(state);
+    const expectedRevision = expectedRevisionFor(state, options);
+    const currentRevision = await this.lockAndLoadCurrentSnapshotRevision(client);
+    if (expectedRevision !== currentRevision) {
+      throw stateRevisionConflict(expectedRevision, currentRevision);
+    }
+
+    const nextRevision = currentRevision + 1;
+    const snapshot = structuredClone(state);
+    snapshot.revision = nextRevision;
+    assertProjectState(snapshot);
+
+    try {
+      await client.query(
+        `INSERT INTO ${this.table('project_snapshots')} (id, org_id, project_id, revision, created_at, snapshot_json)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+        [
+          crypto.randomUUID(),
+          this.tenantScope.orgId,
+          this.tenantScope.projectId,
+          nextRevision,
+          new Date().toISOString(),
+          JSON.stringify(redactSecrets(snapshot)),
+        ],
+      );
+      return nextRevision;
+    } catch (error) {
+      if (isPgUniqueViolation(error)) {
+        throw stateRevisionConflict(expectedRevision, nextRevision);
+      }
+      throw error;
+    }
+  }
+
+  private async lockAndLoadCurrentSnapshotRevision(client: PgClientLike): Promise<number> {
     await client.query(
-      `INSERT INTO ${this.table('project_snapshots')} (id, org_id, project_id, created_at, snapshot_json)
-       VALUES ($1, $2, $3, $4, $5::jsonb)`,
-      [crypto.randomUUID(), this.tenantScope.orgId, this.tenantScope.projectId, new Date().toISOString(), JSON.stringify(redactSecrets(state))],
+      'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+      [this.tenantScope.orgId, this.tenantScope.projectId],
     );
+    const result = (await client.query(
+      `SELECT revision
+       FROM ${this.table('project_snapshots')}
+       WHERE org_id = $1 AND project_id = $2
+       ORDER BY revision DESC, created_at DESC
+       LIMIT 1`,
+      [this.tenantScope.orgId, this.tenantScope.projectId],
+    )) as { rows: { revision: string | number }[] };
+    const revision = result.rows[0]?.revision;
+    return revision == null ? 0 : Number(revision);
   }
 
   private async insertEvent(client: PgClientLike, event: DomainEvent): Promise<void> {
@@ -500,6 +593,9 @@ export class PostgresStateStore implements StateStore {
       return result;
     } catch (error) {
       await client.query('ROLLBACK');
+      if (error instanceof StateStoreError) {
+        throw error;
+      }
       throw new StateStoreError('PostgreSQL state transaction failed', { cause: error });
     } finally {
       client.release();
@@ -532,4 +628,8 @@ function asPgModule(module: unknown): PgModule {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isPgUniqueViolation(error: unknown): boolean {
+  return isRecord(error) && error.code === '23505';
 }

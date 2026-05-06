@@ -59,7 +59,11 @@ export class WorkspaceRunCoordinator {
       workspaceRoot: workspace.rootPath,
       hasInitialDiff: workspace.initialDiff.length > 0 ? 'true' : 'false',
     });
-    await this.input.stateStore.recordArtifact(workspaceArtifact);
+    const workspaceArtifactResult = await this.input.stateStore.recordArtifact(
+      workspaceArtifact,
+      { expectedRevision: input.state.revision },
+    );
+    input.state.revision = workspaceArtifactResult.revision;
     input.state.artifacts.push(workspaceArtifact);
     await this.input.gitLifecycleCoordinator.recordBranchArtifact(input.state, {
       runId: input.runId,

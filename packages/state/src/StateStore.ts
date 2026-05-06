@@ -38,20 +38,43 @@ export interface ListRunStepsQuery {
   offset?: number;
 }
 
+export interface StateWriteOptions {
+  expectedRevision?: number;
+}
+
+export interface StateMutationResult {
+  revision: number;
+}
+
+export interface RecordFailureResult extends StateMutationResult {
+  failure: FailureRecord;
+}
+
 export interface StateStore {
   load: () => Promise<ProjectState>;
-  save: (state: ProjectState) => Promise<void>;
-  saveWithEvents: (state: ProjectState, events: readonly DomainEvent[]) => Promise<void>;
+  /**
+   * Persists a full-state snapshot using optimistic concurrency.
+   *
+   * The write succeeds only when the expected revision matches the latest
+   * stored snapshot revision. On success the snapshot is stored at the next
+   * monotonic revision and the provided state object is updated to that revision.
+   */
+  save: (state: ProjectState, options?: StateWriteOptions) => Promise<StateMutationResult>;
+  saveWithEvents: (
+    state: ProjectState,
+    events: readonly DomainEvent[],
+    options?: StateWriteOptions,
+  ) => Promise<StateMutationResult>;
   listEvents: (query?: ListEventsQuery) => Promise<DomainEvent[]>;
   listRunSteps: (query?: ListRunStepsQuery) => Promise<RunStepLogEntry[]>;
   recordEvent: (event: DomainEvent) => Promise<void>;
-  recordFailure: (input: RecordFailureInput) => Promise<FailureRecord>;
-  recordArtifact: (artifact: ArtifactRecord) => Promise<void>;
-  recordDecision: (decision: DecisionLogItem) => Promise<void>;
-  recordRunStep: (step: RunStepLogEntry) => Promise<void>;
-  recordPolicyDecision: (decision: ExecutionPolicyDecision) => Promise<void>;
+  recordFailure: (input: RecordFailureInput, options?: StateWriteOptions) => Promise<RecordFailureResult>;
+  recordArtifact: (artifact: ArtifactRecord, options?: StateWriteOptions) => Promise<StateMutationResult>;
+  recordDecision: (decision: DecisionLogItem, options?: StateWriteOptions) => Promise<StateMutationResult>;
+  recordRunStep: (step: RunStepLogEntry) => Promise<StateMutationResult>;
+  recordPolicyDecision: (decision: ExecutionPolicyDecision, options?: StateWriteOptions) => Promise<StateMutationResult>;
   getPolicyDecision: (query: PolicyDecisionQuery) => Promise<ExecutionPolicyDecision | null>;
-  markTaskDone: (taskId: string, summary: string) => Promise<void>;
+  markTaskDone: (taskId: string, summary: string, options?: StateWriteOptions) => Promise<StateMutationResult>;
 }
 
 

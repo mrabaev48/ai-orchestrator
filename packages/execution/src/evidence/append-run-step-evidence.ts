@@ -2,7 +2,7 @@ import {
   computeRunStepChecksum,
   type RunStepLogEntry,
 } from '@ai-orchestrator/core';
-import type { RunStepEvidenceStore } from '@ai-orchestrator/state';
+import type { StateMutationResult, RunStepEvidenceStore } from '@ai-orchestrator/state';
 
 export interface AppendRunStepEvidenceInput {
   evidenceId: string;
@@ -26,10 +26,12 @@ export interface AppendRunStepEvidenceInput {
   createdAt: string;
 }
 
+export type AppendRunStepEvidenceResult = RunStepLogEntry & StateMutationResult;
+
 export async function appendRunStepEvidence(
   store: RunStepEvidenceStore,
   input: AppendRunStepEvidenceInput,
-): Promise<RunStepLogEntry> {
+): Promise<AppendRunStepEvidenceResult> {
   const step: RunStepLogEntry = {
     id: input.evidenceId,
     tenantId: input.tenantId,
@@ -69,6 +71,6 @@ export async function appendRunStepEvidence(
     traceId: step.traceId,
   });
 
-  await store.append(step);
-  return step;
+  const result = await store.append(step);
+  return { ...step, revision: result.revision };
 }

@@ -90,6 +90,7 @@ export interface RunStepLogEntry {
 }
 
 export interface ProjectState {
+  revision: number;
   orgId: string;
   projectId: string;
   projectName: string;
@@ -312,6 +313,7 @@ const executionStateSchema = z.object({
 });
 
 const projectStateDeepSchema = z.object({
+  revision: z.number().int().nonnegative(),
   orgId: z.string().min(1),
   backlog: z.object({
     epics: z.record(z.string(), epicSchema),
@@ -352,6 +354,7 @@ export function createEmptyProjectState(input: {
   summary: string;
 }): ProjectState {
   return {
+    revision: 0,
     orgId: input.orgId ?? 'default-org',
     projectId: input.projectId,
     projectName: input.projectName,
@@ -393,6 +396,7 @@ export function createEmptyProjectState(input: {
 }
 
 export function withProjectStateDefaults(state: ProjectState): ProjectState {
+  state.revision ??= 0;
   state.execution.runStepLog ??= [];
   state.execution.dedupRegistry ??= {};
   state.approvals ??= [];

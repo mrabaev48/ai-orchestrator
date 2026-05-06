@@ -11,12 +11,23 @@ import {
   type RunStepLogEntry,
   type ExecutionPolicyDecision,
 } from '@ai-orchestrator/core';
-import type { ListEventsQuery, ListRunStepsQuery, PolicyDecisionQuery, RecordFailureInput, StateStore } from '../StateStore.js';
+import type {
+  ListEventsQuery,
+  ListRunStepsQuery,
+  PolicyDecisionQuery,
+  RecordFailureInput,
+  RecordFailureResult,
+  StateMutationResult,
+  StateStore,
+  StateWriteOptions,
+} from '../StateStore.js';
 import { StateStoreError } from '@ai-orchestrator/shared';
+import { expectedRevisionFor, stateRevisionConflict } from '../revision.js';
 
 export class InMemoryStateStore implements StateStore {
   readonly events: DomainEvent[] = [];
   private state: ProjectState;
+  private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(initialState: ProjectState) {
     assertProjectState(initialState);
@@ -27,17 +38,16 @@ export class InMemoryStateStore implements StateStore {
     return structuredClone(this.state);
   }
 
-  async save(state: ProjectState): Promise<void> {
-    assertProjectState(state);
-    this.state = structuredClone(state);
+  async save(state: ProjectState, options: StateWriteOptions = {}): Promise<StateMutationResult> {
+    return await this.enqueueMutation(() => this.commitSnapshot(state, options));
   }
 
-  async saveWithEvents(state: ProjectState, events: readonly DomainEvent[]): Promise<void> {
-    assertProjectState(state);
-    this.state = structuredClone(state);
-    for (const event of events) {
-      this.events.push(structuredClone(event));
-    }
+  async saveWithEvents(
+    state: ProjectState,
+    events: readonly DomainEvent[],
+    options: StateWriteOptions = {},
+  ): Promise<StateMutationResult> {
+    return await this.enqueueMutation(() => this.commitSnapshot(state, options, events));
   }
 
   async listEvents(query: ListEventsQuery = {}): Promise<DomainEvent[]> {
@@ -87,56 +97,69 @@ export class InMemoryStateStore implements StateStore {
     this.events.push(structuredClone(event));
   }
 
-  async recordFailure(input: RecordFailureInput): Promise<FailureRecord> {
-    const current = await this.load();
-    if (!current.backlog.tasks[input.taskId]) {
-      throw new StateStoreError(`Cannot record failure for missing task ${input.taskId}`);
-    }
+  async recordFailure(input: RecordFailureInput, options: StateWriteOptions = {}): Promise<RecordFailureResult> {
+    return await this.enqueueMutation(() => {
+      const current = structuredClone(this.state);
+      if (!current.backlog.tasks[input.taskId]) {
+        throw new StateStoreError(`Cannot record failure for missing task ${input.taskId}`);
+      }
 
-    const failure: FailureRecord = {
-      id: crypto.randomUUID(),
-      taskId: input.taskId,
-      role: input.role,
-      reason: input.reason,
-      symptoms: input.symptoms ?? [],
-      badPatterns: input.badPatterns ?? [],
-      retrySuggested: input.retrySuggested ?? true,
-      ...(input.status ? { status: input.status } : {}),
-      ...(input.checkpointRunId ? { checkpointRunId: input.checkpointRunId } : {}),
-      ...(input.checkpointStepId ? { checkpointStepId: input.checkpointStepId } : {}),
-      ...(input.deadLetteredAt ? { deadLetteredAt: input.deadLetteredAt } : {}),
-      createdAt: new Date().toISOString(),
-    };
+      const failure: FailureRecord = {
+        id: crypto.randomUUID(),
+        taskId: input.taskId,
+        role: input.role,
+        reason: input.reason,
+        symptoms: input.symptoms ?? [],
+        badPatterns: input.badPatterns ?? [],
+        retrySuggested: input.retrySuggested ?? true,
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.checkpointRunId ? { checkpointRunId: input.checkpointRunId } : {}),
+        ...(input.checkpointStepId ? { checkpointStepId: input.checkpointStepId } : {}),
+        ...(input.deadLetteredAt ? { deadLetteredAt: input.deadLetteredAt } : {}),
+        createdAt: new Date().toISOString(),
+      };
 
-    current.failures.push(failure);
-    current.execution.retryCounts[input.taskId] = (current.execution.retryCounts[input.taskId] ?? 0) + 1;
-    await this.save(current);
-    return failure;
+      current.failures.push(failure);
+      current.execution.retryCounts[input.taskId] = (current.execution.retryCounts[input.taskId] ?? 0) + 1;
+      const result = this.commitSnapshot(current, options);
+      return { failure, revision: result.revision };
+    });
   }
 
-  async recordArtifact(artifact: ArtifactRecord): Promise<void> {
+  async recordArtifact(artifact: ArtifactRecord, options: StateWriteOptions = {}): Promise<StateMutationResult> {
     const issues = defaultArtifactSchemaRegistry.validate(artifact);
     if (issues.length > 0) {
       throw new StateStoreError('Artifact schema validation failed', {
         details: { artifactType: artifact.type, issues },
       });
     }
-    const current = await this.load();
-    current.artifacts.push(structuredClone(artifact));
-    await this.save(current);
+    return await this.enqueueMutation(() => {
+      const current = structuredClone(this.state);
+      if (!current.artifacts.some((item) => item.id === artifact.id)) {
+        current.artifacts.push(structuredClone(artifact));
+      }
+      return this.commitSnapshot(current, options);
+    });
   }
 
-  async recordDecision(decision: DecisionLogItem): Promise<void> {
-    const current = await this.load();
-    current.decisions.push(structuredClone(decision));
-    await this.save(current);
+  async recordDecision(decision: DecisionLogItem, options: StateWriteOptions = {}): Promise<StateMutationResult> {
+    return await this.enqueueMutation(() => {
+      const current = structuredClone(this.state);
+      current.decisions.push(structuredClone(decision));
+      return this.commitSnapshot(current, options);
+    });
   }
 
 
-  async recordPolicyDecision(decision: ExecutionPolicyDecision): Promise<void> {
-    const current = await this.load();
-    current.policyDecisions.push(structuredClone(decision));
-    await this.save(current);
+  async recordPolicyDecision(
+    decision: ExecutionPolicyDecision,
+    options: StateWriteOptions = {},
+  ): Promise<StateMutationResult> {
+    return await this.enqueueMutation(() => {
+      const current = structuredClone(this.state);
+      current.policyDecisions.push(structuredClone(decision));
+      return this.commitSnapshot(current, options);
+    });
   }
 
   async getPolicyDecision(query: PolicyDecisionQuery): Promise<ExecutionPolicyDecision | null> {
@@ -151,68 +174,110 @@ export class InMemoryStateStore implements StateStore {
     return found ? structuredClone(found) : null;
   }
 
-  async recordRunStep(step: RunStepLogEntry): Promise<void> {
-    const current = await this.load();
-    current.execution.runStepLog ??= [];
+  async recordRunStep(step: RunStepLogEntry): Promise<StateMutationResult> {
+    return await this.enqueueMutation(() => {
+      const current = structuredClone(this.state);
+      current.execution.runStepLog ??= [];
 
 
-    if (step.tenantId !== current.orgId || step.projectId !== current.projectId) {
-      throw new StateStoreError('TENANT_PARTITION_GUARD_VIOLATION', {
-        details: {
-          expectedTenantId: current.orgId,
-          expectedProjectId: current.projectId,
-          receivedTenantId: step.tenantId,
-          receivedProjectId: step.projectId,
-        },
+      if (step.tenantId !== current.orgId || step.projectId !== current.projectId) {
+        throw new StateStoreError('TENANT_PARTITION_GUARD_VIOLATION', {
+          details: {
+            expectedTenantId: current.orgId,
+            expectedProjectId: current.projectId,
+            receivedTenantId: step.tenantId,
+            receivedProjectId: step.projectId,
+          },
+        });
+      }
+
+      const previous = current.execution.runStepLog
+        .filter((entry) => entry.runId === step.runId && entry.stepId === step.stepId && entry.attempt === step.attempt)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+
+      assertRunStepTransitionAllowed({
+        ...(previous?.status ? { previousStatus: previous.status } : {}),
+        nextStatus: step.status,
+        runId: step.runId,
+        stepId: step.stepId,
+        attempt: step.attempt,
+        evidenceId: step.id,
       });
-    }
 
-    const previous = current.execution.runStepLog
-      .filter((entry) => entry.runId === step.runId && entry.stepId === step.stepId && entry.attempt === step.attempt)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
-
-    assertRunStepTransitionAllowed({
-      ...(previous?.status ? { previousStatus: previous.status } : {}),
-      nextStatus: step.status,
-      runId: step.runId,
-      stepId: step.stepId,
-      attempt: step.attempt,
-      evidenceId: step.id,
+      current.execution.runStepLog.push(structuredClone(step));
+      assertProjectState(current);
+      this.state = structuredClone(current);
+      return { revision: this.state.revision };
     });
-
-    current.execution.runStepLog.push(structuredClone(step));
-    await this.save(current);
   }
 
-  async markTaskDone(taskId: string, summary: string): Promise<void> {
-    const current = await this.load();
-    const task = current.backlog.tasks[taskId];
-    if (!task) {
-      throw new StateStoreError(`Cannot mark missing task ${taskId} as done`);
+  async markTaskDone(
+    taskId: string,
+    summary: string,
+    options: StateWriteOptions = {},
+  ): Promise<StateMutationResult> {
+    return await this.enqueueMutation(() => {
+      const current = structuredClone(this.state);
+      const task = current.backlog.tasks[taskId];
+      if (!task) {
+        throw new StateStoreError(`Cannot mark missing task ${taskId} as done`);
+      }
+
+      task.status = 'done';
+      if (!current.execution.completedTaskIds.includes(taskId)) {
+        current.execution.completedTaskIds.push(taskId);
+      }
+      delete current.execution.activeTaskId;
+      const summaryArtifact: ArtifactRecord = {
+        id: crypto.randomUUID(),
+        type: 'run_summary',
+        title: `Task ${taskId} completion summary`,
+        metadata: {
+          taskId,
+          summary,
+        },
+        createdAt: new Date().toISOString(),
+      };
+      const issues = defaultArtifactSchemaRegistry.validate(summaryArtifact);
+      if (issues.length > 0) {
+        throw new StateStoreError('Artifact schema validation failed', {
+          details: { artifactType: summaryArtifact.type, issues },
+        });
+      }
+      current.artifacts.push(summaryArtifact);
+      return this.commitSnapshot(current, options);
+    });
+  }
+
+  private commitSnapshot(
+    state: ProjectState,
+    options: StateWriteOptions = {},
+    events: readonly DomainEvent[] = [],
+  ): StateMutationResult {
+    assertProjectState(state);
+    const expectedRevision = expectedRevisionFor(state, options);
+    const currentRevision = this.state.revision;
+    if (expectedRevision !== currentRevision) {
+      throw stateRevisionConflict(expectedRevision, currentRevision);
     }
 
-    task.status = 'done';
-    if (!current.execution.completedTaskIds.includes(taskId)) {
-      current.execution.completedTaskIds.push(taskId);
+    const next = structuredClone(state);
+    next.revision = currentRevision + 1;
+    assertProjectState(next);
+    this.state = structuredClone(next);
+    state.revision = next.revision;
+    for (const event of events) {
+      this.events.push(structuredClone(event));
     }
-    delete current.execution.activeTaskId;
-    const summaryArtifact: ArtifactRecord = {
-      id: crypto.randomUUID(),
-      type: 'run_summary',
-      title: `Task ${taskId} completion summary`,
-      metadata: {
-        taskId,
-        summary,
-      },
-      createdAt: new Date().toISOString(),
-    };
-    const issues = defaultArtifactSchemaRegistry.validate(summaryArtifact);
-    if (issues.length > 0) {
-      throw new StateStoreError('Artifact schema validation failed', {
-        details: { artifactType: summaryArtifact.type, issues },
-      });
-    }
-    current.artifacts.push(summaryArtifact);
-    await this.save(current);
+    return { revision: next.revision };
+  }
+
+  private async enqueueMutation<T>(action: () => T | Promise<T>): Promise<T> {
+    const run = this.mutationQueue.then(action, action);
+    this.mutationQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await run;
   }
 }

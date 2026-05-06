@@ -45,7 +45,11 @@ export class PolicyDecisionRecorder {
       traceId: input.runId,
       policyVersion: POLICY_VERSION,
     };
-    await this.stateStore.recordPolicyDecision(decision);
+    const decisionResult = await this.stateStore.recordPolicyDecision(
+      decision,
+      { expectedRevision: input.state.revision },
+    );
+    input.state.revision = decisionResult.revision;
     input.state.policyDecisions.push(decision);
 
     const persisted = await this.stateStore.getPolicyDecision({

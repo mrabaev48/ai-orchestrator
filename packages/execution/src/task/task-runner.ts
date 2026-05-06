@@ -109,7 +109,11 @@ export class TaskRunner {
         taskId: task.id,
         promptId: promptResponse.output.id,
       });
-      await this.input.stateStore.recordArtifact(optimizedPromptArtifact);
+      const optimizedPromptArtifactResult = await this.input.stateStore.recordArtifact(
+        optimizedPromptArtifact,
+        { expectedRevision: state.revision },
+      );
+      state.revision = optimizedPromptArtifactResult.revision;
       state.artifacts.push(optimizedPromptArtifact);
 
       const roleName = routeTaskToRole(task);
@@ -221,8 +225,16 @@ export class TaskRunner {
         status: 'completed',
       });
 
-      await this.input.stateStore.recordArtifact(taskSummaryArtifact);
-      await this.input.stateStore.recordArtifact(runSummaryArtifact);
+      const taskSummaryArtifactResult = await this.input.stateStore.recordArtifact(
+        taskSummaryArtifact,
+        { expectedRevision: state.revision },
+      );
+      state.revision = taskSummaryArtifactResult.revision;
+      const runSummaryArtifactResult = await this.input.stateStore.recordArtifact(
+        runSummaryArtifact,
+        { expectedRevision: state.revision },
+      );
+      state.revision = runSummaryArtifactResult.revision;
       state.artifacts.push(taskSummaryArtifact, runSummaryArtifact);
       const gitLifecycleStatus = await this.input.gitLifecycleCoordinator.complete({
         state,
@@ -243,7 +255,7 @@ export class TaskRunner {
 
       const stateCommittedEvent = makeEvent('STATE_COMMITTED', { taskId: task.id }, { runId });
       this.input.runStepRecorder.flushToState(state);
-      await this.input.stateStore.saveWithEvents(state, [stateCommittedEvent]);
+      await this.input.stateStore.saveWithEvents(state, [stateCommittedEvent], { expectedRevision: state.revision });
 
       this.input.logger.info('Run cycle completed', {
         event: 'cycle_end',
@@ -293,7 +305,11 @@ export class TaskRunner {
       estimatedCostUsdMicro: String(costSummary.estimatedCostUsdMicro),
       estimationMethod: 'heuristic_chars_div_4',
     });
-    await this.input.stateStore.recordArtifact(artifact).catch(() => {});
+    await this.input.stateStore.recordArtifact(artifact, { expectedRevision: state.revision })
+      .then((result) => {
+        state.revision = result.revision;
+      })
+      .catch(() => {});
     state.artifacts.push(artifact);
   }
 
@@ -386,7 +402,8 @@ export class TaskRunner {
         status: stage.status,
         diagnostics: truncateText(diagnostics, 250),
       });
-      await this.input.stateStore.recordArtifact(artifact);
+      const artifactResult = await this.input.stateStore.recordArtifact(artifact, { expectedRevision: state.revision });
+      state.revision = artifactResult.revision;
       state.artifacts.push(artifact);
     }
   }
