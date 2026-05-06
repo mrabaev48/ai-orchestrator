@@ -58,7 +58,7 @@ function makeTask(input: Partial<BacklogTask> = {}): BacklogTask {
   };
 }
 
-function makeHandler(maxRetriesPerTask: number) {
+function makeHandler(maxRetriesPerTask: number, initialRetryCount = 0) {
   const state = createEmptyProjectState({
     projectId: 'p1',
     projectName: 'Project',
@@ -81,6 +81,7 @@ function makeHandler(maxRetriesPerTask: number) {
     status: 'todo',
     featureIds: ['feature-1'],
   };
+  state.execution.retryCounts[task.id] = initialRetryCount;
   const store = new InMemoryStateStore(state);
   const runStepRecorder = new RunStepRecorder(store);
   const handler = new FailureHandler({
@@ -88,11 +89,11 @@ function makeHandler(maxRetriesPerTask: number) {
     config: makeConfig(maxRetriesPerTask),
     runStepRecorder,
   });
-  return { handler, state, task };
+  return { handler, state, store, task };
 }
 
 test('FailureHandler saves retryable failure without blocking task', async () => {
-  const { handler, state, task } = makeHandler(3);
+  const { handler, state, store, task } = makeHandler(3);
 
   const result = await handler.handle({
     state,
@@ -106,6 +107,28 @@ test('FailureHandler saves retryable failure without blocking task', async () =>
   assert.equal(state.execution.retryCounts[task.id], 1);
   assert.equal(state.failures[0]?.status, 'retryable');
   assert.equal(task.status, 'todo');
+
+  const persisted = await store.load();
+  assert.equal(persisted.execution.retryCounts[task.id], 1);
+  assert.equal(persisted.failures[0]?.checkpointRunId, 'run-1');
+});
+
+test('FailureHandler synchronizes retry count from the state store without double incrementing', async () => {
+  const { handler, state, store, task } = makeHandler(10, 4);
+
+  await handler.handle({
+    state,
+    task,
+    role: 'tester',
+    reason: 'test_failed',
+    runId: 'run-1',
+  });
+
+  const persisted = await store.load();
+  assert.equal(state.execution.retryCounts[task.id], 5);
+  assert.equal(persisted.execution.retryCounts[task.id], 5);
+  assert.equal(state.failures.length, 1);
+  assert.equal(persisted.failures.length, 1);
 });
 
 test('FailureHandler splits exhausted root task and rewrites dependents', async () => {
@@ -130,7 +153,7 @@ test('FailureHandler splits exhausted root task and rewrites dependents', async 
 });
 
 test('FailureHandler blocks exhausted split task with dead-letter metadata', async () => {
-  const { handler, state, task } = makeHandler(1);
+  const { handler, state, store, task } = makeHandler(1);
   state.backlog.tasks['parent-task'] = makeTask({ id: 'parent-task' });
   task.splitFromTaskId = 'parent-task';
 
@@ -147,4 +170,9 @@ test('FailureHandler blocks exhausted split task with dead-letter metadata', asy
   assert.equal(state.execution.blockedTaskIds.includes(task.id), true);
   assert.equal(state.failures[0]?.status, 'dead_lettered');
   assert.equal(typeof state.failures[0]?.deadLetteredAt, 'string');
+
+  const persisted = await store.load();
+  assert.equal(persisted.failures[0]?.status, 'dead_lettered');
+  assert.equal(persisted.failures[0]?.checkpointRunId, 'run-1');
+  assert.equal(typeof persisted.failures[0]?.deadLetteredAt, 'string');
 });

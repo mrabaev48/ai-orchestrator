@@ -6,7 +6,6 @@ import {
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
-  type FailureRecord,
   type ProjectState,
   type RunStepLogEntry,
   type ExecutionPolicyDecision,
@@ -23,6 +22,7 @@ import type {
 } from '../StateStore.js';
 import { StateStoreError } from '@ai-orchestrator/shared';
 import { expectedRevisionFor, stateRevisionConflict } from '../revision.js';
+import { buildFailureRecord } from '../failure-record.js';
 
 export class InMemoryStateStore implements StateStore {
   readonly events: DomainEvent[] = [];
@@ -104,25 +104,13 @@ export class InMemoryStateStore implements StateStore {
         throw new StateStoreError(`Cannot record failure for missing task ${input.taskId}`);
       }
 
-      const failure: FailureRecord = {
-        id: crypto.randomUUID(),
-        taskId: input.taskId,
-        role: input.role,
-        reason: input.reason,
-        symptoms: input.symptoms ?? [],
-        badPatterns: input.badPatterns ?? [],
-        retrySuggested: input.retrySuggested ?? true,
-        ...(input.status ? { status: input.status } : {}),
-        ...(input.checkpointRunId ? { checkpointRunId: input.checkpointRunId } : {}),
-        ...(input.checkpointStepId ? { checkpointStepId: input.checkpointStepId } : {}),
-        ...(input.deadLetteredAt ? { deadLetteredAt: input.deadLetteredAt } : {}),
-        createdAt: new Date().toISOString(),
-      };
+      const failure = buildFailureRecord(input);
 
       current.failures.push(failure);
-      current.execution.retryCounts[input.taskId] = (current.execution.retryCounts[input.taskId] ?? 0) + 1;
+      const retryCount = (current.execution.retryCounts[input.taskId] ?? 0) + 1;
+      current.execution.retryCounts[input.taskId] = retryCount;
       const result = this.commitSnapshot(current, options);
-      return { failure, revision: result.revision };
+      return { failure, retryCount, revision: result.revision };
     });
   }
 

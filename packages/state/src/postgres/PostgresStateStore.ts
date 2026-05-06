@@ -6,7 +6,6 @@ import {
   type ArtifactRecord,
   type DecisionLogItem,
   type DomainEvent,
-  type FailureRecord,
   type ProjectState,
   type RunStepLogEntry,
   type ExecutionPolicyDecision,
@@ -25,6 +24,7 @@ import type {
 } from '../StateStore.js';
 import { createPostgresMigrations } from './migrations.js';
 import { expectedRevisionFor, stateRevisionConflict } from '../revision.js';
+import { buildFailureRecord } from '../failure-record.js';
 
 interface PgPoolLike {
   connect: () => Promise<PgClientLike>;
@@ -255,26 +255,19 @@ export class PostgresStateStore implements StateStore {
       throw new StateStoreError(`Cannot record failure for missing task ${input.taskId}`);
     }
 
-    const failure: FailureRecord = {
-      id: crypto.randomUUID(),
-      taskId: input.taskId,
-      role: input.role,
-      reason: input.reason,
-      symptoms: input.symptoms ?? [],
-      badPatterns: input.badPatterns ?? [],
-      retrySuggested: input.retrySuggested ?? true,
-      createdAt: new Date().toISOString(),
-    };
+    const failure = buildFailureRecord(input);
 
     current.failures.push(failure);
-    current.execution.retryCounts[input.taskId] = (current.execution.retryCounts[input.taskId] ?? 0) + 1;
+    const retryCount = (current.execution.retryCounts[input.taskId] ?? 0) + 1;
+    current.execution.retryCounts[input.taskId] = retryCount;
 
     await this.ensureInitialized();
     const revision = await this.withTransaction(async (client) => {
       await client.query(
         `INSERT INTO ${this.table('failure_log')} (
-          id, org_id, project_id, task_id, role, reason, symptoms_json, bad_patterns_json, retry_suggested, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10)`,
+          id, org_id, project_id, task_id, role, reason, symptoms_json, bad_patterns_json,
+          retry_suggested, status, checkpoint_run_id, checkpoint_step_id, dead_lettered_at, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13, $14)`,
         [
           failure.id,
           this.tenantScope.orgId,
@@ -285,6 +278,10 @@ export class PostgresStateStore implements StateStore {
           JSON.stringify(failure.symptoms),
           JSON.stringify(failure.badPatterns),
           failure.retrySuggested,
+          failure.status ?? null,
+          failure.checkpointRunId ?? null,
+          failure.checkpointStepId ?? null,
+          failure.deadLetteredAt ?? null,
           failure.createdAt,
         ],
       );
@@ -293,7 +290,7 @@ export class PostgresStateStore implements StateStore {
       });
     });
 
-    return { failure, revision };
+    return { failure, retryCount, revision };
   }
 
   async recordArtifact(artifact: ArtifactRecord, options: StateWriteOptions = {}): Promise<StateMutationResult> {

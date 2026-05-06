@@ -9,6 +9,7 @@ import { StateStoreError } from '@ai-orchestrator/shared';
 import {
   InMemoryStateStore,
 } from '@ai-orchestrator/state';
+import { createPostgresMigrations } from '../packages/state/src/postgres/migrations.js';
 
 function makeState() {
   const state = createEmptyProjectState({
@@ -50,7 +51,7 @@ function makeState() {
 
 test('InMemoryStateStore records failures and marks tasks done', async () => {
   const store = new InMemoryStateStore(makeState());
-  await store.recordFailure({
+  const failureResult = await store.recordFailure({
     taskId: 'task-1',
     role: 'reviewer',
     reason: 'Missing tests',
@@ -58,9 +59,62 @@ test('InMemoryStateStore records failures and marks tasks done', async () => {
   await store.markTaskDone('task-1', 'Implemented successfully');
 
   const state = await store.load();
+  assert.equal(failureResult.retryCount, 1);
   assert.equal(state.execution.retryCounts['task-1'], 1);
   assert.equal(state.backlog.tasks['task-1']?.status, 'done');
   assert.equal(state.artifacts.length, 1);
+});
+
+test('InMemoryStateStore preserves the full failure persistence contract', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const deadLetteredAt = new Date('2026-05-06T12:00:00.000Z').toISOString();
+
+  const firstFailure = await store.recordFailure({
+    taskId: 'task-1',
+    role: 'tester',
+    reason: 'Tests failed',
+    symptoms: ['unit test red'],
+    badPatterns: ['missing regression'],
+    retrySuggested: false,
+    status: 'dead_lettered',
+    checkpointRunId: 'run-1',
+    checkpointStepId: 'step-1',
+    deadLetteredAt,
+  });
+  const secondFailure = await store.recordFailure({
+    taskId: 'task-1',
+    role: 'reviewer',
+    reason: 'Review rejected',
+  });
+
+  const state = await store.load();
+  const persistedFailure = state.failures[0];
+  assert.equal(firstFailure.retryCount, 1);
+  assert.equal(secondFailure.retryCount, 2);
+  assert.equal(state.execution.retryCounts['task-1'], 2);
+  assert.equal(persistedFailure?.taskId, 'task-1');
+  assert.equal(persistedFailure?.role, 'tester');
+  assert.equal(persistedFailure?.reason, 'Tests failed');
+  assert.deepEqual(persistedFailure?.symptoms, ['unit test red']);
+  assert.deepEqual(persistedFailure?.badPatterns, ['missing regression']);
+  assert.equal(persistedFailure?.retrySuggested, false);
+  assert.equal(persistedFailure?.status, 'dead_lettered');
+  assert.equal(persistedFailure?.checkpointRunId, 'run-1');
+  assert.equal(persistedFailure?.checkpointStepId, 'step-1');
+  assert.equal(persistedFailure?.deadLetteredAt, deadLetteredAt);
+});
+
+test('Postgres failure_log migrations include the full failure contract fields', () => {
+  const migrations = createPostgresMigrations((name) => name);
+  const failureContractMigration = migrations.find((migration) => migration.name === 'failure_log_contract_fields');
+
+  assert.ok(failureContractMigration);
+  assert.deepEqual(failureContractMigration.statements, [
+    'ALTER TABLE failure_log ADD COLUMN IF NOT EXISTS status TEXT',
+    'ALTER TABLE failure_log ADD COLUMN IF NOT EXISTS checkpoint_run_id TEXT',
+    'ALTER TABLE failure_log ADD COLUMN IF NOT EXISTS checkpoint_step_id TEXT',
+    'ALTER TABLE failure_log ADD COLUMN IF NOT EXISTS dead_lettered_at TIMESTAMPTZ',
+  ]);
 });
 
 test('InMemoryStateStore rejects stale whole-snapshot saves without losing newer state', async () => {

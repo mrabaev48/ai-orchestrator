@@ -48,6 +48,7 @@ export interface StateMutationResult {
 
 export interface RecordFailureResult extends StateMutationResult {
   failure: FailureRecord;
+  retryCount: number;
 }
 
 export interface StateStore {

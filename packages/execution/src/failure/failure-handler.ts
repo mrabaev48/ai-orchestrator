@@ -48,7 +48,7 @@ export class FailureHandler {
     const { failure } = failureResult;
     state.revision = failureResult.revision;
     state.failures.push(failure);
-    state.execution.retryCounts[task.id] = (state.execution.retryCounts[task.id] ?? 0) + 1;
+    state.execution.retryCounts[task.id] = failureResult.retryCount;
     delete state.execution.activeTaskId;
     this.input.runStepRecorder.flushToState(state);
 

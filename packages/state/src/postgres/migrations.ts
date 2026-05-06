@@ -199,5 +199,15 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
           ON ${table('project_snapshots')} (org_id, project_id, revision)`,
       ],
     },
+    {
+      id: 7,
+      name: 'failure_log_contract_fields',
+      statements: [
+        `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS status TEXT`,
+        `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS checkpoint_run_id TEXT`,
+        `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS checkpoint_step_id TEXT`,
+        `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS dead_lettered_at TIMESTAMPTZ`,
+      ],
+    },
   ];
 }
