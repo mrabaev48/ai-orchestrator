@@ -22,6 +22,7 @@ import {
   runWithTimeout,
   type ExecutionLeaseAuthority,
   type ExecutionLeaseHandle,
+  type GitLifecycleExecutors,
 } from '@ai-orchestrator/execution';
 import { SchemaValidationError, WorkflowPolicyError } from '@ai-orchestrator/shared';
 import { InMemoryObservabilityStore, InMemoryStateStore } from '@ai-orchestrator/state';
@@ -165,17 +166,29 @@ function makeGitLifecycleTestHarness(input: {
 }) {
   const state = input.state ?? makeState();
   const store = new InMemoryStateStore(state);
+  const executors: GitLifecycleExecutors = {
+    workspaceHasGitChanges: async () => input.workspaceHasGitChanges,
+    currentGitBranch: async () => input.currentGitBranch ?? 'task-1-run-test',
+  };
+  const createCommit = input.createCommit;
+  const pushBranch = input.pushBranch;
+  const createPullRequestDraft = input.createPullRequestDraft;
+
+  if (createCommit) {
+    executors.createCommit = async () => createCommit();
+  }
+  if (pushBranch) {
+    executors.pushBranch = async () => pushBranch();
+  }
+  if (createPullRequestDraft) {
+    executors.createPullRequestDraft = async () => createPullRequestDraft();
+  }
+
   const coordinator = new GitLifecycleCoordinator({
     stateStore: store,
     config: input.config ?? makeRuntimeConfig(),
     policyDecisionRecorder: new PolicyDecisionRecorder(store),
-    executors: {
-      workspaceHasGitChanges: async () => input.workspaceHasGitChanges,
-      currentGitBranch: async () => input.currentGitBranch ?? 'task-1-run-test',
-      createCommit: input.createCommit,
-      pushBranch: input.pushBranch,
-      createPullRequestDraft: input.createPullRequestDraft,
-    },
+    executors,
   });
   return { coordinator, state, store };
 }

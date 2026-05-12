@@ -11,7 +11,7 @@ import { DashboardReadinessService } from '@ai-orchestrator/dashboard-api';
 import { OBSERVABILITY_STORE, STATE_STORE } from '@ai-orchestrator/dashboard-api';
 import { createDashboardApiApp } from '@ai-orchestrator/dashboard-api';
 import type { DashboardRuntimeContext } from '@ai-orchestrator/dashboard-api';
-import { computeRunStepChecksum, makeEvent, type RunStepLogEntry } from '@ai-orchestrator/core';
+import { computeRunStepChecksum, type RunStepLogEntry } from '@ai-orchestrator/core';
 import type { ObservabilityStore, StateStore } from '@ai-orchestrator/state';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 

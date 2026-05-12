@@ -620,6 +620,14 @@ pnpm run typecheck
 pnpm run build
 ```
 
+Root validation is split into explicit package-aware and root-level phases:
+
+- `pnpm run lint:packages` / `pnpm run lint:root`;
+- `pnpm run typecheck:packages` / `pnpm run typecheck:root`;
+- `pnpm run test:packages` / `pnpm run test:integration`.
+
+Package boundary validation is enforced by `pnpm run boundaries`. It scans workspace `src` trees and root integration tests, rejects cross-package relative imports, and rejects workspace subpath imports so validation code consumes only public package exports.
+
 ---
 
 ## 8. Типовой операционный сценарий

@@ -4,7 +4,7 @@ import test from 'node:test';
 import { ObservabilityStoreExecutionTelemetry } from '@ai-orchestrator/execution';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 import { InMemoryObservabilityStore } from '@ai-orchestrator/state';
-import type { ObservabilityStore, RecordTelemetryMetricInput, TelemetryMetricRecord } from '@ai-orchestrator/state';
+import type { ObservabilityStore, TelemetryMetricRecord } from '@ai-orchestrator/state';
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -100,7 +100,7 @@ test('ObservabilityStoreExecutionTelemetry degrades safely when metric persisten
   });
 
   const failingStore = {
-    recordMetric: async (_input: RecordTelemetryMetricInput): Promise<TelemetryMetricRecord> => {
+    recordMetric: async (): Promise<TelemetryMetricRecord> => {
       throw new Error('database unavailable');
     },
     recordSpan: async () => {
@@ -128,6 +128,8 @@ function stripGeneratedTelemetryFields<TRecord extends { id: string; createdAt: 
   if (!record) {
     return undefined;
   }
-  const { id: _id, createdAt: _createdAt, ...rest } = record;
+  const { id, createdAt, ...rest } = record;
+  void id;
+  void createdAt;
   return rest;
 }

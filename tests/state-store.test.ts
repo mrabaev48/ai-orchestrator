@@ -15,8 +15,10 @@ import {
   validatePostgresMigrations,
   type PostgresAppliedMigration,
   type PostgresMigration,
+  type PgPoolLike,
+  type PgQueryResult,
+  type PgTransactionClient,
 } from '@ai-orchestrator/state';
-import type { PgPoolLike, PgQueryResult, PgTransactionClient } from '../packages/state/src/postgres/pg.js';
 
 function makeState() {
   const state = createEmptyProjectState({

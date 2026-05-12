@@ -38,6 +38,7 @@ export interface BoundaryCheckResult {
 }
 
 const WORKSPACE_SCOPES = ['apps', 'packages'] as const;
+const ROOT_VALIDATION_DIRECTORIES = ['tests'] as const;
 
 const ALLOWED_WORKSPACE_DEPENDENCIES = new Map<string, ReadonlySet<string>>([
   ['@ai-orchestrator/shared', new Set()],
@@ -105,13 +106,19 @@ const ALLOWED_WORKSPACE_DEPENDENCIES = new Map<string, ReadonlySet<string>>([
 export function checkPackageBoundaries(rootDir: string = process.cwd()): BoundaryCheckResult {
   const workspacePackages = discoverWorkspacePackages(rootDir);
   const packageByName = new Map(workspacePackages.map((workspacePackage) => [workspacePackage.name, workspacePackage]));
-  const sourceFiles = workspacePackages.flatMap((workspacePackage) =>
-    listTypeScriptFiles(path.join(workspacePackage.rootDir, 'src')),
-  );
+  const sourceFiles = [
+    ...workspacePackages.flatMap((workspacePackage) =>
+      listTypeScriptFiles(path.join(workspacePackage.rootDir, 'src')),
+    ),
+    ...ROOT_VALIDATION_DIRECTORIES.flatMap((directoryName) =>
+      listTypeScriptFiles(path.join(rootDir, directoryName)),
+    ),
+  ];
   const violations: BoundaryViolation[] = [];
 
   for (const filePath of sourceFiles) {
     const sourceOwner = findOwner(filePath, workspacePackages);
+    const isRootValidationSource = isRootValidationFile(rootDir, filePath);
     const imports = readModuleSpecifiers(filePath);
 
     for (const importLocation of imports) {
@@ -143,6 +150,12 @@ export function checkPackageBoundaries(rootDir: string = process.cwd()): Boundar
           'CROSS_PACKAGE_RELATIVE_IMPORT',
           importLocation,
           `Relative import crosses from ${sourceOwner.name} into ${targetOwner.name}. Use ${targetOwner.name} public exports instead.`,
+        ));
+      } else if (!sourceOwner && isRootValidationSource && targetOwner) {
+        violations.push(createViolation(
+          'CROSS_PACKAGE_RELATIVE_IMPORT',
+          importLocation,
+          `Root validation file imports ${targetOwner.name} internals by relative path. Use ${targetOwner.name} public exports instead.`,
         ));
       }
     }
@@ -348,6 +361,14 @@ function findOwner(filePath: string, workspacePackages: readonly WorkspacePackag
   return workspacePackages.find((workspacePackage) =>
     normalizedPath === workspacePackage.rootDir || normalizedPath.startsWith(`${workspacePackage.rootDir}${path.sep}`),
   );
+}
+
+function isRootValidationFile(rootDir: string, filePath: string): boolean {
+  const normalizedPath = path.resolve(filePath);
+  return ROOT_VALIDATION_DIRECTORIES.some((directoryName) => {
+    const validationRoot = path.join(rootDir, directoryName);
+    return normalizedPath.startsWith(`${validationRoot}${path.sep}`);
+  });
 }
 
 function createViolation(

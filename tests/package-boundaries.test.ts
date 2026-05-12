@@ -13,6 +13,11 @@ interface FixturePackageInput {
   readonly files: Readonly<Record<string, string>>;
 }
 
+interface FixtureInput {
+  readonly packages: readonly FixturePackageInput[];
+  readonly rootFiles?: Readonly<Record<string, string>>;
+}
+
 test('package boundary checker accepts public declared workspace imports', () => {
   const fixtureRoot = createFixture([
     {
@@ -282,14 +287,69 @@ test('package boundary checker rejects workspace package subpaths', () => {
   }
 });
 
-function createFixture(packages: readonly FixturePackageInput[]): string {
+test('package boundary checker rejects root test relative imports into workspace internals', () => {
+  const fixtureRoot = createFixture({
+    packages: [
+      {
+        scope: 'packages',
+        directoryName: 'state',
+        packageName: '@ai-orchestrator/state',
+        files: {
+          'src/index.ts': 'export const stateValue = 1;\n',
+        },
+      },
+    ],
+    rootFiles: {
+      'tests/state-store.test.ts': "import { stateValue } from '../packages/state/src/index.js';\nexport const testValue = stateValue;\n",
+    },
+  });
+
+  try {
+    const result = runBoundaryChecker(fixtureRoot);
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /CROSS_PACKAGE_RELATIVE_IMPORT/u);
+    assert.match(result.output, /Root validation file imports @ai-orchestrator\/state internals/u);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('package boundary checker rejects root test workspace subpath imports', () => {
+  const fixtureRoot = createFixture({
+    packages: [
+      {
+        scope: 'packages',
+        directoryName: 'core',
+        packageName: '@ai-orchestrator/core',
+        files: {
+          'src/index.ts': 'export const coreValue = 1;\n',
+          'src/internal.ts': 'export const internalValue = 1;\n',
+        },
+      },
+    ],
+    rootFiles: {
+      'tests/core.test.ts': "import { internalValue } from '@ai-orchestrator/core/src/internal.js';\nexport const testValue = internalValue;\n",
+    },
+  });
+
+  try {
+    const result = runBoundaryChecker(fixtureRoot);
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /FORBIDDEN_WORKSPACE_SUBPATH/u);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+function createFixture(input: readonly FixturePackageInput[] | FixtureInput): string {
   const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), 'package-boundaries-'));
+  const fixtureInput = isFixturePackageInputArray(input) ? { packages: input } : input;
 
   for (const workspaceScope of ['apps', 'packages'] as const) {
     mkdirSync(path.join(fixtureRoot, workspaceScope), { recursive: true });
   }
 
-  for (const fixturePackage of packages) {
+  for (const fixturePackage of fixtureInput.packages) {
     const packageRoot = path.join(fixtureRoot, fixturePackage.scope, fixturePackage.directoryName);
     mkdirSync(packageRoot, { recursive: true });
     writeFileSync(
@@ -308,7 +368,17 @@ function createFixture(packages: readonly FixturePackageInput[]): string {
     }
   }
 
+  for (const [relativePath, contents] of Object.entries(fixtureInput.rootFiles ?? {})) {
+    const filePath = path.join(fixtureRoot, relativePath);
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    writeFileSync(filePath, contents);
+  }
+
   return fixtureRoot;
+}
+
+function isFixturePackageInputArray(input: readonly FixturePackageInput[] | FixtureInput): input is readonly FixturePackageInput[] {
+  return Array.isArray(input);
 }
 
 function runBoundaryChecker(fixtureRoot: string): { readonly status: number | null; readonly output: string } {

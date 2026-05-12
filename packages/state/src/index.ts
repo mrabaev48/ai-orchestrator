@@ -3,6 +3,7 @@ export * from './in-memory/InMemoryStateStore.js';
 export * from './postgres/PostgresStateStore.js';
 export * from './postgres/PostgresMigrationRunner.js';
 export * from './postgres/migrations.js';
+export type { PgPoolLike, PgQueryResult, PgTransactionClient } from './postgres/pg.js';
 
 export * from './metrics/sli-snapshot.js';
 
