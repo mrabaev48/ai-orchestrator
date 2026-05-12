@@ -19,7 +19,7 @@ export function createTestingToolAdapter(policy: ToolPolicyAdapter): TestingTool
     canHandle: (toolName) => toolName === 'testing_run',
     execute: async (
       request: UnifiedToolRequest,
-      options?: ToolExecutionOptions,
+      options: ToolExecutionOptions,
     ): Promise<ShellExecResult> => {
       const command = request.input.command;
       if (typeof command !== 'string' || command.length === 0) {

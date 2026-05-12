@@ -296,6 +296,7 @@ export class Orchestrator {
       workspaceRoot,
       allowedWritePaths: this.config.tools.allowedWritePaths,
       evidenceSource: taskId ? 'runtime_events' : 'state_snapshot',
+      packageManager: this.config.tools.packageManager ?? 'pnpm',
       qualityGateMode: this.config.workflow.qualityGateMode ?? 'tooling',
       ...(abortSignal ? { abortSignal } : {}),
       logger: this.logger,

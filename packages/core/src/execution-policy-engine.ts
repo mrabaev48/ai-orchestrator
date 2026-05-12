@@ -28,6 +28,7 @@ export interface ExecutionPolicyProfile {
     permissionScope: ToolPermissionScope;
     workspaceRoot: string;
     evidenceSource: EvidenceSource;
+    packageManager?: 'npm' | 'pnpm';
     qualityGateMode?: 'tooling' | 'synthetic';
   };
   rules: ExecutionPolicyRule;
@@ -73,6 +74,7 @@ export interface ExecutionPolicyEngineInput {
   workspaceRoot: string;
   allowedWritePaths: string[];
   evidenceSource: EvidenceSource;
+  packageManager?: 'npm' | 'pnpm';
   qualityGateMode?: 'tooling' | 'synthetic';
   logger: RoleExecutionContext['logger'];
   taskId?: string;
@@ -96,6 +98,7 @@ export class ExecutionPolicyEngine {
         permissionScope: constraint.permissionScope,
         workspaceRoot: input.workspaceRoot,
         evidenceSource: input.evidenceSource,
+        ...(input.packageManager ? { packageManager: input.packageManager } : {}),
         ...(input.qualityGateMode ? { qualityGateMode: input.qualityGateMode } : {}),
       },
       rules: baseRules,

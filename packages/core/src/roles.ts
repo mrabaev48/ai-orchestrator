@@ -41,6 +41,7 @@ export interface ToolExecutionContext {
   permissionScope: ToolPermissionScope;
   workspaceRoot: string;
   evidenceSource: EvidenceSource;
+  packageManager?: 'npm' | 'pnpm';
   qualityGateMode?: 'tooling' | 'synthetic';
 }
 

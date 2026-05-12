@@ -37,13 +37,14 @@ export function createShellToolAdapter(policy: ToolPolicyAdapter): ShellToolAdap
   return {
     name: 'shell',
     canHandle: (toolName) => toolName === 'shell_exec',
-    execute: async (request: UnifiedToolRequest, options?: ToolExecutionOptions): Promise<ShellExecResult> => {
+    execute: async (request: UnifiedToolRequest, options: ToolExecutionOptions): Promise<ShellExecResult> => {
       const command = request.input.command;
       if (typeof command !== 'string' || command.length === 0) {
         throw new Error('Field command must be a non-empty string');
       }
-      const allowlistedCommand = policy.assertCommandAllowed(command);
       const args = asStringArray(request.input.args, 'args');
+      const allowlistedCommand = policy.assertCommandAllowed(command, args);
+      const cwd = policy.assertWorkspaceAllowed(options.executionContext.workspaceRoot);
       const timeoutMs =
         typeof request.input.timeoutMs === 'number' && Number.isFinite(request.input.timeoutMs)
           ? request.input.timeoutMs
@@ -51,6 +52,7 @@ export function createShellToolAdapter(policy: ToolPolicyAdapter): ShellToolAdap
 
       try {
         const { stdout, stderr } = await execFileAsync(allowlistedCommand, args, {
+          cwd,
           signal: options?.signal,
           timeout: timeoutMs,
           encoding: 'utf8',

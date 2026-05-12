@@ -58,10 +58,20 @@ function makeContext(config: RuntimeConfig): RoleExecutionContext {
     runId: 'run-1',
     taskId: 'task-1',
     stateSummary: 'state',
-    workspaceRoot: process.cwd(),
-    allowedWritePaths: config.tools.allowedWritePaths,
-    evidenceSource: 'runtime_events',
-    qualityGateMode: 'synthetic',
+    toolProfile: {
+      allowedWritePaths: config.tools.allowedWritePaths,
+      canWriteRepo: true,
+      canApproveChanges: false,
+      canRunTests: false,
+    },
+    toolExecution: {
+      policy: 'orchestrator_default',
+      permissionScope: 'repo_write',
+      workspaceRoot: process.cwd(),
+      evidenceSource: 'runtime_events',
+      packageManager: config.tools.packageManager ?? 'pnpm',
+      qualityGateMode: 'synthetic',
+    },
     logger: createLogger(config, { sink: () => {} }),
   };
 }
@@ -151,7 +161,60 @@ test('RoleRunner executes step loop and records role evidence', async () => {
 
   assert.equal(response.output.summary, 'done');
   assert.equal(state.execution.runStepLog.some((step) => step.tool === 'git_status'), true);
+  const gitStep = state.execution.runStepLog.find((step) => step.tool === 'git_status');
+  assert.equal(typeof gitStep?.input === 'string' && gitStep.input.includes(`"workspaceRoot":"${process.cwd()}"`), true);
   assert.equal(state.execution.runStepLog.some((step) => step.tool === 'role.execute'), true);
+});
+
+test('RoleRunner passes workspace context into tool execution', async () => {
+  class WorkspaceAwareCoderRole implements AgentRole<{ task: string }, CodeExecutionOutput> {
+    readonly name = 'coder' as const;
+
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
+      throw new Error('execute should not be called');
+    }
+
+    async executeStep(
+      request: RoleRequest<{ task: string }>,
+      context: RoleExecutionContext,
+      observations: readonly RoleObservation[],
+    ): Promise<RoleStepResult<CodeExecutionOutput>> {
+      void request;
+      void context;
+      if (observations.length === 0) {
+        return {
+          type: 'tool_request',
+          request: {
+            toolName: 'shell_exec',
+            input: { command: 'node', args: ['-e', 'console.log(process.cwd())'] },
+            rationale: 'Verify workspace cwd',
+          },
+        };
+      }
+
+      const output = observations[0]?.output;
+      assert.equal(isRecord(output), true);
+      if (!isRecord(output)) {
+        assert.fail('Expected shell output');
+      }
+      assert.equal(output.stdout, `${process.cwd()}\n`);
+      return { type: 'final_output', response: makeCoderResponse('workspace propagated') };
+    }
+  }
+
+  const { runner, config } = makeRunner();
+  const response = await runner.execute(
+    new WorkspaceAwareCoderRole(),
+    {
+      role: 'coder',
+      objective: 'Execute task',
+      input: { task: 'task-1' },
+      acceptanceCriteria: ['done'],
+    },
+    makeContext(config),
+  );
+
+  assert.equal(response.output.summary, 'workspace propagated');
 });
 
 test('RoleRunner retries once after schema validation failure', async () => {
@@ -213,3 +276,7 @@ test('runWithTimeout surfaces step timeout details', async () => {
     },
   );
 });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

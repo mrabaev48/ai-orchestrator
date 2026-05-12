@@ -463,6 +463,7 @@ export class TaskRunner {
       workspaceRoot,
       allowedWritePaths: this.input.config.tools.allowedWritePaths,
       evidenceSource: taskId ? 'runtime_events' : 'state_snapshot',
+      packageManager: this.input.config.tools.packageManager ?? 'pnpm',
       qualityGateMode: this.input.config.workflow.qualityGateMode ?? 'tooling',
       ...(abortSignal ? { abortSignal } : {}),
       logger: this.input.logger,
