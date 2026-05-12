@@ -1,4 +1,5 @@
 import type { BacklogTask } from '@ai-orchestrator/core';
+import type { CodeExecutionOutput, CodeExecutionEvidence, ToolCallName } from '@ai-orchestrator/core';
 import type {
   ArchitectureAnalysis,
   ArchitectureFinding,
@@ -26,6 +27,7 @@ import type { QualityStageResult, TestExecutionResult } from '@ai-orchestrator/c
 import type { ProjectState } from '@ai-orchestrator/core';
 import type { OptimizedPrompt } from '@ai-orchestrator/prompts';
 import { PromptPipeline } from '@ai-orchestrator/prompts';
+import { WorkflowPolicyError } from '@ai-orchestrator/shared';
 import { selectNextTask } from '@ai-orchestrator/workflow';
 
 interface BootstrapRepositorySnapshot {
@@ -127,9 +129,14 @@ interface PromptEngineerInput {
   outputSchema: Record<string, unknown>;
 }
 
-interface CodeExecutionOutput {
-  changed: boolean;
-  summary: string;
+export interface RoleGenerationRequest<TSchema extends Record<string, unknown>> {
+  schemaName: string;
+  prompt: string;
+  schema: TSchema;
+}
+
+export interface RoleGenerationPort {
+  generateObject: <TOutput>(request: RoleGenerationRequest<Record<string, unknown>>) => Promise<TOutput>;
 }
 
 function makeResponse<TOutput>(
@@ -546,6 +553,164 @@ export class PromptEngineerRole implements AgentRole<PromptEngineerInput, Optimi
   };
 }
 
+type ProductionCoderDecision =
+  | {
+    action: 'request_tool';
+    toolName: ToolCallName;
+    rationale: string;
+    input: Record<string, unknown>;
+  }
+  | {
+    action: 'final_output';
+    changed: boolean;
+    summary: string;
+    changedFiles: string[];
+    evidence: CodeExecutionEvidence[];
+    noOpReason?: string;
+  };
+
+const PRODUCTION_CODER_DECISION_SCHEMA = {
+  type: 'object',
+  properties: {
+    action: { type: 'string', enum: ['request_tool', 'final_output'] },
+    toolName: {
+      type: 'string',
+      enum: [
+        'file_read',
+        'file_write',
+        'file_list',
+        'file_exists',
+        'git_status',
+        'git_diff',
+        'git_current_branch',
+        'typescript_check',
+        'typescript_diagnostics',
+        'shell_exec',
+        'testing_run',
+        'diff_workspace',
+        'search_repo',
+      ],
+    },
+    rationale: { type: 'string' },
+    input: { type: 'object', additionalProperties: true },
+    changed: { type: 'boolean' },
+    summary: { type: 'string' },
+    changedFiles: { type: 'array', items: { type: 'string' } },
+    evidence: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['tool_observation', 'workspace_diff', 'artifact', 'llm_decision', 'no_op'] },
+          description: { type: 'string' },
+          reference: { type: 'string' },
+        },
+        required: ['type', 'description'],
+        additionalProperties: false,
+      },
+    },
+    noOpReason: { type: 'string' },
+  },
+  required: ['action'],
+  additionalProperties: false,
+} satisfies Record<string, unknown>;
+
+const REVIEW_RESULT_SCHEMA = {
+  type: 'object',
+  properties: {
+    approved: { type: 'boolean' },
+    blockingIssues: { type: 'array', items: { type: 'string' } },
+    nonBlockingSuggestions: { type: 'array', items: { type: 'string' } },
+    missingTests: { type: 'array', items: { type: 'string' } },
+    notes: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['approved', 'blockingIssues', 'nonBlockingSuggestions', 'missingTests', 'notes'],
+  additionalProperties: false,
+} satisfies Record<string, unknown>;
+
+export class ProductionCoderRole implements AgentRole<{ task: BacklogTask; prompt: OptimizedPrompt }, CodeExecutionOutput> {
+  readonly name = 'coder' as const;
+
+  constructor(private readonly generation: RoleGenerationPort) {}
+
+  execute = async (
+    request: RoleRequest<{ task: BacklogTask; prompt: OptimizedPrompt }>,
+    context: RoleExecutionContext,
+  ): Promise<RoleResponse<CodeExecutionOutput>> => {
+    const decision = await this.generateDecision(request, context, []);
+    if (decision.action !== 'final_output') {
+      throw new WorkflowPolicyError('Production coder returned a tool request outside the action loop', {
+        details: {
+          taskId: request.input.task.id,
+          toolName: decision.toolName,
+        },
+        retrySuggested: true,
+      });
+    }
+    return this.makeFinalResponse(request, decision);
+  };
+
+  executeStep = async (
+    request: RoleRequest<{ task: BacklogTask; prompt: OptimizedPrompt }>,
+    context: RoleExecutionContext,
+    observations: readonly RoleObservation[],
+  ) => {
+    const decision = await this.generateDecision(request, context, observations);
+    if (decision.action === 'request_tool') {
+      return {
+        type: 'tool_request',
+        request: {
+          toolName: decision.toolName,
+          rationale: decision.rationale,
+          input: decision.input,
+        },
+      } as const;
+    }
+
+    return {
+      type: 'final_output',
+      response: this.makeFinalResponse(request, decision),
+    } as const;
+  };
+
+  private async generateDecision(
+    request: RoleRequest<{ task: BacklogTask; prompt: OptimizedPrompt }>,
+    context: RoleExecutionContext,
+    observations: readonly RoleObservation[],
+  ): Promise<ProductionCoderDecision> {
+    const decision = await this.generation.generateObject<unknown>({
+      schemaName: 'production_coder_decision',
+      schema: PRODUCTION_CODER_DECISION_SCHEMA,
+      prompt: [
+        request.input.prompt.systemPrompt,
+        request.input.prompt.taskPrompt,
+        `Task ID: ${request.input.task.id}`,
+        `Objective: ${request.objective}`,
+        `Acceptance criteria: ${request.acceptanceCriteria.join('; ')}`,
+        `Workspace root: ${context.toolExecution.workspaceRoot}`,
+        `Allowed write paths: ${context.toolProfile.allowedWritePaths.join(', ')}`,
+        `Observed tool results: ${JSON.stringify(observations)}`,
+        'Return either a tool request for the next safe action or a final output.',
+        'If changed is true, include changedFiles and concrete evidence. If changed is false, include noOpReason.',
+      ].join('\n\n'),
+    });
+    return parseProductionCoderDecision(decision);
+  }
+
+  private makeFinalResponse(
+    request: RoleRequest<{ task: BacklogTask; prompt: OptimizedPrompt }>,
+    decision: Extract<ProductionCoderDecision, { action: 'final_output' }>,
+  ): RoleResponse<CodeExecutionOutput> {
+    return makeResponse(this.name, `Executed task ${request.input.task.id}`, {
+      changed: decision.changed,
+      summary: decision.summary,
+      changedFiles: [...decision.changedFiles],
+      evidence: [...decision.evidence],
+      ...(decision.noOpReason ? { noOpReason: decision.noOpReason } : {}),
+    });
+  }
+}
+
 export class CoderRole implements AgentRole<{ task: BacklogTask; prompt: OptimizedPrompt }, CodeExecutionOutput> {
   readonly name = 'coder' as const;
 
@@ -555,7 +720,37 @@ export class CoderRole implements AgentRole<{ task: BacklogTask; prompt: Optimiz
     return makeResponse(this.name, `Executed task ${request.input.task.id}`, {
       changed: true,
       summary: `Stub execution completed for ${request.input.task.title}`,
+      changedFiles: request.input.task.affectedModules,
+      evidence: [{
+        type: 'llm_decision',
+        description: 'Synthetic coder role produced deterministic test evidence; not valid for production registry.',
+        reference: request.input.task.id,
+      }],
     });
+  };
+}
+
+export class ProductionReviewerRole implements AgentRole<{ task: BacklogTask; result: CodeExecutionOutput }, ReviewResult> {
+  readonly name = 'reviewer' as const;
+
+  constructor(private readonly generation: RoleGenerationPort) {}
+
+  execute = async (
+    request: RoleRequest<{ task: BacklogTask; result: CodeExecutionOutput }>,
+  ): Promise<RoleResponse<ReviewResult>> => {
+    const review = await this.generation.generateObject<unknown>({
+      schemaName: 'production_review_result',
+      schema: REVIEW_RESULT_SCHEMA,
+      prompt: [
+        `Review task ${request.input.task.id}: ${request.input.task.title}`,
+        `Acceptance criteria: ${request.input.task.acceptanceCriteria.join('; ')}`,
+        `Execution summary: ${request.input.result.summary}`,
+        `Changed files: ${request.input.result.changedFiles.join(', ')}`,
+        `Evidence: ${JSON.stringify(request.input.result.evidence)}`,
+        'Approve only when the result satisfies acceptance criteria and evidence supports the claimed mutation or no-op.',
+      ].join('\n\n'),
+    });
+    return makeResponse(this.name, `Reviewed ${request.input.task.id}`, parseReviewResult(review));
   };
 }
 
@@ -636,6 +831,128 @@ export class TesterRole implements AgentRole<{ task: BacklogTask; result: CodeEx
       response: makeResponse(this.name, `Tested ${request.input.task.id}`, buildTestResult(request.input.task, qualityStages)),
     } as const;
   };
+}
+
+function parseProductionCoderDecision(value: unknown): ProductionCoderDecision {
+  if (!isRecord(value)) {
+    throw new WorkflowPolicyError('Production coder decision must be an object');
+  }
+  if (value.action === 'request_tool') {
+    if (!isToolCallName(value.toolName)) {
+      throw new WorkflowPolicyError('Production coder tool request has an unsupported toolName');
+    }
+    if (typeof value.rationale !== 'string' || !value.rationale.trim()) {
+      throw new WorkflowPolicyError('Production coder tool request requires rationale');
+    }
+    if (!isRecord(value.input)) {
+      throw new WorkflowPolicyError('Production coder tool request requires input object');
+    }
+    return {
+      action: 'request_tool',
+      toolName: value.toolName,
+      rationale: value.rationale,
+      input: value.input,
+    };
+  }
+  if (value.action === 'final_output') {
+    if (typeof value.changed !== 'boolean') {
+      throw new WorkflowPolicyError('Production coder final output requires changed flag');
+    }
+    if (typeof value.summary !== 'string' || !value.summary.trim()) {
+      throw new WorkflowPolicyError('Production coder final output requires summary');
+    }
+    if (!isStringArray(value.changedFiles)) {
+      throw new WorkflowPolicyError('Production coder final output requires changedFiles array');
+    }
+    if (!isCodeExecutionEvidenceArray(value.evidence)) {
+      throw new WorkflowPolicyError('Production coder final output requires evidence array');
+    }
+    if (!value.changed && (typeof value.noOpReason !== 'string' || !value.noOpReason.trim())) {
+      throw new WorkflowPolicyError('Production coder no-op output requires noOpReason');
+    }
+    return {
+      action: 'final_output',
+      changed: value.changed,
+      summary: value.summary,
+      changedFiles: value.changedFiles,
+      evidence: value.evidence,
+      ...(typeof value.noOpReason === 'string' && value.noOpReason.trim()
+        ? { noOpReason: value.noOpReason }
+        : {}),
+    };
+  }
+  throw new WorkflowPolicyError('Production coder decision action must be request_tool or final_output');
+}
+
+function parseReviewResult(value: unknown): ReviewResult {
+  if (!isRecord(value)) {
+    throw new WorkflowPolicyError('Review result must be an object');
+  }
+  if (
+    typeof value.approved !== 'boolean' ||
+    !isStringArray(value.blockingIssues) ||
+    !isStringArray(value.nonBlockingSuggestions) ||
+    !isStringArray(value.missingTests) ||
+    !isStringArray(value.notes)
+  ) {
+    throw new WorkflowPolicyError('Review result does not match the required contract');
+  }
+  return {
+    approved: value.approved,
+    blockingIssues: value.blockingIssues,
+    nonBlockingSuggestions: value.nonBlockingSuggestions,
+    missingTests: value.missingTests,
+    notes: value.notes,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
+function isToolCallName(value: unknown): value is ToolCallName {
+  return typeof value === 'string' && [
+    'file_read',
+    'file_write',
+    'file_list',
+    'file_exists',
+    'git_status',
+    'git_diff',
+    'git_current_branch',
+    'typescript_check',
+    'typescript_diagnostics',
+    'shell_exec',
+    'testing_run',
+    'diff_workspace',
+    'search_repo',
+  ].includes(value);
+}
+
+function isCodeExecutionEvidenceArray(value: unknown): value is CodeExecutionEvidence[] {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  return value.every((entry) =>
+    isRecord(entry) &&
+    isCodeExecutionEvidenceType(entry.type) &&
+    typeof entry.description === 'string' &&
+    entry.description.trim().length > 0 &&
+    (entry.reference === undefined || typeof entry.reference === 'string')
+  );
+}
+
+function isCodeExecutionEvidenceType(value: unknown): value is CodeExecutionEvidence['type'] {
+  return typeof value === 'string' && [
+    'tool_observation',
+    'workspace_diff',
+    'artifact',
+    'llm_decision',
+    'no_op',
+  ].includes(value);
 }
 
 const QUALITY_GATE_STAGES = ['build', 'lint', 'typecheck', 'test'] as const;

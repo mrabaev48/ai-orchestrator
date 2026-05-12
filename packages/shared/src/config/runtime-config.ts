@@ -13,6 +13,7 @@ const stateBackendSchema = z.enum(['memory', 'postgresql']);
 const runLockProviderSchema = z.enum(['noop', 'postgresql', 'redis', 'etcd']);
 const workspaceManagerModeSchema = z.enum(['git-worktree', 'static']);
 const qualityGateModeSchema = z.enum(['tooling', 'synthetic']);
+const roleProviderModeSchema = z.enum(['production', 'synthetic']);
 const approvalGateModeSchema = z.enum(['disabled', 'enabled']);
 const readinessCriterionIdSchema = z.enum([
   'repo-lint',
@@ -75,6 +76,7 @@ const runtimeConfigSchema = z.strictObject({
     workspaceManagerMode: workspaceManagerModeSchema.optional(),
     workspaceBranchTtlHours: z.number().int().positive().optional(),
     qualityGateMode: qualityGateModeSchema.optional(),
+    roleProviderMode: roleProviderModeSchema.optional(),
     approvalGateMode: approvalGateModeSchema.optional(),
     approvalRequiredActions: z.array(approvalRequestedActionSchema).min(1).optional(),
     approvalBulkFileThreshold: z.number().int().positive().optional(),
@@ -128,6 +130,7 @@ const envSchema = z.object({
   WORKFLOW_WORKSPACE_MANAGER_MODE: workspaceManagerModeSchema.default('git-worktree'),
   WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS: z.coerce.number().int().positive().default(24),
   WORKFLOW_QUALITY_GATE_MODE: qualityGateModeSchema.default('tooling'),
+  WORKFLOW_ROLE_PROVIDER_MODE: roleProviderModeSchema.default('production'),
   WORKFLOW_APPROVAL_GATE_MODE: approvalGateModeSchema.default('disabled'),
   WORKFLOW_APPROVAL_REQUIRED_ACTIONS: z.string().trim().min(1).default('git_push,pr_draft'),
   WORKFLOW_APPROVAL_BULK_FILE_THRESHOLD: z.coerce.number().int().positive().default(25),
@@ -221,6 +224,7 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       workspaceManagerMode: env.data.WORKFLOW_WORKSPACE_MANAGER_MODE,
       workspaceBranchTtlHours: env.data.WORKFLOW_WORKSPACE_BRANCH_TTL_HOURS,
       qualityGateMode: env.data.WORKFLOW_QUALITY_GATE_MODE,
+      roleProviderMode: env.data.WORKFLOW_ROLE_PROVIDER_MODE,
       approvalGateMode: env.data.WORKFLOW_APPROVAL_GATE_MODE,
       approvalRequiredActions: normalizeCommaSeparatedValues(
         fileConfig.workflow?.approvalRequiredActions ?? env.data.WORKFLOW_APPROVAL_REQUIRED_ACTIONS,

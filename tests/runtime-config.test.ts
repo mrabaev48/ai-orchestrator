@@ -31,6 +31,7 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   assert.equal(config.workflow.workspaceManagerMode, 'git-worktree');
   assert.equal(config.workflow.workspaceBranchTtlHours, 24);
   assert.equal(config.workflow.qualityGateMode, 'tooling');
+  assert.equal(config.workflow.roleProviderMode, 'production');
   assert.equal(config.tools.allowedWritePaths[0], '/tmp/workspace/src');
   assert.equal(config.tools.allowedWritePaths[1], '/tmp/workspace/tests');
   assert.equal(config.tools.allowedShellCommands.includes('node'), true);
@@ -129,6 +130,17 @@ test('loadRuntimeConfig supports quality gate mode configuration', () => {
   });
 
   assert.equal(config.workflow.qualityGateMode, 'synthetic');
+});
+
+test('loadRuntimeConfig supports role provider mode configuration', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      WORKFLOW_ROLE_PROVIDER_MODE: 'synthetic',
+    },
+  });
+
+  assert.equal(config.workflow.roleProviderMode, 'synthetic');
 });
 
 test('loadRuntimeConfig supports configurable approval required actions', () => {

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TesterRole } from '@ai-orchestrator/agents';
-import type { RoleExecutionContext, RoleRequest } from '@ai-orchestrator/core';
+import type { CodeExecutionOutput, RoleExecutionContext, RoleRequest } from '@ai-orchestrator/core';
 import type { BacklogTask } from '@ai-orchestrator/core';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 
@@ -63,7 +63,7 @@ function makeContext(qualityGateMode: 'tooling' | 'synthetic'): RoleExecutionCon
   };
 }
 
-function makeRequest(acceptanceCriteria: string[] = ['done']): RoleRequest<{ task: BacklogTask; result: { changed: boolean; summary: string } }> {
+function makeRequest(acceptanceCriteria: string[] = ['done']): RoleRequest<{ task: BacklogTask; result: CodeExecutionOutput }> {
   return {
     role: 'tester',
     objective: 'Test task',
@@ -84,6 +84,8 @@ function makeRequest(acceptanceCriteria: string[] = ['done']): RoleRequest<{ tas
       result: {
         changed: true,
         summary: 'ok',
+        changedFiles: ['packages/execution'],
+        evidence: [{ type: 'tool_observation', description: 'test setup evidence' }],
       },
     },
   };

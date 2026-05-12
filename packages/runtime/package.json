@@ -22,6 +22,7 @@
     "@ai-orchestrator/application": "workspace:*",
     "@ai-orchestrator/core": "workspace:*",
     "@ai-orchestrator/execution": "workspace:*",
+    "@ai-orchestrator/llm": "workspace:*",
     "@ai-orchestrator/shared": "workspace:*",
     "@ai-orchestrator/state": "workspace:*"
   }

@@ -82,6 +82,7 @@ const ALLOWED_WORKSPACE_DEPENDENCIES = new Map<string, ReadonlySet<string>>([
       '@ai-orchestrator/application',
       '@ai-orchestrator/core',
       '@ai-orchestrator/execution',
+      '@ai-orchestrator/llm',
       '@ai-orchestrator/shared',
       '@ai-orchestrator/state',
     ]),

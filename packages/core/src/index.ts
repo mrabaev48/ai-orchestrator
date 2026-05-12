@@ -4,6 +4,7 @@ export * from './architecture-findings.js';
 export * from './approvals.js';
 export * from './approval/approval-request.js';
 export * from './backlog.js';
+export * from './code-execution.js';
 export * from './decisions.js';
 export * from './discovery.js';
 export * from './events.js';

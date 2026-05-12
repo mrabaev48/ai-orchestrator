@@ -1,5 +1,6 @@
 import { validateArchitectureFinding, type ArchitectureAnalysis } from './architecture-findings.js';
 import { validateBacklogTask, type BacklogTask } from './backlog.js';
+import { validateCodeExecutionOutput, type CodeExecutionOutput } from './code-execution.js';
 import { validateProjectDiscovery, type ProjectDiscovery } from './discovery.js';
 import {
   validateIntegrationExportPayload,
@@ -49,7 +50,6 @@ type DocsWriterOutput = {
   followUpGaps: string[];
   markdown: string;
 };
-type CoderOutput = { changed: boolean; summary: string };
 type OptimizedPrompt = {
   id: string;
   role: AgentRoleName;
@@ -96,7 +96,7 @@ const ROLE_OUTPUT_SCHEMAS: Record<AgentRoleName, Record<string, unknown>> = {
   },
   coder: {
     type: 'object',
-    required: ['changed', 'summary'],
+    required: ['changed', 'summary', 'changedFiles', 'evidence'],
   },
   reviewer: {
     type: 'object',
@@ -121,7 +121,7 @@ const ROLE_OUTPUT_VALIDATORS: Record<AgentRoleName, RoleOutputValidator> = {
   integration_manager: (output) => validateIntegrationExportPayload(output as IntegrationExportPayload),
   task_manager: (output) => validateTaskManagerOutput(output as BacklogTask | null),
   prompt_engineer: (output) => validateOptimizedPrompt(output as OptimizedPrompt),
-  coder: (output) => validateCoderOutput(output as CoderOutput),
+  coder: (output) => validateCodeExecutionOutput(output as CodeExecutionOutput),
   reviewer: (output) => validateReviewOutput(output as ReviewResult),
   tester: (output) => validateTestOutput(output as TestExecutionResult),
   docs_writer: (output) => validateDocsWriterOutput(output as DocsWriterOutput),
@@ -209,13 +209,6 @@ function validateOptimizedPrompt(output: OptimizedPrompt): string[] {
   if (!output.contextSummary?.trim()) issues.push('Prompt contextSummary is required');
   if (!Array.isArray(output.constraints)) issues.push('Prompt constraints must be an array');
   return issues;
-}
-
-function validateCoderOutput(output: CoderOutput): string[] {
-  if (!output.summary?.trim()) {
-    return ['Coder output summary is required'];
-  }
-  return [];
 }
 
 function validateReviewOutput(output: ReviewResult): string[] {

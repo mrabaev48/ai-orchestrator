@@ -9,7 +9,12 @@ import {
   TaskManagerRole,
   TesterRole,
 } from '@ai-orchestrator/agents';
-import { buildIdempotencyKey, classifyExecutionPolicyActionRisk, createEmptyProjectState } from '@ai-orchestrator/core';
+import {
+  buildIdempotencyKey,
+  classifyExecutionPolicyActionRisk,
+  createEmptyProjectState,
+  type CodeExecutionOutput,
+} from '@ai-orchestrator/core';
 import { Orchestrator, type ExecutionLeaseAuthority, type ExecutionLeaseHandle } from '@ai-orchestrator/execution';
 import { SchemaValidationError, WorkflowPolicyError } from '@ai-orchestrator/shared';
 import { InMemoryStateStore } from '@ai-orchestrator/state';
@@ -111,6 +116,15 @@ function makeState(acceptanceCriteria: string[] = ['done']): ReturnType<typeof c
     featureIds: ['feature-1'],
   };
   return state;
+}
+
+function makeCodeExecutionOutput(summary: string): CodeExecutionOutput {
+  return {
+    changed: true,
+    summary,
+    changedFiles: ['packages/execution'],
+    evidence: [{ type: 'tool_observation', description: 'Test role produced explicit execution evidence' }],
+  };
 }
 
 function makeLeaseHandle(overrides: Partial<ExecutionLeaseHandle> = {}): ExecutionLeaseHandle {
@@ -728,19 +742,19 @@ test('runCycle renews execution lease during long-running work', async () => {
 });
 
 test('runCycle rejects invalid coder output via role output schema registry', async () => {
-  class InvalidCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+  class InvalidCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
     async execute(
       request: RoleRequest<{ task: unknown; prompt: unknown }>,
       context: RoleExecutionContext,
-    ): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    ): Promise<RoleResponse<CodeExecutionOutput>> {
       void request;
       void context;
       return {
         role: 'coder',
         summary: 'invalid-output',
-        output: { changed: true, summary: '' },
+        output: { changed: true, summary: '' } as unknown as CodeExecutionOutput,
         warnings: [],
         risks: [],
         needsHumanDecision: false,
@@ -767,14 +781,14 @@ test('runCycle rejects invalid coder output via role output schema registry', as
 });
 
 test('runCycle provides tool execution context with policy, permission scope, workspace, and evidence source', async () => {
-  class ContextAwareCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+  class ContextAwareCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       return {
         role: 'coder',
         summary: 'context checked',
-        output: { changed: true, summary: 'implemented' },
+        output: makeCodeExecutionOutput('implemented'),
         warnings: [],
         risks: [],
         needsHumanDecision: false,
@@ -862,10 +876,10 @@ test('runCycle provides tool execution context with policy, permission scope, wo
 });
 
 test('runCycle supports think-act-observe loop with tool_request and final_output', async () => {
-  class LoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+  class LoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       throw new Error('execute should not be called when executeStep is available');
     }
 
@@ -873,7 +887,7 @@ test('runCycle supports think-act-observe loop with tool_request and final_outpu
       request: RoleRequest<{ task: unknown; prompt: unknown }>,
       context: RoleExecutionContext,
       observations: readonly RoleObservation[],
-    ): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+    ): Promise<RoleStepResult<CodeExecutionOutput>> {
       void request;
       void context;
       if (observations.length === 0) {
@@ -892,7 +906,7 @@ test('runCycle supports think-act-observe loop with tool_request and final_outpu
         response: {
           role: 'coder',
           summary: 'completed with observations',
-          output: { changed: true, summary: 'Observed git status before finishing' },
+          output: makeCodeExecutionOutput('Observed git status before finishing'),
           warnings: [],
           risks: [],
           needsHumanDecision: false,
@@ -939,14 +953,14 @@ test('runCycle supports think-act-observe loop with tool_request and final_outpu
 });
 
 test('runCycle fails when role action loop exceeds max step limit', async () => {
-  class EndlessToolRequesterRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+  class EndlessToolRequesterRole implements AgentRole<{ task: unknown; prompt: unknown }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       throw new Error('execute should not be called when executeStep is available');
     }
 
-    async executeStep(): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+    async executeStep(): Promise<RoleStepResult<CodeExecutionOutput>> {
       return {
         type: 'tool_request',
         request: {
@@ -983,14 +997,14 @@ test('runCycle fails when role action loop exceeds max step limit', async () => 
 
 
 test('runCycle fails when role action loop exceeds wall-time budget', async () => {
-  class SlowToolRequesterRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+  class SlowToolRequesterRole implements AgentRole<{ task: unknown; prompt: unknown }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       throw new Error('execute should not be called when executeStep is available');
     }
 
-    async executeStep(): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+    async executeStep(): Promise<RoleStepResult<CodeExecutionOutput>> {
       await new Promise((resolve) => setTimeout(resolve, 20));
       return {
         type: 'tool_request',
@@ -1028,10 +1042,10 @@ test('runCycle fails when role action loop exceeds wall-time budget', async () =
 });
 
 test('runCycle skips tool evidence artifacts when persistToolEvidence is disabled', async () => {
-  class LoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+  class LoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       throw new Error('execute should not be called when executeStep is available');
     }
 
@@ -1039,7 +1053,7 @@ test('runCycle skips tool evidence artifacts when persistToolEvidence is disable
       request: RoleRequest<{ task: unknown; prompt: unknown }>,
       context: RoleExecutionContext,
       observations: readonly RoleObservation[],
-    ): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+    ): Promise<RoleStepResult<CodeExecutionOutput>> {
       void request;
       void context;
       if (observations.length === 0) {
@@ -1058,7 +1072,7 @@ test('runCycle skips tool evidence artifacts when persistToolEvidence is disable
         response: {
           role: 'coder',
           summary: 'completed',
-          output: { changed: true, summary: 'done' },
+          output: makeCodeExecutionOutput('done'),
           warnings: [],
           risks: [],
           needsHumanDecision: false,
@@ -1088,21 +1102,21 @@ test('runCycle skips tool evidence artifacts when persistToolEvidence is disable
 });
 
 test('runCycle fails when role step exceeds timeout budget', async () => {
-  class SlowLoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+  class SlowLoopingCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       throw new Error('execute should not be called when executeStep is available');
     }
 
-    async executeStep(): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+    async executeStep(): Promise<RoleStepResult<CodeExecutionOutput>> {
       await new Promise((resolve) => setTimeout(resolve, 40));
       return {
         type: 'final_output',
         response: {
           role: 'coder',
           summary: 'too slow',
-          output: { changed: true, summary: 'slow' },
+          output: makeCodeExecutionOutput('slow'),
           warnings: [],
           risks: [],
           needsHumanDecision: false,
@@ -1137,17 +1151,17 @@ test('runCycle fails when role step exceeds timeout budget', async () => {
 test('runCycle propagates abort signal into role step for cooperative cancellation', async () => {
   let isAbortObserved = false;
 
-  class AbortAwareCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, { changed: boolean; summary: string }> {
+  class AbortAwareCoderRole implements AgentRole<{ task: unknown; prompt: unknown }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       throw new Error('execute should not be called when executeStep is available');
     }
 
     async executeStep(
       request: RoleRequest<{ task: unknown; prompt: unknown }>,
       context: RoleExecutionContext,
-    ): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+    ): Promise<RoleStepResult<CodeExecutionOutput>> {
       void request;
       await new Promise<never>((_, reject) => {
         context.abortSignal?.addEventListener(

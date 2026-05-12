@@ -6,6 +6,7 @@ import {
   defaultRoleOutputSchemaRegistry,
   makeEvent,
   type BacklogTask,
+  type CodeExecutionOutput,
   type ProjectState,
   type QualityStageResult,
   type RoleExecutionContext,
@@ -119,7 +120,7 @@ export class TaskRunner {
       const roleName = routeTaskToRole(task);
       const executor = this.input.roleRegistry.get<
         { task: BacklogTask; prompt: typeof promptResponse.output },
-        { changed: boolean; summary: string }
+        CodeExecutionOutput
       >(roleName);
 
       const executionContext = this.makeContext(roleName, runId, state, workspace.rootPath, task.id, abortSignal);
@@ -208,6 +209,7 @@ export class TaskRunner {
         await this.input.stateStore.recordEvent(makeEvent('TEST_PASSED', { taskId: task.id }, { runId }));
       }
 
+      this.enforceCompletionEvidence(task, executionResponse.output);
       task.status = 'done';
       if (!state.execution.completedTaskIds.includes(task.id)) {
         state.execution.completedTaskIds.push(task.id);
@@ -362,6 +364,43 @@ export class TaskRunner {
     const missing = requiredChecks.filter((check) => !passedStages.has(check as QualityStageResult['stage']));
     if (missing.length > 0) {
       throw new WorkflowPolicyError(`Policy requiredChecks not satisfied: ${missing.join(', ')}`);
+    }
+  }
+
+  private enforceCompletionEvidence(task: BacklogTask, output: CodeExecutionOutput): void {
+    if (!output.summary.trim()) {
+      throw new WorkflowPolicyError(`Task ${task.id} cannot complete without execution summary`, {
+        details: {
+          taskId: task.id,
+          reason: 'missing_execution_summary',
+        },
+        retrySuggested: false,
+      });
+    }
+
+    if (output.changed) {
+      if (output.changedFiles.length === 0 || output.evidence.length === 0) {
+        throw new WorkflowPolicyError(`Task ${task.id} cannot complete without mutation evidence`, {
+          details: {
+            taskId: task.id,
+            reason: 'missing_mutation_evidence',
+            changedFiles: output.changedFiles.length,
+            evidence: output.evidence.length,
+          },
+          retrySuggested: false,
+        });
+      }
+      return;
+    }
+
+    if (!output.noOpReason?.trim()) {
+      throw new WorkflowPolicyError(`Task ${task.id} cannot complete without explicit no-op reason`, {
+        details: {
+          taskId: task.id,
+          reason: 'missing_no_op_reason',
+        },
+        retrySuggested: false,
+      });
     }
   }
 

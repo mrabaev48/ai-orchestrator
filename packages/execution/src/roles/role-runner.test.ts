@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   createEmptyProjectState,
   type AgentRole,
+  type CodeExecutionOutput,
   type RoleExecutionContext,
   type RoleRequest,
   type RoleResponse,
@@ -89,11 +90,16 @@ function makeRunner(config = makeConfig()) {
   return { runner, recorder, state, config };
 }
 
-function makeCoderResponse(summary: string): RoleResponse<{ changed: boolean; summary: string }> {
+function makeCoderResponse(summary: string): RoleResponse<CodeExecutionOutput> {
   return {
     role: 'coder',
     summary,
-    output: { changed: true, summary },
+    output: {
+      changed: true,
+      summary,
+      changedFiles: ['packages/execution'],
+      evidence: [{ type: 'tool_observation', description: 'Observed role execution in test' }],
+    },
     warnings: [],
     risks: [],
     needsHumanDecision: false,
@@ -102,10 +108,10 @@ function makeCoderResponse(summary: string): RoleResponse<{ changed: boolean; su
 }
 
 test('RoleRunner executes step loop and records role evidence', async () => {
-  class LoopingCoderRole implements AgentRole<{ task: string }, { changed: boolean; summary: string }> {
+  class LoopingCoderRole implements AgentRole<{ task: string }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       throw new Error('execute should not be called');
     }
 
@@ -113,7 +119,7 @@ test('RoleRunner executes step loop and records role evidence', async () => {
       request: RoleRequest<{ task: string }>,
       context: RoleExecutionContext,
       observations: readonly unknown[],
-    ): Promise<RoleStepResult<{ changed: boolean; summary: string }>> {
+    ): Promise<RoleStepResult<CodeExecutionOutput>> {
       void request;
       void context;
       if (observations.length === 0) {
@@ -149,17 +155,17 @@ test('RoleRunner executes step loop and records role evidence', async () => {
 });
 
 test('RoleRunner retries once after schema validation failure', async () => {
-  class RetryCoderRole implements AgentRole<{ task: string }, { changed: boolean; summary: string }> {
+  class RetryCoderRole implements AgentRole<{ task: string }, CodeExecutionOutput> {
     readonly name = 'coder' as const;
     private attempt = 0;
 
-    async execute(): Promise<RoleResponse<{ changed: boolean; summary: string }>> {
+    async execute(): Promise<RoleResponse<CodeExecutionOutput>> {
       this.attempt += 1;
       if (this.attempt === 1) {
         return {
           role: 'coder',
           summary: 'invalid',
-          output: { summary: 'missing changed' } as unknown as { changed: boolean; summary: string },
+          output: { summary: 'missing changed' } as unknown as CodeExecutionOutput,
           warnings: [],
           risks: [],
           needsHumanDecision: false,
@@ -169,7 +175,7 @@ test('RoleRunner retries once after schema validation failure', async () => {
       return makeCoderResponse('valid');
     }
 
-    async validate(response: RoleResponse<{ changed: boolean; summary: string }>): Promise<void> {
+    async validate(response: RoleResponse<CodeExecutionOutput>): Promise<void> {
       if (response.output.summary !== 'valid') {
         throw new Error('invalid response');
       }

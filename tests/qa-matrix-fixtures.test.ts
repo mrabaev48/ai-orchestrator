@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 
 import { TesterRole } from '@ai-orchestrator/agents';
-import type { BacklogTask, RoleExecutionContext, RoleObservation, RoleRequest } from '@ai-orchestrator/core';
+import type { BacklogTask, CodeExecutionOutput, RoleExecutionContext, RoleObservation, RoleRequest } from '@ai-orchestrator/core';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 import { createLocalToolSet } from '@ai-orchestrator/tools';
 
@@ -52,7 +52,7 @@ function makeContext(workspaceRoot: string): RoleExecutionContext {
   };
 }
 
-function makeRequest(): RoleRequest<{ task: BacklogTask; result: { changed: boolean; summary: string } }> {
+function makeRequest(): RoleRequest<{ task: BacklogTask; result: CodeExecutionOutput }> {
   return {
     role: 'tester',
     objective: 'Validate quality stages',
@@ -73,6 +73,9 @@ function makeRequest(): RoleRequest<{ task: BacklogTask; result: { changed: bool
       result: {
         changed: false,
         summary: 'fixture run',
+        changedFiles: [],
+        evidence: [{ type: 'no_op', description: 'Fixture validation does not mutate workspace' }],
+        noOpReason: 'Fixture validation only runs quality gates',
       },
     },
   };
