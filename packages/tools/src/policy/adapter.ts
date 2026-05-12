@@ -12,7 +12,8 @@ export type SafeWriteMode =
 
 export interface ToolPolicyAdapter {
   assertWriteAllowed: (targetPath: string) => string;
-  assertCommandAllowed: (command: string) => string;
+  assertWorkspaceAllowed: (workspaceRoot: string) => string;
+  assertCommandAllowed: (command: string, args?: readonly string[]) => string;
 }
 
 export interface ToolPolicyConfig {
@@ -54,7 +55,18 @@ export function createToolPolicyAdapter(config: ToolPolicyConfig): ToolPolicyAda
   const isProtectedPath = (candidatePath: string): boolean =>
     normalizedProtectedScopes.some((protectedScope) => isWithinPathScope(candidatePath, protectedScope));
 
+  const assertWorkspaceAllowed = (workspaceRoot: string): string => {
+    const resolved = normalizePath(workspaceRoot);
+    const hasAllowedWorkspacePath = normalizedScopes.some((basePath) => isWithinPathScope(resolved, basePath));
+    if (!hasAllowedWorkspacePath) {
+      throw new SafetyViolationError(`Workspace outside allowed scope is forbidden: ${resolved}`);
+    }
+
+    return resolved;
+  };
+
   return {
+    assertWorkspaceAllowed,
     assertWriteAllowed: (targetPath: string): string => {
       const resolved = normalizePath(targetPath);
       if (writeMode === 'read-only' || writeMode === 'propose-only') {
@@ -83,12 +95,50 @@ export function createToolPolicyAdapter(config: ToolPolicyConfig): ToolPolicyAda
 
       return resolved;
     },
-    assertCommandAllowed: (command: string): string => {
+    assertCommandAllowed: (command: string, args: readonly string[] = []): string => {
       if (!allowedCommands.has(command)) {
         throw new SafetyViolationError(`Shell command is not allowlisted: ${command}`);
       }
 
+      assertCommandArgsAllowed(command, args);
       return command;
     },
   };
+}
+
+const QUALITY_GATE_STAGES = new Set(['build', 'lint', 'typecheck', 'test']);
+
+function assertCommandArgsAllowed(command: string, args: readonly string[]): void {
+  if (command === 'git') {
+    assertGitArgsAllowed(args);
+    return;
+  }
+
+  if (command === 'npm' || command === 'pnpm') {
+    assertPackageManagerArgsAllowed(command, args);
+  }
+}
+
+function assertGitArgsAllowed(args: readonly string[]): void {
+  const signature = args.join('\0');
+  const allowedSignatures = new Set([
+    'status',
+    'status\0--short',
+    'status\0--porcelain',
+    'diff',
+    'diff\0--staged',
+    'branch\0--show-current',
+  ]);
+
+  if (!allowedSignatures.has(signature)) {
+    throw new SafetyViolationError(`Shell command arguments are not allowed for git: ${args.join(' ')}`);
+  }
+}
+
+function assertPackageManagerArgsAllowed(command: 'npm' | 'pnpm', args: readonly string[]): void {
+  if (args.length === 2 && args[0] === 'run' && QUALITY_GATE_STAGES.has(args[1] ?? '')) {
+    return;
+  }
+
+  throw new SafetyViolationError(`Shell command arguments are not allowed for ${command}: ${args.join(' ')}`);
 }

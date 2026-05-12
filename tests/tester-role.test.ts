@@ -40,7 +40,10 @@ function makeConfig(): RuntimeConfig {
   };
 }
 
-function makeContext(qualityGateMode: 'tooling' | 'synthetic'): RoleExecutionContext {
+function makeContext(
+  qualityGateMode: 'tooling' | 'synthetic',
+  packageManager: 'npm' | 'pnpm' = 'pnpm',
+): RoleExecutionContext {
   return {
     runId: 'run-1',
     taskId: 'task-1',
@@ -57,6 +60,7 @@ function makeContext(qualityGateMode: 'tooling' | 'synthetic'): RoleExecutionCon
       permissionScope: 'test_execution',
       workspaceRoot: process.cwd(),
       evidenceSource: 'runtime_events',
+      packageManager,
       qualityGateMode,
     },
     logger: createLogger(makeConfig(), { sink: () => {} }),
@@ -101,6 +105,20 @@ test('TesterRole executeStep requests build stage first in tooling mode', async 
 
   assert.equal(step?.type, 'tool_request');
   assert.equal(step?.request.toolName, 'testing_run');
+  assert.equal(step?.request.input.command, 'pnpm');
+  assert.deepEqual(step?.request.input.args, ['run', 'build']);
+});
+
+test('TesterRole executeStep uses configured package manager for quality gates', async () => {
+  const tester = new TesterRole();
+  const step = await tester.executeStep?.(
+    makeRequest(),
+    makeContext('tooling', 'npm'),
+    [],
+  );
+
+  assert.equal(step?.type, 'tool_request');
+  assert.equal(step?.request.input.command, 'npm');
   assert.deepEqual(step?.request.input.args, ['run', 'build']);
 });
 

@@ -14,6 +14,7 @@ const runLockProviderSchema = z.enum(['noop', 'postgresql', 'redis', 'etcd']);
 const workspaceManagerModeSchema = z.enum(['git-worktree', 'static']);
 const qualityGateModeSchema = z.enum(['tooling', 'synthetic']);
 const roleProviderModeSchema = z.enum(['production', 'synthetic']);
+const packageManagerSchema = z.enum(['npm', 'pnpm']);
 const approvalGateModeSchema = z.enum(['disabled', 'enabled']);
 const readinessCriterionIdSchema = z.enum([
   'repo-lint',
@@ -92,6 +93,7 @@ const runtimeConfigSchema = z.strictObject({
     writeMode: safeWriteModeSchema.optional(),
     protectedWritePaths: z.array(z.string().trim().min(1)).optional(),
     maxModifiedFiles: z.number().int().positive().optional(),
+    packageManager: packageManagerSchema.optional(),
     typescriptDiagnosticsEnabled: z.boolean(),
     persistToolEvidence: z.boolean(),
   }),
@@ -140,6 +142,7 @@ const envSchema = z.object({
   TOOL_WRITE_MODE: safeWriteModeSchema.default('workspace-write'),
   TOOL_PROTECTED_WRITE_PATHS: z.string().trim().min(1).default('package.json,pnpm-lock.yaml,package-lock.json,.github,.env'),
   TOOL_MAX_MODIFIED_FILES: z.coerce.number().int().positive().default(200),
+  TOOL_PACKAGE_MANAGER: packageManagerSchema.default('pnpm'),
   TOOL_TYPESCRIPT_DIAGNOSTICS: z.stringbool().default(true),
   TOOL_PERSIST_EVIDENCE: z.stringbool().default(true),
   LOG_LEVEL: logLevelSchema.default('info'),
@@ -255,6 +258,7 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
         cwd,
       ),
       maxModifiedFiles: fileConfig.tools?.maxModifiedFiles ?? env.data.TOOL_MAX_MODIFIED_FILES,
+      packageManager: fileConfig.tools?.packageManager ?? env.data.TOOL_PACKAGE_MANAGER,
       typescriptDiagnosticsEnabled:
         fileConfig.tools?.typescriptDiagnosticsEnabled ?? env.data.TOOL_TYPESCRIPT_DIAGNOSTICS,
       persistToolEvidence: fileConfig.tools?.persistToolEvidence ?? env.data.TOOL_PERSIST_EVIDENCE,

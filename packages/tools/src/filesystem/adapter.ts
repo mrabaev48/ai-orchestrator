@@ -62,7 +62,7 @@ export function createFileSystemToolAdapter(policy: ToolPolicyAdapter): FileSyst
 
   const execute = async (
     request: UnifiedToolRequest,
-    options?: ToolExecutionOptions,
+    options: ToolExecutionOptions,
   ): Promise<unknown> => {
     switch (request.toolName) {
       case 'file_read':

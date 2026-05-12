@@ -10,8 +10,8 @@ import type {
 const execFileAsync = promisify(execFile);
 
 export interface TypeScriptTool {
-  check: (options?: { signal?: AbortSignal }) => Promise<{ ok: boolean; diagnostics: string[] }>;
-  diagnostics: (options?: { signal?: AbortSignal }) => Promise<string[]>;
+  check: (options?: { cwd?: string; signal?: AbortSignal }) => Promise<{ ok: boolean; diagnostics: string[] }>;
+  diagnostics: (options?: { cwd?: string; signal?: AbortSignal }) => Promise<string[]>;
 }
 
 export interface TypeScriptToolAdapter extends UnifiedToolAdapter {
@@ -21,10 +21,13 @@ export interface TypeScriptToolAdapter extends UnifiedToolAdapter {
 
 export function createTypeScriptToolAdapter(): TypeScriptToolAdapter {
   const typeScriptCheck = async (
-    options?: { signal?: AbortSignal },
+    options?: { cwd?: string; signal?: AbortSignal },
   ): Promise<{ ok: boolean; diagnostics: string[] }> => {
     try {
-      await execFileAsync('npm', ['run', 'typecheck'], { signal: options?.signal });
+      await execFileAsync('npm', ['run', 'typecheck'], {
+        ...(options?.cwd ? { cwd: options.cwd } : {}),
+        signal: options?.signal,
+      });
       return { ok: true, diagnostics: [] };
     } catch (error) {
       const stderr = error instanceof Error && 'stderr' in error ? String(error.stderr) : String(error);
@@ -42,13 +45,17 @@ export function createTypeScriptToolAdapter(): TypeScriptToolAdapter {
 
   const execute = async (
     request: UnifiedToolRequest,
-    options?: ToolExecutionOptions,
+    options: ToolExecutionOptions,
   ): Promise<unknown> => {
+    const runtimeOptions = {
+      cwd: options.executionContext.workspaceRoot,
+      ...(options.signal ? { signal: options.signal } : {}),
+    };
     switch (request.toolName) {
       case 'typescript_check':
-        return tool.check(options);
+        return tool.check(runtimeOptions);
       case 'typescript_diagnostics':
-        return tool.diagnostics(options);
+        return tool.diagnostics(runtimeOptions);
       default:
         throw new Error(`Unsupported typescript tool: ${request.toolName}`);
     }

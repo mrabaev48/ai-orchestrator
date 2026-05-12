@@ -13,9 +13,10 @@ export function createDiffToolAdapter(gitTool: GitTool): DiffToolAdapter {
   return {
     name: 'diff',
     canHandle: (toolName) => toolName === 'diff_workspace',
-    execute: async (request: UnifiedToolRequest, options?: ToolExecutionOptions): Promise<string> => {
+    execute: async (request: UnifiedToolRequest, options: ToolExecutionOptions): Promise<string> => {
       const isStaged = typeof request.input.staged === 'boolean' ? request.input.staged : false;
       return gitTool.diff({
+        cwd: options.executionContext.workspaceRoot,
         staged: isStaged,
         ...(options?.signal ? { signal: options.signal } : {}),
       });

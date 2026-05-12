@@ -46,6 +46,7 @@ function makeContext(workspaceRoot: string): RoleExecutionContext {
       permissionScope: 'test_execution',
       workspaceRoot,
       evidenceSource: 'runtime_events',
+      packageManager: 'npm',
       qualityGateMode: 'tooling',
     },
     logger: createLogger(makeConfig(), { sink: () => {} }),
@@ -95,9 +96,14 @@ async function runQualityStagesWithFixture(workspaceRoot: string): Promise<RoleO
       toolName: 'testing_run',
       input: {
         command: 'npm',
-        args: ['--prefix', workspaceRoot, 'run', stage],
-        cwd: workspaceRoot,
+        args: ['run', stage],
         timeoutMs: 30_000,
+      },
+    }, {
+      executionContext: {
+        workspaceRoot,
+        policy: 'quality_gate',
+        permissionScope: 'test_execution',
       },
     });
     const output = toolResult.ok

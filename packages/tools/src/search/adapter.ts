@@ -21,18 +21,18 @@ export function createSearchToolAdapter(policy: ToolPolicyAdapter): SearchToolAd
   return {
     name: 'search',
     canHandle: (toolName) => toolName === 'search_repo',
-    execute: async (request: UnifiedToolRequest, options?: ToolExecutionOptions): Promise<string[]> => {
+    execute: async (request: UnifiedToolRequest, options: ToolExecutionOptions): Promise<string[]> => {
       const pattern = request.input.pattern;
       if (typeof pattern !== 'string' || pattern.length === 0) {
         throw new Error('Field pattern must be a non-empty string');
       }
-      const cwd = typeof request.input.cwd === 'string' && request.input.cwd.length > 0
-        ? request.input.cwd
-        : process.cwd();
+      const workspaceRoot = policy.assertWorkspaceAllowed(options.executionContext.workspaceRoot);
+      const cwd = resolveSearchRoot(request.input.cwd, workspaceRoot, policy);
 
-      const command = policy.assertCommandAllowed('rg');
+      const command = policy.assertCommandAllowed('rg', ['--line-number', pattern, cwd]);
       try {
         const { stdout } = await execFileAsync(command, ['--line-number', pattern, cwd], {
+          cwd: workspaceRoot,
           signal: options?.signal,
         });
         return stdout.split('\n').filter(Boolean);
@@ -49,6 +49,21 @@ export function createSearchToolAdapter(policy: ToolPolicyAdapter): SearchToolAd
       }
     },
   };
+}
+
+function resolveSearchRoot(
+  input: unknown,
+  workspaceRoot: string,
+  policy: ToolPolicyAdapter,
+): string {
+  if (typeof input !== 'string' || input.trim().length === 0) {
+    return workspaceRoot;
+  }
+
+  const resolved = path.isAbsolute(input)
+    ? path.resolve(input)
+    : path.resolve(workspaceRoot, input);
+  return policy.assertWorkspaceAllowed(resolved);
 }
 
 function isNoMatchError(error: unknown): error is { code: 1; stdout?: string } {

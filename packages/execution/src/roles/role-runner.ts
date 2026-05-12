@@ -390,7 +390,7 @@ export class RoleRunner {
     const startedAt = Date.now();
     try {
       const output = await runWithTimeout(
-        async (signal) => this.executeTool(request, signal),
+        async (signal) => this.executeTool(request, context, signal),
         this.input.config.llm.timeoutMs,
         `Tool ${request.toolName} timed out at step ${step}`,
         withParentSignal(context.abortSignal),
@@ -400,7 +400,10 @@ export class RoleRunner {
         ...(context.taskId ? { taskId: context.taskId } : {}),
         role: roleName,
         tool: request.toolName,
-        input: request.input,
+        input: {
+          ...request.input,
+          workspaceRoot: context.toolExecution.workspaceRoot,
+        },
         output,
         status: 'succeeded',
         durationMs: Date.now() - startedAt,
@@ -443,7 +446,10 @@ export class RoleRunner {
         ...(context.taskId ? { taskId: context.taskId } : {}),
         role: roleName,
         tool: request.toolName,
-        input: request.input,
+        input: {
+          ...request.input,
+          workspaceRoot: context.toolExecution.workspaceRoot,
+        },
         output: message,
         status,
         durationMs: Date.now() - startedAt,
@@ -481,18 +487,29 @@ export class RoleRunner {
     }
   }
 
-  private async executeTool(request: ToolCallRequest, signal?: AbortSignal): Promise<unknown> {
+  private async executeTool(
+    request: ToolCallRequest,
+    context: RoleExecutionContext,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     await this.input.leaseGuard?.requireValid();
     const result = await this.tools.execute(
       {
         toolName: request.toolName,
         input: request.input,
       },
-      withSignal(signal),
+      {
+        ...withSignal(signal),
+        executionContext: {
+          workspaceRoot: context.toolExecution.workspaceRoot,
+          policy: context.toolExecution.policy,
+          permissionScope: context.toolExecution.permissionScope,
+        },
+      },
     );
 
     if (result.ok) {
-      return result;
+      return result.output;
     }
 
     throw new WorkflowPolicyError(result.error.message, {

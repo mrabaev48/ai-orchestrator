@@ -2,6 +2,7 @@ import {
   ToolExecutionContractError,
   type ToolDeterminismMetadata,
   type ToolEvidenceStore,
+  type ToolExecutionOptions,
   type UnifiedToolAdapter,
   type UnifiedToolRequest,
   type UnifiedToolResult,
@@ -23,7 +24,12 @@ import { withToolTimeout } from './runtime/with-timeout.js';
 import { validateToolInput, validateToolOutput } from './contracts/input-output-schemas.js';
 import { normalizeToolError } from './errors/tool-error-envelope.js';
 
-export type { ToolExecutionRecord, ToolAdapterName } from './contracts.js';
+export type {
+  ToolExecutionOptions,
+  ToolExecutionRecord,
+  ToolExecutionWorkspaceContext,
+  ToolAdapterName,
+} from './contracts.js';
 export type { FileSystemTool, GitTool, TypeScriptTool };
 export type { SafeWriteMode } from './policy/adapter.js';
 export { ToolExecutionContractError } from './contracts.js';
@@ -32,7 +38,7 @@ export interface ToolSet {
   fileSystem: FileSystemTool;
   git: GitTool;
   typeScript: TypeScriptTool;
-  execute: (request: UnifiedToolRequest, options?: { signal?: AbortSignal }) => Promise<UnifiedToolResult>;
+  execute: (request: UnifiedToolRequest, options: ToolExecutionOptions) => Promise<UnifiedToolResult>;
   evidence: ToolEvidenceStore;
 }
 
@@ -106,9 +112,10 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
 
   const execute = async (
     request: UnifiedToolRequest,
-    options?: { signal?: AbortSignal },
+    options?: ToolExecutionOptions,
   ): Promise<UnifiedToolResult> => {
     validateToolInput(request.toolName, request.input);
+    const executionOptions = requireExecutionOptions(policyAdapter, options);
     const adapter = adapters.find((candidate) => candidate.canHandle(request.toolName));
     if (!adapter) {
       throw new ToolExecutionContractError({
@@ -129,10 +136,10 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
 
     try {
       const result = await withToolTimeout({
-        execute: async (signal) => adapter.execute(request, { ...options, signal }),
+        execute: async (signal) => adapter.execute(request, { ...executionOptions, signal }),
         timeoutMs,
         toolName: request.toolName,
-        ...(options?.signal ? { parentSignal: options.signal } : {}),
+        ...(executionOptions.signal ? { parentSignal: executionOptions.signal } : {}),
       });
       validateToolOutput(request.toolName, result);
       evidenceAdapter.store.add({
@@ -141,6 +148,8 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
         success: true,
         durationMs: Date.now() - start,
         createdAt: new Date().toISOString(),
+        workspaceRoot: executionOptions.executionContext.workspaceRoot,
+        ...extractCommandMetadata(request),
       });
       return { ok: true, toolName: request.toolName, output: result, determinism };
     } catch (error) {
@@ -151,6 +160,8 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
         success: false,
         durationMs: Date.now() - start,
         createdAt: new Date().toISOString(),
+        workspaceRoot: executionOptions.executionContext.workspaceRoot,
+        ...extractCommandMetadata(request),
         error: envelope.message,
       });
       return { ok: false, toolName: request.toolName, error: envelope, determinism };
@@ -163,6 +174,48 @@ export function createLocalToolSet(input: CreateLocalToolSetInput): ToolSet {
     typeScript: typeScriptAdapter.tool,
     execute,
     evidence: evidenceAdapter.store,
+  };
+}
+
+function requireExecutionOptions(
+  policyAdapter: ReturnType<typeof createToolPolicyAdapter>,
+  options: ToolExecutionOptions | undefined,
+): ToolExecutionOptions {
+  if (
+    !options ||
+    typeof options.executionContext.workspaceRoot !== 'string' ||
+    options.executionContext.workspaceRoot.trim().length === 0
+  ) {
+    throw new ToolExecutionContractError({
+      category: 'policy',
+      retriable: false,
+      code: 'TOOL_WORKSPACE_REQUIRED',
+      message: 'Tool execution requires an explicit workspaceRoot',
+      details: { reason: 'missing_workspace_root' },
+    });
+  }
+
+  const workspaceRoot = options.executionContext.workspaceRoot;
+  return {
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.idempotency ? { idempotency: options.idempotency } : {}),
+    executionContext: {
+      ...options.executionContext,
+      workspaceRoot: policyAdapter.assertWorkspaceAllowed(workspaceRoot),
+    },
+  };
+}
+
+function extractCommandMetadata(
+  request: UnifiedToolRequest,
+): { command?: string; args?: string[] } {
+  const command = request.input.command;
+  const args = request.input.args;
+  return {
+    ...(typeof command === 'string' ? { command } : {}),
+    ...(Array.isArray(args) && args.every((entry) => typeof entry === 'string')
+      ? { args: [...args] }
+      : {}),
   };
 }
 

@@ -37,6 +37,7 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   assert.equal(config.tools.allowedShellCommands.includes('node'), true);
   assert.equal(config.tools.writeMode, 'workspace-write');
   assert.equal(config.tools.maxModifiedFiles, 200);
+  assert.equal(config.tools.packageManager, 'pnpm');
   assert.equal(config.tools.persistToolEvidence, true);
 });
 
@@ -130,6 +131,17 @@ test('loadRuntimeConfig supports quality gate mode configuration', () => {
   });
 
   assert.equal(config.workflow.qualityGateMode, 'synthetic');
+});
+
+test('loadRuntimeConfig supports package manager configuration for tooling', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      TOOL_PACKAGE_MANAGER: 'npm',
+    },
+  });
+
+  assert.equal(config.tools.packageManager, 'npm');
 });
 
 test('loadRuntimeConfig supports role provider mode configuration', () => {

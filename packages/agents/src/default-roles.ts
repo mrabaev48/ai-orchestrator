@@ -808,13 +808,14 @@ export class TesterRole implements AgentRole<{ task: BacklogTask; result: CodeEx
 
     if (observations.length < QUALITY_GATE_STAGES.length) {
       const stage = QUALITY_GATE_STAGES[observations.length];
+      const packageManager = context.toolExecution.packageManager ?? 'pnpm';
       return {
         type: 'tool_request',
         request: {
           toolName: 'testing_run',
           rationale: `Execute ${stage} quality stage`,
           input: {
-            command: 'npm',
+            command: packageManager,
             args: ['run', stage],
             timeoutMs: QUALITY_STAGE_TIMEOUT_MS,
           },

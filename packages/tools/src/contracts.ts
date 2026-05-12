@@ -16,7 +16,14 @@ export interface ToolIdempotencyMetadata {
   isIdempotent: boolean;
 }
 
+export interface ToolExecutionWorkspaceContext {
+  workspaceRoot: string;
+  policy?: string;
+  permissionScope?: string;
+}
+
 export interface ToolExecutionOptions {
+  executionContext: ToolExecutionWorkspaceContext;
   signal?: AbortSignal;
   idempotency?: ToolIdempotencyMetadata;
 }
@@ -60,7 +67,7 @@ export type UnifiedToolResult = UnifiedToolSuccessResult | UnifiedToolErrorResul
 export interface UnifiedToolAdapter {
   readonly name: ToolAdapterName;
   canHandle: (toolName: string) => boolean;
-  execute: (request: UnifiedToolRequest, options?: ToolExecutionOptions) => Promise<unknown>;
+  execute: (request: UnifiedToolRequest, options: ToolExecutionOptions) => Promise<unknown>;
 }
 
 export interface ToolExecutionRecord {
@@ -69,6 +76,9 @@ export interface ToolExecutionRecord {
   success: boolean;
   durationMs: number;
   createdAt: string;
+  workspaceRoot: string;
+  command?: string;
+  args?: string[];
   error?: string;
 }
 
