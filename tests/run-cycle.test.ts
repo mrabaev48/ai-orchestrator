@@ -15,7 +15,14 @@ import {
   createEmptyProjectState,
   type CodeExecutionOutput,
 } from '@ai-orchestrator/core';
-import { Orchestrator, type ExecutionLeaseAuthority, type ExecutionLeaseHandle } from '@ai-orchestrator/execution';
+import {
+  GitLifecycleCoordinator,
+  Orchestrator,
+  PolicyDecisionRecorder,
+  runWithTimeout,
+  type ExecutionLeaseAuthority,
+  type ExecutionLeaseHandle,
+} from '@ai-orchestrator/execution';
 import { SchemaValidationError, WorkflowPolicyError } from '@ai-orchestrator/shared';
 import { InMemoryObservabilityStore, InMemoryStateStore } from '@ai-orchestrator/state';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
@@ -147,6 +154,32 @@ function makeLeaseHandle(overrides: Partial<ExecutionLeaseHandle> = {}): Executi
   };
 }
 
+function makeGitLifecycleTestHarness(input: {
+  state?: ReturnType<typeof makeState>;
+  config?: RuntimeConfig;
+  workspaceHasGitChanges: boolean;
+  currentGitBranch?: string;
+  createCommit?: () => Promise<{ ok: true; commitSha: string } | { ok: false }>;
+  pushBranch?: () => Promise<boolean>;
+  createPullRequestDraft?: () => Promise<boolean>;
+}) {
+  const state = input.state ?? makeState();
+  const store = new InMemoryStateStore(state);
+  const coordinator = new GitLifecycleCoordinator({
+    stateStore: store,
+    config: input.config ?? makeRuntimeConfig(),
+    policyDecisionRecorder: new PolicyDecisionRecorder(store),
+    executors: {
+      workspaceHasGitChanges: async () => input.workspaceHasGitChanges,
+      currentGitBranch: async () => input.currentGitBranch ?? 'task-1-run-test',
+      createCommit: input.createCommit,
+      pushBranch: input.pushBranch,
+      createPullRequestDraft: input.createPullRequestDraft,
+    },
+  });
+  return { coordinator, state, store };
+}
+
 test('runCycle happy path completes task and records summary artifact', async () => {
   const store = new InMemoryStateStore(makeState());
   const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
@@ -233,21 +266,22 @@ test('runCycle persists failing quality stage diagnostics and updates repo healt
 });
 
 test('runCycle requests approval for risky git lifecycle actions when approval gate is enabled', async () => {
-  const store = new InMemoryStateStore(makeState());
-  const logger = createLogger(makeApprovalRuntimeConfig(), { sink: () => {} });
-  const orchestrator = new Orchestrator(store, makeRegistry(), makeApprovalRuntimeConfig(), logger);
-  const internals = orchestrator as unknown as {
-    workspaceHasGitChanges: () => Promise<boolean>;
-    createCommit: () => Promise<{ ok: true; commitSha: string }>;
-  };
-  internals.workspaceHasGitChanges = async () => true;
-  internals.createCommit = async () => ({ ok: true, commitSha: 'abc123' });
+  const { coordinator, state } = makeGitLifecycleTestHarness({
+    config: makeApprovalRuntimeConfig(),
+    workspaceHasGitChanges: true,
+    createCommit: async () => ({ ok: true, commitSha: 'abc123' }),
+    pushBranch: async () => true,
+  });
 
-  const result = await orchestrator.runCycle();
-  const state = await store.load();
+  const result = await coordinator.complete({
+    state,
+    runId: 'run-1',
+    taskId: 'task-1',
+    taskTitle: state.backlog.tasks['task-1']?.title ?? 'task',
+    workspaceRoot: process.cwd(),
+  });
 
-  assert.equal(result.status, 'blocked');
-  assert.equal(result.stopReason, 'approval_pending');
+  assert.equal(result, 'approval_pending');
   assert.equal(state.approvals.length > 0, true);
   assert.equal(state.approvals[0]?.requestedAction, 'git_push');
   assert.equal(state.approvals[0]?.status, 'pending');
@@ -256,22 +290,20 @@ test('runCycle requests approval for risky git lifecycle actions when approval g
 
 
 test('runCycle persists policy decisions with risk levels from classification matrix for git side effects', async () => {
-  const store = new InMemoryStateStore(makeState());
-  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
-  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
-  const internals = orchestrator as unknown as {
-    workspaceHasGitChanges: () => Promise<boolean>;
-    createCommit: () => Promise<{ ok: true; commitSha: string }>;
-    pushBranch: () => Promise<boolean>;
-    createPullRequestDraft: () => Promise<boolean>;
-  };
-  internals.workspaceHasGitChanges = async () => true;
-  internals.createCommit = async () => ({ ok: true, commitSha: 'abc123' });
-  internals.pushBranch = async () => true;
-  internals.createPullRequestDraft = async () => true;
+  const { coordinator, state } = makeGitLifecycleTestHarness({
+    workspaceHasGitChanges: true,
+    createCommit: async () => ({ ok: true, commitSha: 'abc123' }),
+    pushBranch: async () => true,
+    createPullRequestDraft: async () => true,
+  });
 
-  await orchestrator.runCycle();
-  const state = await store.load();
+  await coordinator.complete({
+    state,
+    runId: 'run-1',
+    taskId: 'task-1',
+    taskTitle: state.backlog.tasks['task-1']?.title ?? 'task',
+    workspaceRoot: process.cwd(),
+  });
 
   const expectedActions = ['git_commit', 'git_push', 'pr_draft'] as const;
   for (const actionType of expectedActions) {
@@ -305,33 +337,23 @@ test('runCycle skips git push side effect when dedup registry already has succee
     expiresAt: '2099-01-01T00:00:00.000Z',
   };
 
-  const store = new InMemoryStateStore(state);
-  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
-  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
-  const internals = orchestrator as unknown as {
-    recordGitLifecycleCompletionArtifacts: (
-      state: ReturnType<typeof createEmptyProjectState>,
-      input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
-    ) => Promise<'ok' | 'approval_pending'>;
-    workspaceHasGitChanges: () => Promise<boolean>;
-    currentGitBranch: () => Promise<string>;
-    createCommit: () => Promise<{ ok: true; commitSha: string }>;
-    pushBranch: () => Promise<boolean>;
-  };
-  internals.workspaceHasGitChanges = async () => true;
-  internals.currentGitBranch = async () => branchName;
-  internals.createCommit = async () => ({ ok: true, commitSha });
   let pushCalls = 0;
-  internals.pushBranch = async () => {
-    pushCalls += 1;
-    return true;
-  };
+  const { coordinator, store } = makeGitLifecycleTestHarness({
+    state,
+    workspaceHasGitChanges: true,
+    currentGitBranch: branchName,
+    createCommit: async () => ({ ok: true, commitSha }),
+    pushBranch: async () => {
+      pushCalls += 1;
+      return true;
+    },
+  });
 
-  const resultStatus = await internals.recordGitLifecycleCompletionArtifacts(state, {
+  const resultStatus = await coordinator.complete({
+    state,
     runId,
     taskId: 'task-1',
     taskTitle: state.backlog.tasks['task-1']?.title ?? 'task',
-    branchName,
     workspaceRoot: process.cwd(),
   });
   const loaded = await store.load();
@@ -353,7 +375,8 @@ test('runCycle skips PR draft side effect when dedup registry already has succee
   const runId = '11111111-1111-1111-1111-111111111111';
   const branchName = 'task-1-run-test';
   const commitSha = 'abc123';
-  const prTitle = '[task-1] Implement runtime block';
+  const taskTitle = state.backlog.tasks['task-1']?.title ?? 'task';
+  const prTitle = `[task-1] ${taskTitle}`;
   const prDedupKey = buildIdempotencyKey({
     tenantId: state.orgId,
     projectId: state.projectId,
@@ -373,35 +396,24 @@ test('runCycle skips PR draft side effect when dedup registry already has succee
     expiresAt: '2099-01-01T00:00:00.000Z',
   };
 
-  const store = new InMemoryStateStore(state);
-  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
-  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
-  const internals = orchestrator as unknown as {
-    recordGitLifecycleCompletionArtifacts: (
-      state: ReturnType<typeof createEmptyProjectState>,
-      input: { runId: string; taskId: string; taskTitle: string; branchName?: string; workspaceRoot: string },
-    ) => Promise<'ok' | 'approval_pending'>;
-    workspaceHasGitChanges: () => Promise<boolean>;
-    currentGitBranch: () => Promise<string>;
-    createCommit: () => Promise<{ ok: true; commitSha: string }>;
-    pushBranch: () => Promise<boolean>;
-    createPullRequestDraft: () => Promise<boolean>;
-  };
-  internals.workspaceHasGitChanges = async () => true;
-  internals.currentGitBranch = async () => branchName;
-  internals.createCommit = async () => ({ ok: true, commitSha });
-  internals.pushBranch = async () => true;
   let prCalls = 0;
-  internals.createPullRequestDraft = async () => {
-    prCalls += 1;
-    return true;
-  };
+  const { coordinator, store } = makeGitLifecycleTestHarness({
+    state,
+    workspaceHasGitChanges: true,
+    currentGitBranch: branchName,
+    createCommit: async () => ({ ok: true, commitSha }),
+    pushBranch: async () => true,
+    createPullRequestDraft: async () => {
+      prCalls += 1;
+      return true;
+    },
+  });
 
-  const resultStatus = await internals.recordGitLifecycleCompletionArtifacts(state, {
+  const resultStatus = await coordinator.complete({
+    state,
     runId,
     taskId: 'task-1',
-    taskTitle: state.backlog.tasks['task-1']?.title ?? 'task',
-    branchName,
+    taskTitle,
     workspaceRoot: process.cwd(),
   });
   const loaded = await store.load();
@@ -566,7 +578,6 @@ test('runCycle returns deterministic idle reason when global run lock is unavail
   assert.equal(metricRecord?.value, 1);
   assert.equal(metricRecord?.tags.lock_resource, 'global-run-cycle');
   assert.equal(typeof metricRecord?.tags.runId, 'string');
-  assert.equal(store.events.some((event) => event.eventType === 'METRIC_RECORDED'), false);
 });
 
 test('runSingleTask executes the requested task when executable', async () => {
@@ -1211,15 +1222,13 @@ test('runCycle enforces token budget before executing role', async () => {
 });
 
 test('runWithTimeout surfaces STEP_TIMEOUT details', async () => {
-  const store = new InMemoryStateStore(makeState());
-  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
-  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
-  const internals = orchestrator as unknown as {
-    runWithTimeout: <T>(execute: (signal: AbortSignal) => Promise<T>, timeoutMs: number, timeoutMessage: string) => Promise<T>;
-  };
-
   await assert.rejects(
-    async () => internals.runWithTimeout(async () => new Promise((resolve) => { setTimeout(() => { resolve('ok'); }, 50); }), 10, 'timeout expected'),
+    async () =>
+      runWithTimeout(
+        async () => new Promise((resolve) => { setTimeout(() => { resolve('ok'); }, 50); }),
+        10,
+        'timeout expected',
+      ),
     (error: unknown) => {
       assert.equal(error instanceof WorkflowPolicyError, true);
       const details = (error as WorkflowPolicyError).details as Record<string, unknown>;
@@ -1232,17 +1241,11 @@ test('runWithTimeout surfaces STEP_TIMEOUT details', async () => {
 });
 
 test('runWithTimeout surfaces STEP_CANCELLED details for parent cancellation', async () => {
-  const store = new InMemoryStateStore(makeState());
-  const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
-  const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger);
-  const internals = orchestrator as unknown as {
-    runWithTimeout: <T>(execute: (signal: AbortSignal) => Promise<T>, timeoutMs: number, timeoutMessage: string, options?: { parentSignal?: AbortSignal }) => Promise<T>;
-  };
   const controller = new AbortController();
   controller.abort(new Error('stop'));
 
   await assert.rejects(
-    async () => internals.runWithTimeout(async () => 'ok', 20, 'cancel expected', { parentSignal: controller.signal }),
+    async () => runWithTimeout(async () => 'ok', 20, 'cancel expected', { parentSignal: controller.signal }),
     (error: unknown) => {
       assert.equal(error instanceof WorkflowPolicyError, true);
       const details = (error as WorkflowPolicyError).details as Record<string, unknown>;

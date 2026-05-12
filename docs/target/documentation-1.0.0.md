@@ -165,10 +165,10 @@ Execution-слой включает:
 
 ### 3.2.0 Correlation IDs standardization (1.46.0)
 
-Добавлена унификация correlation ID для доменных telemetry/event потоков:
+Добавлена унификация correlation ID для доменных event потоков и typed observability telemetry:
 - `DomainEvent` теперь поддерживает `correlationId` как first-class поле;
 - `makeEvent(...)` автоматически наследует `correlationId` из `runId`, если явный `correlationId` не задан;
-- execution telemetry (`METRIC_RECORDED`) прикрепляет `correlationId` в event-контекст и в metric tags для корректной склейки run/task/step/tool сигналов в observability-пайплайне.
+- execution telemetry прикрепляет `correlationId` к typed metric/span records для корректной склейки run/task/step/tool сигналов в observability-пайплайне.
 
 Изменение аддитивное: существующие вызовы `makeEvent` без `correlationId` сохраняют совместимость и получают детерминированный fallback на `runId`.
 

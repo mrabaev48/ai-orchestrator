@@ -213,9 +213,6 @@ test('dashboard api query routes enforce HTTP contracts and validation', async (
     const metricsResponse = await request(server)
       .get('/api/audit/metrics')
       .set('x-api-key', 'test-key');
-    const metricEventsResponse = await request(server)
-      .get('/api/events?eventType=METRIC_RECORDED')
-      .set('x-api-key', 'test-key');
     const invalidEventResponse = await request(server)
       .get('/api/events?eventType=UNKNOWN_EVENT')
       .set('x-api-key', 'test-key');
@@ -224,7 +221,6 @@ test('dashboard api query routes enforce HTTP contracts and validation', async (
     const backlogExportBody = backlogExportResponse.body as { format?: unknown; content?: unknown };
     const reviewBody = reviewResponse.body as { artifactId?: unknown; verdict?: unknown };
     const metricsBody = metricsResponse.body as { items?: { name?: unknown }[] };
-    const metricEventsBody = metricEventsResponse.body as { items?: { type?: unknown }[] };
 
     assert.equal(stateResponse.status, 200);
     assert.equal(stateBody.projectId, 'ai-orchestrator');
@@ -236,8 +232,6 @@ test('dashboard api query routes enforce HTTP contracts and validation', async (
     assert.equal(reviewBody.verdict, 'ready');
     assert.equal(metricsResponse.status, 200);
     assert.equal(metricsBody.items?.[0]?.name, 'dashboard_http_route_total');
-    assert.equal(metricEventsResponse.status, 200);
-    assert.equal(metricEventsBody.items?.length, 0);
     assert.equal(invalidEventResponse.status, 400);
   } finally {
     await app.close();

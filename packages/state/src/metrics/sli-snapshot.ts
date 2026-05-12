@@ -27,11 +27,9 @@ export function buildSliSnapshotFromEvents(
     return payload.code === 'STEP_CANCELLED';
   }).length;
 
-  const latencies = telemetrySpans.length > 0
-    ? telemetrySpans
-      .filter((span) => span.spanName === 'task_run')
-      .map((span) => span.durationMs)
-    : legacyTaskDurationLatencies(events);
+  const latencies = telemetrySpans
+    .filter((span) => span.spanName === 'task_run')
+    .map((span) => span.durationMs);
 
   const denominator = total === 0 ? 1 : total;
   return {
@@ -41,17 +39,4 @@ export function buildSliSnapshotFromEvents(
     p95LatencyMs: percentile95(latencies),
     sampleSize: total,
   };
-}
-
-function legacyTaskDurationLatencies(events: readonly DomainEvent[]): number[] {
-  return events
-    .filter((event) => event.eventType === 'METRIC_RECORDED')
-    .map((event) => {
-      const payload = event.payload as { name?: string; value?: number };
-      if (payload.name !== 'span_task_duration_ms' || typeof payload.value !== 'number') {
-        return null;
-      }
-      return payload.value;
-    })
-    .filter((value): value is number => value !== null);
 }

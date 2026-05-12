@@ -24,7 +24,6 @@ export const DOMAIN_EVENT_TYPES = [
   'TASK_COMPLETED',
   'TASK_BLOCKED',
   'STATE_COMMITTED',
-  'METRIC_RECORDED',
 ] as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];

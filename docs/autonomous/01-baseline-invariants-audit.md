@@ -50,7 +50,7 @@ We reviewed implementation entrypoints and evidence/policy/state surfaces, then 
 
 ### Present
 
-- Structured events and metrics exist (`METRIC_RECORDED`, run/task metadata in logger context).
+- Structured domain events, typed telemetry records, and run/task metadata in logger context exist.
 - Runtime includes lock-contention telemetry and run/task identifiers.
 
 ### Gaps
