@@ -1,11 +1,18 @@
+import { createHash } from 'node:crypto';
+
+export const POSTGRES_SCHEMA_MIGRATIONS_TABLE = 'schema_migrations';
+
+export const POSTGRES_REQUIRED_SCHEMA_VERSION = 7;
+
 export interface PostgresMigration {
-  id: number;
-  name: string;
-  statements: string[];
+  readonly id: number;
+  readonly name: string;
+  readonly checksum: string;
+  readonly statements: readonly string[];
 }
 
 export function createPostgresMigrations(table: (name: string) => string): PostgresMigration[] {
-  return [
+  return withMigrationChecksums([
     {
       id: 1,
       name: 'init',
@@ -209,5 +216,24 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
         `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS dead_lettered_at TIMESTAMPTZ`,
       ],
     },
-  ];
+  ]);
+}
+
+function withMigrationChecksums(
+  migrations: readonly Omit<PostgresMigration, 'checksum'>[],
+): PostgresMigration[] {
+  return migrations.map((migration) => ({
+    ...migration,
+    checksum: createMigrationChecksum(migration),
+  }));
+}
+
+function createMigrationChecksum(migration: Omit<PostgresMigration, 'checksum'>): string {
+  const payload = JSON.stringify({
+    id: migration.id,
+    name: migration.name,
+    statements: migration.statements,
+  });
+
+  return createHash('sha256').update(payload).digest('hex');
 }

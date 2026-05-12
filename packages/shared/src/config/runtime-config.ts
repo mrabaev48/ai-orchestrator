@@ -10,6 +10,7 @@ const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 const logFormatSchema = z.enum(['json']);
 const llmProviderSchema = z.enum(['openai', 'anthropic', 'mock']);
 const stateBackendSchema = z.enum(['memory', 'postgresql']);
+const postgresMigrationModeSchema = z.enum(['verify', 'auto']);
 const runLockProviderSchema = z.enum(['noop', 'postgresql', 'redis', 'etcd']);
 const workspaceManagerModeSchema = z.enum(['git-worktree', 'static']);
 const qualityGateModeSchema = z.enum(['tooling', 'synthetic']);
@@ -61,6 +62,7 @@ const runtimeConfigSchema = z.strictObject({
     backend: stateBackendSchema,
     postgresDsn: z.string().trim().min(1),
     postgresSchema: z.string().trim().min(1),
+    postgresMigrationMode: postgresMigrationModeSchema.optional(),
     snapshotOnBootstrap: z.boolean(),
     snapshotOnTaskCompletion: z.boolean(),
     snapshotOnMilestoneCompletion: z.boolean(),
@@ -118,6 +120,7 @@ const envSchema = z.object({
   STATE_BACKEND: stateBackendSchema.default('postgresql'),
   POSTGRES_DSN: z.string().trim().min(1).default('postgresql://localhost:5432/ai_orchestrator'),
   POSTGRES_SCHEMA: z.string().trim().min(1).default('public'),
+  STATE_POSTGRES_MIGRATION_MODE: postgresMigrationModeSchema.default('verify'),
   SNAPSHOT_ON_BOOTSTRAP: z.stringbool().default(true),
   SNAPSHOT_ON_TASK_COMPLETION: z.stringbool().default(true),
   SNAPSHOT_ON_MILESTONE_COMPLETION: z.stringbool().default(true),
@@ -207,6 +210,7 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       backend: env.data.STATE_BACKEND,
       postgresDsn: env.data.POSTGRES_DSN,
       postgresSchema: env.data.POSTGRES_SCHEMA,
+      postgresMigrationMode: env.data.STATE_POSTGRES_MIGRATION_MODE,
       snapshotOnBootstrap: env.data.SNAPSHOT_ON_BOOTSTRAP,
       snapshotOnTaskCompletion: env.data.SNAPSHOT_ON_TASK_COMPLETION,
       snapshotOnMilestoneCompletion: env.data.SNAPSHOT_ON_MILESTONE_COMPLETION,

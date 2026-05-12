@@ -1,6 +1,8 @@
 export * from './StateStore.js';
 export * from './in-memory/InMemoryStateStore.js';
 export * from './postgres/PostgresStateStore.js';
+export * from './postgres/PostgresMigrationRunner.js';
+export * from './postgres/migrations.js';
 
 export * from './metrics/sli-snapshot.js';
 

@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@ai-orchestrator/core": "workspace:*",
-    "@ai-orchestrator/shared": "workspace:*"
+    "@ai-orchestrator/shared": "workspace:*",
+    "pg": "^8.20.0"
   }
 }

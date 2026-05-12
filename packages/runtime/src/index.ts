@@ -22,6 +22,7 @@ import { ConfigError, type Logger, type RuntimeConfig } from '@ai-orchestrator/s
 import { createLlmClient, type LlmClient } from '@ai-orchestrator/llm';
 import {
   InMemoryStateStore,
+  PostgresMigrationRunner,
   PostgresStateStore,
   type StateStore,
 } from '@ai-orchestrator/state';
@@ -31,6 +32,12 @@ export interface RuntimeApplicationContext {
   stateStore: ApplicationStateStore;
   roleRegistry: ApplicationRoleRegistry;
   orchestrator: Orchestrator;
+}
+
+export interface RuntimeStateMigrationResult {
+  readonly requiredVersion: number;
+  readonly appliedVersion: number;
+  readonly appliedMigrationIds: readonly number[];
 }
 
 export function createRuntimeApplicationContext(input: {
@@ -134,5 +141,24 @@ function validateProductionRoleRuntimeConfig(config: RuntimeConfig): void {
 export function createStateStore(config: RuntimeConfig, initialState: ProjectState): StateStore {
   return config.state.backend === 'memory'
     ? new InMemoryStateStore(initialState)
-    : new PostgresStateStore(config.state.postgresDsn, initialState, config.state.postgresSchema);
+    : new PostgresStateStore(config.state.postgresDsn, initialState, {
+      schema: config.state.postgresSchema,
+      migrationMode: config.state.postgresMigrationMode ?? 'verify',
+    });
+}
+
+export async function migratePostgresState(config: RuntimeConfig): Promise<RuntimeStateMigrationResult> {
+  if (config.state.backend !== 'postgresql') {
+    throw new ConfigError('state-migrate requires STATE_BACKEND=postgresql');
+  }
+
+  const runner = await PostgresMigrationRunner.fromConnectionString(config.state.postgresDsn, {
+    schema: config.state.postgresSchema,
+  });
+  const result = await runner.applyPendingMigrations();
+  return {
+    requiredVersion: result.requiredVersion,
+    appliedVersion: result.appliedVersion,
+    appliedMigrationIds: result.appliedMigrations.map((migration) => migration.id),
+  };
 }
