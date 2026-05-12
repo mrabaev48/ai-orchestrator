@@ -16,6 +16,9 @@ const dashboardEnvSchema = z.object({
   DASHBOARD_API_JWT_ISSUER: z.string().trim().min(1).optional(),
   DASHBOARD_API_JWT_AUDIENCE: z.string().trim().min(1).optional(),
   DASHBOARD_API_ALLOWED_ORIGINS: z.string().optional(),
+  DASHBOARD_PROJECT_ID: z.string().trim().min(1).default('ai-orchestrator'),
+  DASHBOARD_PROJECT_NAME: z.string().trim().min(1).default('AI Orchestrator'),
+  DASHBOARD_PROJECT_SUMMARY: z.string().trim().min(1).default('MVP runtime state'),
 });
 
 export interface DashboardApiKeyRecord {
@@ -35,10 +38,17 @@ export interface DashboardApiCorsConfig {
   allowedOrigins: string[];
 }
 
+export interface DashboardProjectScopeConfig {
+  projectId: string;
+  projectName: string;
+  summary: string;
+}
+
 export interface DashboardApiConfig {
   host: string;
   port: number;
   runtime: RuntimeConfig;
+  project: DashboardProjectScopeConfig;
   security: DashboardApiSecurityConfig;
   cors: DashboardApiCorsConfig;
 }
@@ -66,6 +76,11 @@ export function loadDashboardRuntimeContext(options: {
       host: env.DASHBOARD_API_HOST,
       port: env.DASHBOARD_API_PORT,
       runtime,
+      project: {
+        projectId: env.DASHBOARD_PROJECT_ID,
+        projectName: env.DASHBOARD_PROJECT_NAME,
+        summary: env.DASHBOARD_PROJECT_SUMMARY,
+      },
       security,
       cors: {
         allowedOrigins: parseAllowedOrigins(env.DASHBOARD_API_ALLOWED_ORIGINS),

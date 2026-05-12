@@ -42,6 +42,11 @@ test('DashboardApiModule wires DashboardQueryService provider', async () => {
           format: 'json',
         },
       },
+      project: {
+        projectId: 'ai-orchestrator',
+        projectName: 'AI Orchestrator',
+        summary: 'MVP runtime state',
+      },
       security: {
         apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }],
       },

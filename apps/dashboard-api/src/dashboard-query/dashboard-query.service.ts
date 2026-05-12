@@ -5,20 +5,10 @@ import { STATE_STORE } from '../dashboard-api.tokens.js';
 import {
   ApprovalGateService,
   DashboardQueryService as ApplicationDashboardQueryService,
+  type TraceAuditQueryInput,
 } from '@ai-orchestrator/application';
 import type { DomainEventType } from '@ai-orchestrator/core';
 import { buildImmutableAuditLog, type StateStore } from '@ai-orchestrator/state';
-
-interface TraceAuditQueryInput {
-  limit?: number;
-  offset?: number;
-  runId?: string;
-  correlationId?: string;
-  taskId?: string;
-  role?: string;
-  toolName?: string;
-  status?: 'ok' | 'error';
-}
 
 @Injectable()
 export class DashboardReadApiService {
@@ -51,8 +41,11 @@ export class DashboardReadApiService {
     return await this.dashboardQueryService.getBacklog({ ...(orgId ? { orgId } : {}), ...(projectId ? { projectId } : {}) });
   }
 
-  async getBacklogExport() {
-    return await this.dashboardQueryService.getBacklogExport();
+  async getBacklogExport(orgId?: string, projectId?: string) {
+    return await this.dashboardQueryService.getBacklogExport({
+      ...(orgId ? { orgId } : {}),
+      ...(projectId ? { projectId } : {}),
+    });
   }
 
   async getEvents(limit?: number, offset?: number, eventType?: DomainEventType) {
