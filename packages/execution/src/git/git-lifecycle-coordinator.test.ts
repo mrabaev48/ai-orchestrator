@@ -4,8 +4,10 @@ import assert from 'node:assert/strict';
 import { createEmptyProjectState } from '@ai-orchestrator/core';
 import { InMemoryStateStore } from '@ai-orchestrator/state';
 import type { RuntimeConfig } from '@ai-orchestrator/shared';
+import { WorkflowPolicyError } from '@ai-orchestrator/shared';
 
 import { PolicyDecisionRecorder } from '../persistence/policy-decision-recorder.js';
+import type { ExecutionLeaseGuard } from '../leases/execution-lease-authority.js';
 import { GitLifecycleCoordinator } from './git-lifecycle-coordinator.js';
 
 function makeConfig(approvalGateMode: 'enabled' | 'disabled' = 'disabled'): RuntimeConfig {
@@ -49,6 +51,7 @@ function makeCoordinator(input: {
   createCommit?: () => Promise<{ ok: true; commitSha: string } | { ok: false }>;
   pushBranch?: () => Promise<boolean>;
   readCommitNameStatus?: () => Promise<string[]>;
+  leaseGuard?: ExecutionLeaseGuard;
 }) {
   const state = createEmptyProjectState({
     projectId: 'p1',
@@ -60,6 +63,7 @@ function makeCoordinator(input: {
     stateStore: store,
     config: makeConfig(input.approvalGateMode ?? 'disabled'),
     policyDecisionRecorder: new PolicyDecisionRecorder(store),
+    ...(input.leaseGuard ? { leaseGuard: input.leaseGuard } : {}),
     executors: {
       workspaceHasGitChanges: async () => input.workspaceHasGitChanges,
       currentGitBranch: async () => 'branch-1',
@@ -92,6 +96,42 @@ test('GitLifecycleCoordinator records skipped artifacts when workspace has no ch
     ),
     true,
   );
+});
+
+test('GitLifecycleCoordinator validates execution lease before commit side effect', async () => {
+  let commitCount = 0;
+  const { coordinator, state } = makeCoordinator({
+    workspaceHasGitChanges: true,
+    createCommit: async () => {
+      commitCount += 1;
+      return { ok: true, commitSha: 'commit-1' };
+    },
+    leaseGuard: {
+      requireValid: async () => {
+        throw new WorkflowPolicyError('Execution lease is no longer valid', {
+          details: { reason: 'stale_fencing_token' },
+        });
+      },
+    },
+  });
+
+  await assert.rejects(
+    async () =>
+      coordinator.complete({
+        state,
+        runId: 'run-1',
+        taskId: 'task-1',
+        taskTitle: 'Title',
+        workspaceRoot: process.cwd(),
+      }),
+    (error: unknown) =>
+      error instanceof WorkflowPolicyError
+      && error.details !== undefined
+      && typeof error.details === 'object'
+      && (error.details as Record<string, unknown>).reason === 'stale_fencing_token',
+  );
+
+  assert.equal(commitCount, 0);
 });
 
 test('GitLifecycleCoordinator marks approval pending before push', async () => {

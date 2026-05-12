@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 import {
   assertProjectState,
@@ -14,9 +15,6 @@ import type { StateStore } from '@ai-orchestrator/state';
 import { createLocalToolSet } from '@ai-orchestrator/tools';
 import { type Logger, type RuntimeConfig, WorkflowPolicyError } from '@ai-orchestrator/shared';
 
-import { createLockAuthority, type LockAuthority } from './lock-authority.js';
-import { createFencingTokenGuard, type FencingTokenGuard } from './locks/fencing-token-guard.js';
-import { createDistributedLockStore } from './locks/distributed-lock-store-factory.js';
 import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.js';
 import {
   createWorkspaceManager,
@@ -35,6 +33,13 @@ import { FailureHandler } from './failure/failure-handler.js';
 import { GitLifecycleCoordinator } from './git/git-lifecycle-coordinator.js';
 import { WorkspaceRunCoordinator } from './workspace/workspace-run-coordinator.js';
 import { TaskRunner } from './task/task-runner.js';
+import {
+  createExecutionLeaseAuthority,
+  type ExecutionLeaseAuthority,
+  type ExecutionLeaseGuard,
+  type ExecutionLeaseHandle,
+} from './leases/execution-lease-authority.js';
+import { createLeaseProtectedStateStore } from './leases/lease-protected-state-store.js';
 
 export type {
   RunCycleOptions,
@@ -43,10 +48,9 @@ export type {
 } from './run-cycle-types.js';
 
 export interface OrchestratorOverrides {
-  lockAuthority?: LockAuthority;
+  executionLeaseAuthority?: ExecutionLeaseAuthority;
   telemetry?: ExecutionTelemetry;
   workspaceManager?: WorkspaceManager;
-  fencingTokenGuard?: FencingTokenGuard;
 }
 
 export class Orchestrator {
@@ -54,8 +58,9 @@ export class Orchestrator {
   private readonly roleRegistry: RoleRegistry;
   private readonly config: RuntimeConfig;
   private readonly logger: Logger;
-  private readonly lockAuthority: LockAuthority;
-  private readonly fencingTokenGuard: FencingTokenGuard;
+  private readonly executionLeaseAuthority: ExecutionLeaseAuthority;
+  private readonly leaseContext = new AsyncLocalStorage<ExecutionLeaseHandle>();
+  private readonly leaseGuard: ExecutionLeaseGuard;
   private readonly telemetry: ExecutionTelemetry;
   private readonly taskRunner: TaskRunner;
   private readonly workspaceRunCoordinator: WorkspaceRunCoordinator;
@@ -72,13 +77,17 @@ export class Orchestrator {
     this.roleRegistry = roleRegistry;
     this.config = config;
     this.logger = logger;
-    this.lockAuthority = overrides?.lockAuthority ?? createLockAuthority(config);
-    this.fencingTokenGuard = overrides?.fencingTokenGuard ?? createFencingTokenGuard(
-      createDistributedLockStore(config),
-      logger,
-      { ttlMs: config.workflow.fencingTtlMs ?? 60_000 },
-    );
-    this.telemetry = overrides?.telemetry ?? new StateStoreExecutionTelemetry(stateStore, logger);
+    this.executionLeaseAuthority = overrides?.executionLeaseAuthority ?? createExecutionLeaseAuthority(config, logger);
+    this.leaseGuard = {
+      requireValid: async () => {
+        const lease = this.leaseContext.getStore();
+        if (lease) {
+          await lease.requireValid();
+        }
+      },
+    };
+    const guardedStateStore = createLeaseProtectedStateStore(stateStore, this.leaseGuard);
+    this.telemetry = overrides?.telemetry ?? new StateStoreExecutionTelemetry(guardedStateStore, logger);
     const workspaceManager = overrides?.workspaceManager
       ?? createWorkspaceManager({
         mode: config.workflow.workspaceManagerMode ?? 'git-worktree',
@@ -86,8 +95,8 @@ export class Orchestrator {
         branchTtlHours: config.workflow.workspaceBranchTtlHours ?? 24,
       });
 
-    const runStepRecorder = new RunStepRecorder(stateStore);
-    const policyDecisionRecorder = new PolicyDecisionRecorder(stateStore);
+    const runStepRecorder = new RunStepRecorder(guardedStateStore);
+    const policyDecisionRecorder = new PolicyDecisionRecorder(guardedStateStore);
     const defaultTools = createLocalToolSet({
       allowedWritePaths: config.tools.allowedWritePaths,
       allowedShellCommands: config.tools.allowedShellCommands,
@@ -98,31 +107,33 @@ export class Orchestrator {
         : {}),
     });
     this.roleRunner = new RoleRunner({
-      stateStore,
+      stateStore: guardedStateStore,
       config,
       telemetry: this.telemetry,
       runStepRecorder,
       costTracker: new RoleRunCostTracker(),
       tools: defaultTools,
+      leaseGuard: this.leaseGuard,
     });
     const failureHandler = new FailureHandler({
-      stateStore,
+      stateStore: guardedStateStore,
       config,
       runStepRecorder,
     });
     const gitLifecycleCoordinator = new GitLifecycleCoordinator({
-      stateStore,
+      stateStore: guardedStateStore,
       config,
       policyDecisionRecorder,
+      leaseGuard: this.leaseGuard,
     });
     this.workspaceRunCoordinator = new WorkspaceRunCoordinator({
-      stateStore,
+      stateStore: guardedStateStore,
       config,
       workspaceManager,
       gitLifecycleCoordinator,
     });
     this.taskRunner = new TaskRunner({
-      stateStore,
+      stateStore: guardedStateStore,
       roleRegistry,
       config,
       logger,
@@ -139,11 +150,15 @@ export class Orchestrator {
     this.roleRunner.resetRunCost();
     const runId = crypto.randomUUID();
     const state = await this.stateStore.load();
-    const lockHandle = await this.lockAuthority.acquireRunLock('global-run-cycle', {
-      tenantId: state.orgId,
-      projectId: state.projectId,
+    const executionLease = await this.executionLeaseAuthority.acquireRunLease({
+      resource: 'global-run-cycle',
+      ownerId: runId,
+      scope: {
+        tenantId: state.orgId,
+        projectId: state.projectId,
+      },
     });
-    if (!lockHandle) {
+    if (!executionLease) {
       await this.recordRunLockContention(runId, { lock_resource: 'global-run-cycle' });
       this.logger.info('Run cycle skipped because global run lock is unavailable', {
         event: 'cycle_idle_lock_unavailable',
@@ -159,65 +174,46 @@ export class Orchestrator {
         stopReason: 'run_lock_unavailable',
       };
     }
-    const fencingHandle = await this.fencingTokenGuard.acquire('global-run-cycle', runId, new Date().toISOString());
-    if (!fencingHandle) {
-      await lockHandle.release();
-      await this.recordRunLockContention(runId, {
-        lock_resource: 'global-run-cycle',
-        lock_phase: 'fencing',
-      });
-      this.logger.info('Run cycle skipped because fencing lock is unavailable', {
-        event: 'cycle_idle_fencing_unavailable',
-        runId,
-        data: { resource: 'global-run-cycle', delta: 1 },
-      });
-      return { runId, status: 'idle', stopReason: 'run_lock_unavailable' };
-    }
 
+    const leaseAbortController = this.createLeaseAbortController(options.abortSignal);
+    const heartbeat = this.startExecutionLeaseHeartbeat(executionLease, leaseAbortController, runId);
     try {
-      const fencingValidation = await fencingHandle.validate(new Date().toISOString());
-      if (!fencingValidation.valid) {
-        throw new WorkflowPolicyError('Fencing lock validation failed before cycle execution', {
-          details: {
+      return await this.leaseContext.run(executionLease, async () => {
+        await executionLease.requireValid();
+        assertProjectState(state);
+
+        const stop = shouldStopRun(state, this.config.workflow);
+        if (stop.stop) {
+          return {
+            runId: state.execution.activeRunId ?? crypto.randomUUID(),
+            status: 'idle',
+            ...(stop.reason ? { stopReason: stop.reason } : {}),
+          };
+        }
+
+        const task = options.forcedTaskId
+          ? this.selectForcedTask(state, options.forcedTaskId)
+          : await this.selectNextTask(state, runId);
+        if (!task) {
+          return {
             runId,
-            reason: fencingValidation.reason,
-            resource: 'global-run-cycle',
-            fencingToken: fencingHandle.lease.fencingToken,
-          },
-        });
-      }
-      assertProjectState(state);
+            status: 'idle',
+            stopReason: options.forcedTaskId ? 'forced_task_not_executable' : 'no_executable_task',
+          };
+        }
 
-      const stop = shouldStopRun(state, this.config.workflow);
-      if (stop.stop) {
-        return {
-          runId: state.execution.activeRunId ?? crypto.randomUUID(),
-          status: 'idle',
-          ...(stop.reason ? { stopReason: stop.reason } : {}),
-        };
-      }
-
-      const task = options.forcedTaskId
-        ? this.selectForcedTask(state, options.forcedTaskId)
-        : await this.selectNextTask(state, runId);
-      if (!task) {
-        return {
+        return await this.workspaceRunCoordinator.run({
+          state,
+          task,
           runId,
-          status: 'idle',
-          stopReason: options.forcedTaskId ? 'forced_task_not_executable' : 'no_executable_task',
-        };
-      }
-
-      return await this.workspaceRunCoordinator.run({
-        state,
-        task,
-        runId,
-        ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
-        execute: async (workspaceContext) => this.taskRunner.run(workspaceContext),
+          abortSignal: leaseAbortController.signal,
+          execute: async (workspaceContext) => this.taskRunner.run(workspaceContext),
+        });
       });
     } finally {
-      await fencingHandle.release();
-      await lockHandle.release();
+      await heartbeat.stop();
+      leaseAbortController.cleanup();
+      await this.releaseExecutionLease(executionLease, runId);
     }
   }
 
@@ -329,5 +325,98 @@ export class Orchestrator {
       runId,
       tags,
     });
+  }
+
+  private createLeaseAbortController(parentSignal?: AbortSignal): AbortController & { cleanup: () => void } {
+    const controller = new AbortController() as AbortController & { cleanup: () => void };
+    let cleanup = (): void => undefined;
+    if (parentSignal?.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (parentSignal) {
+      const onAbort = (): void => {
+        controller.abort(parentSignal.reason);
+      };
+      parentSignal.addEventListener('abort', onAbort, { once: true });
+      cleanup = () => {
+        parentSignal.removeEventListener('abort', onAbort);
+      };
+    }
+    controller.cleanup = cleanup;
+    return controller;
+  }
+
+  private startExecutionLeaseHeartbeat(
+    lease: ExecutionLeaseHandle,
+    abortController: AbortController,
+    runId: string,
+  ): { stop: () => Promise<void> } {
+    const ttlMs = this.config.workflow.fencingTtlMs ?? 60_000;
+    const intervalMs = Math.max(1, Math.floor(ttlMs / 2));
+    let inFlight: Promise<void> | null = null;
+    let isStopped = false;
+
+    const failLease = (error: unknown): void => {
+      const leaseError = error instanceof WorkflowPolicyError
+        ? error
+        : new WorkflowPolicyError('Execution lease renewal failed', {
+          cause: error,
+          details: {
+            runId,
+            resource: lease.resource,
+            fencingToken: lease.lease.fencingToken,
+          },
+          retrySuggested: true,
+        });
+      if (!abortController.signal.aborted) {
+        abortController.abort(leaseError);
+      }
+    };
+
+    const renew = async (): Promise<void> => {
+      if (isStopped) {
+        return;
+      }
+      const result = await lease.renew();
+      if (!result.renewed) {
+        failLease(new WorkflowPolicyError('Execution lease renewal failed', {
+          details: {
+            runId,
+            resource: lease.resource,
+            fencingToken: lease.lease.fencingToken,
+            reason: result.reason,
+          },
+          retrySuggested: true,
+        }));
+      }
+    };
+
+    const timer = setInterval(() => {
+      inFlight = renew().catch(failLease);
+    }, intervalMs);
+    timer.unref();
+
+    return {
+      stop: async () => {
+        isStopped = true;
+        clearInterval(timer);
+        await inFlight?.catch(() => undefined);
+      },
+    };
+  }
+
+  private async releaseExecutionLease(lease: ExecutionLeaseHandle, runId: string): Promise<void> {
+    try {
+      await lease.release();
+    } catch (error) {
+      this.logger.warn('Unable to release execution lease during run cleanup', {
+        event: 'execution_lease_release_failed',
+        runId,
+        data: {
+          resource: lease.resource,
+          fencingToken: lease.lease.fencingToken,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 }

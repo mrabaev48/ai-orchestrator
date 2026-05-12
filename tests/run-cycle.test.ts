@@ -10,12 +10,10 @@ import {
   TesterRole,
 } from '@ai-orchestrator/agents';
 import { buildIdempotencyKey, classifyExecutionPolicyActionRisk, createEmptyProjectState } from '@ai-orchestrator/core';
-import { Orchestrator } from '@ai-orchestrator/execution';
+import { Orchestrator, type ExecutionLeaseAuthority, type ExecutionLeaseHandle } from '@ai-orchestrator/execution';
 import { SchemaValidationError, WorkflowPolicyError } from '@ai-orchestrator/shared';
 import { InMemoryStateStore } from '@ai-orchestrator/state';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
-import type { LockAuthority } from '@ai-orchestrator/execution';
-import type { FencingTokenGuard } from '@ai-orchestrator/execution';
 import type {
   AgentRole,
   RoleExecutionContext,
@@ -113,6 +111,26 @@ function makeState(acceptanceCriteria: string[] = ['done']): ReturnType<typeof c
     featureIds: ['feature-1'],
   };
   return state;
+}
+
+function makeLeaseHandle(overrides: Partial<ExecutionLeaseHandle> = {}): ExecutionLeaseHandle {
+  const lease = {
+    resource: 'default-org:p1:global-run-cycle',
+    ownerId: 'run-1',
+    fencingToken: 1,
+    acquiredAtIso: '2026-01-01T00:00:00.000Z',
+    expiresAtIso: '2026-01-01T00:01:00.000Z',
+  };
+  return {
+    resource: lease.resource,
+    ownerId: lease.ownerId,
+    lease,
+    renew: async () => ({ renewed: true, lease }),
+    validate: async () => ({ valid: true, lease }),
+    requireValid: async () => {},
+    release: async () => {},
+    ...overrides,
+  };
 }
 
 test('runCycle happy path completes task and records summary artifact', async () => {
@@ -512,11 +530,11 @@ test('runCycle returns deterministic idle reason when global run lock is unavail
       records.push(JSON.parse(record) as Record<string, unknown>);
     },
   });
-  const lockAuthority: LockAuthority = {
-    acquireRunLock: async () => null,
+  const executionLeaseAuthority: ExecutionLeaseAuthority = {
+    acquireRunLease: async () => null,
   };
   const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
-    lockAuthority,
+    executionLeaseAuthority,
   });
 
   const result = await orchestrator.runCycle();
@@ -635,8 +653,8 @@ test('runCycle returns idle when distributed run lock is unavailable', async () 
   const store = new InMemoryStateStore(makeState());
   const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
   const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
-    lockAuthority: {
-      acquireRunLock: async () => null,
+    executionLeaseAuthority: {
+      acquireRunLease: async () => null,
     },
   });
 
@@ -645,12 +663,12 @@ test('runCycle returns idle when distributed run lock is unavailable', async () 
   assert.equal(result.stopReason, 'run_lock_unavailable');
 });
 
-test('runCycle returns idle when fencing lock is unavailable', async () => {
+test('runCycle returns idle when execution lease is unavailable', async () => {
   const store = new InMemoryStateStore(makeState());
   const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
-  const fencingTokenGuard: FencingTokenGuard = { acquire: async () => null };
+  const executionLeaseAuthority: ExecutionLeaseAuthority = { acquireRunLease: async () => null };
   const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
-    fencingTokenGuard,
+    executionLeaseAuthority,
   });
 
   const result = await orchestrator.runCycle();
@@ -658,31 +676,55 @@ test('runCycle returns idle when fencing lock is unavailable', async () => {
   assert.equal(result.stopReason, 'run_lock_unavailable');
 });
 
-test('runCycle fails when fencing validation fails before execution', async () => {
+test('runCycle fails when execution lease validation fails before execution', async () => {
   const store = new InMemoryStateStore(makeState());
   const logger = createLogger(makeRuntimeConfig(), { sink: () => {} });
-  const fencingTokenGuard: FencingTokenGuard = {
-    acquire: async () => ({
-      lease: {
-        resource: 'global-run-cycle',
-        ownerId: 'run-1',
-        fencingToken: 1,
-        acquiredAtIso: '2026-01-01T00:00:00.000Z',
-        expiresAtIso: '2026-01-01T00:01:00.000Z',
+  const executionLeaseAuthority: ExecutionLeaseAuthority = {
+    acquireRunLease: async () => makeLeaseHandle({
+      requireValid: async () => {
+        throw new WorkflowPolicyError('Execution lease is no longer valid', {
+          details: { reason: 'stale_fencing_token' },
+        });
       },
-      validate: async () => ({ valid: false, reason: 'stale_fencing_token' }),
-      release: async () => {},
     }),
   };
   const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
-    fencingTokenGuard,
+    executionLeaseAuthority,
   });
 
   await assert.rejects(
     async () => orchestrator.runCycle(),
     (error: unknown) => error instanceof WorkflowPolicyError
-      && error.message.includes('Fencing lock validation failed before cycle execution'),
+      && error.message.includes('Execution lease is no longer valid'),
   );
+});
+
+test('runCycle renews execution lease during long-running work', async () => {
+  const store = new InMemoryStateStore(makeState());
+  const config = makeRuntimeConfig();
+  config.workflow.fencingTtlMs = 2;
+  const logger = createLogger(config, { sink: () => {} });
+  let renewCount = 0;
+  const executionLeaseAuthority: ExecutionLeaseAuthority = {
+    acquireRunLease: async () => makeLeaseHandle({
+      renew: async () => {
+        renewCount += 1;
+        const lease = makeLeaseHandle().lease;
+        return { renewed: true, lease };
+      },
+      requireValid: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      },
+    }),
+  };
+  const orchestrator = new Orchestrator(store, makeRegistry(), config, logger, {
+    executionLeaseAuthority,
+  });
+
+  const result = await orchestrator.runCycle();
+
+  assert.equal(result.status, 'completed');
+  assert.equal(renewCount > 0, true);
 });
 
 test('runCycle rejects invalid coder output via role output schema registry', async () => {

@@ -75,6 +75,23 @@ class RedisDistributedLockStore implements DistributedLockStore {
     }
     return { acquired: true as const, lease };
   }
+  async renew(input: { resource: string; ownerId: string; fencingToken: number; nowIso: string; ttlMs: number }) {
+    const client = await this.loadClient();
+    const key = redisLeaseKey(input.resource);
+    const currentRaw = await client.get(key);
+    if (!currentRaw) return { renewed: false as const, reason: 'missing_lock' as const };
+    const cur = JSON.parse(currentRaw) as DistributedLockLease;
+    const validation = validateLease(cur, input);
+    if (!validation.valid) return { renewed: false as const, reason: validation.reason, lease: cur };
+    const renewedLease = renewLease(cur, input.nowIso, input.ttlMs);
+    const result = await client.eval(
+      'if redis.call("GET", KEYS[1]) == ARGV[1] then redis.call("SET", KEYS[1], ARGV[2], "PX", ARGV[3]); return 1 else return 0 end',
+      { keys: [key], arguments: [currentRaw, JSON.stringify(renewedLease), String(input.ttlMs)] },
+    );
+    return Number(result) === 1
+      ? { renewed: true as const, lease: renewedLease }
+      : { renewed: false as const, reason: 'stale_fencing_token' as const, lease: cur };
+  }
   async release(input: { resource: string; ownerId: string; fencingToken: number }) {
     const client = await this.loadClient();
     const key = redisLeaseKey(input.resource);
@@ -95,9 +112,8 @@ class RedisDistributedLockStore implements DistributedLockStore {
     const currentRaw = await client.get(key);
     if (!currentRaw) return { valid: false as const, reason: 'missing_lock' as const };
     const cur = JSON.parse(currentRaw) as DistributedLockLease;
-    if (new Date(cur.expiresAtIso).getTime() <= new Date(input.nowIso).getTime()) return { valid: false as const, reason: 'expired' as const, lease: cur };
-    if (cur.ownerId !== input.ownerId) return { valid: false as const, reason: 'owner_mismatch' as const, lease: cur };
-    if (cur.fencingToken !== input.fencingToken) return { valid: false as const, reason: 'stale_fencing_token' as const, lease: cur };
+    const validation = validateLease(cur, input);
+    if (!validation.valid) return { valid: false as const, reason: validation.reason, lease: cur };
     const lua = await client.eval('if redis.call("GET", KEYS[1]) == ARGV[1] then return 1 else return 0 end', { keys: [key], arguments: [currentRaw] });
     return Number(lua) === 1 ? { valid: true as const, lease: cur } : { valid: false as const, reason: 'stale_fencing_token' as const, lease: cur };
   }
@@ -133,6 +149,34 @@ class PostgresDistributedLockStore implements DistributedLockStore {
       throw error;
     } finally { client.release(); }
   }
+  async renew(input: { resource: string; ownerId: string; fencingToken: number; nowIso: string; ttlMs: number }) {
+    const client = await (await this.loadPool()).connect();
+    try {
+      await client.query('BEGIN');
+      await ensurePgSchema(client);
+      const row = await client.query('SELECT lease_payload FROM workflow_fencing_locks WHERE resource = $1 FOR UPDATE', [input.resource]);
+      if (!row.rows[0]?.lease_payload) {
+        await client.query('ROLLBACK');
+        return { renewed: false as const, reason: 'missing_lock' as const };
+      }
+      const lease = parseLeasePayload(row.rows[0].lease_payload);
+      const validation = validateLease(lease, input);
+      if (!validation.valid) {
+        await client.query('ROLLBACK');
+        return { renewed: false as const, reason: validation.reason, lease };
+      }
+      const renewedLease = renewLease(lease, input.nowIso, input.ttlMs);
+      await client.query('UPDATE workflow_fencing_locks SET lease_payload = $2::jsonb WHERE resource = $1', [
+        input.resource,
+        JSON.stringify(renewedLease),
+      ]);
+      await client.query('COMMIT');
+      return { renewed: true as const, lease: renewedLease };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally { client.release(); }
+  }
   async release(input: { resource: string; ownerId: string; fencingToken: number }) {
     const pool = await this.loadPool();
     const client = await pool.connect();
@@ -155,9 +199,8 @@ class PostgresDistributedLockStore implements DistributedLockStore {
       const row = await client.query('SELECT lease_payload FROM workflow_fencing_locks WHERE resource = $1', [input.resource]);
       if (!row.rows[0]?.lease_payload) return { valid: false as const, reason: 'missing_lock' as const };
       const lease = parseLeasePayload(row.rows[0].lease_payload);
-      if (new Date(lease.expiresAtIso).getTime() <= new Date(input.nowIso).getTime()) return { valid: false as const, reason: 'expired' as const, lease };
-      if (lease.ownerId !== input.ownerId) return { valid: false as const, reason: 'owner_mismatch' as const, lease };
-      if (lease.fencingToken !== input.fencingToken) return { valid: false as const, reason: 'stale_fencing_token' as const, lease };
+      const validation = validateLease(lease, input);
+      if (!validation.valid) return { valid: false as const, reason: validation.reason, lease };
       return { valid: true as const, lease };
     } finally { client.release(); }
   }
@@ -174,7 +217,20 @@ class EtcdDistributedLockStore implements DistributedLockStore {
     try { putResult = await leaseEtcd.put(etcdLeaseKey(input.resource)).value(JSON.stringify(provisionalLease), { prevNoExist: true }); }
     catch { return { acquired: false as const, reason: 'already_locked' as const, lease: provisionalLease }; }
     const token = extractEtcdRevision(putResult);
-    return { acquired: true as const, lease: asLease(input, token) };
+    const lease = asLease(input, token);
+    await leaseEtcd.put(etcdLeaseKey(input.resource)).value(JSON.stringify(lease));
+    return { acquired: true as const, lease };
+  }
+  async renew(input: { resource: string; ownerId: string; fencingToken: number; nowIso: string; ttlMs: number }) {
+    const client = await this.loadClient();
+    const leaseRecord = await readEtcdLeaseRecord(client, etcdLeaseKey(input.resource));
+    if (!leaseRecord) return { renewed: false as const, reason: 'missing_lock' as const };
+    const validation = validateLease(leaseRecord.lease, input);
+    if (!validation.valid) return { renewed: false as const, reason: validation.reason, lease: leaseRecord.lease };
+    const leaseEtcd = client.lease(Math.max(1, Math.floor(input.ttlMs / 1000)));
+    const renewedLease = renewLease(leaseRecord.lease, input.nowIso, input.ttlMs);
+    await leaseEtcd.put(etcdLeaseKey(input.resource)).value(JSON.stringify(renewedLease));
+    return { renewed: true as const, lease: renewedLease };
   }
   async release(input: { resource: string; ownerId: string; fencingToken: number }) {
     const v = await this.validate({ ...input, nowIso: new Date().toISOString() });
@@ -188,9 +244,8 @@ class EtcdDistributedLockStore implements DistributedLockStore {
     const leaseRecord = await readEtcdLeaseRecord(client, etcdLeaseKey(input.resource));
     if (!leaseRecord) return { valid: false as const, reason: 'missing_lock' as const };
     const lease = leaseRecord.lease;
-    if (new Date(lease.expiresAtIso).getTime() <= new Date(input.nowIso).getTime()) return { valid: false as const, reason: 'expired' as const, lease };
-    if (lease.ownerId !== input.ownerId) return { valid: false as const, reason: 'owner_mismatch' as const, lease };
-    if (leaseRecord.revision !== input.fencingToken) return { valid: false as const, reason: 'stale_fencing_token' as const, lease };
+    const validation = validateLease(lease, input);
+    if (!validation.valid) return { valid: false as const, reason: validation.reason, lease };
     return { valid: true as const, lease };
   }
 }
@@ -203,6 +258,23 @@ function asLease(input: { resource: string; ownerId: string; nowIso: string; ttl
     acquiredAtIso: input.nowIso,
     expiresAtIso: new Date(new Date(input.nowIso).getTime() + input.ttlMs).toISOString(),
   };
+}
+
+function renewLease(lease: DistributedLockLease, nowIso: string, ttlMs: number): DistributedLockLease {
+  return {
+    ...lease,
+    expiresAtIso: new Date(new Date(nowIso).getTime() + ttlMs).toISOString(),
+  };
+}
+
+function validateLease(
+  lease: DistributedLockLease,
+  input: { ownerId: string; fencingToken: number; nowIso: string },
+): { valid: true } | { valid: false; reason: 'owner_mismatch' | 'stale_fencing_token' | 'expired' } {
+  if (new Date(lease.expiresAtIso).getTime() <= new Date(input.nowIso).getTime()) return { valid: false as const, reason: 'expired' as const };
+  if (lease.ownerId !== input.ownerId) return { valid: false as const, reason: 'owner_mismatch' as const };
+  if (lease.fencingToken !== input.fencingToken) return { valid: false as const, reason: 'stale_fencing_token' as const };
+  return { valid: true as const };
 }
 
 function redisLeaseKey(resource: string): string { return `ai-orchestrator:fencing:lease:${resource}`; }

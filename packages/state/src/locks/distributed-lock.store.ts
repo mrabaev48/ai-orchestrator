@@ -26,10 +26,21 @@ export interface ValidateDistributedLockInput {
   readonly nowIso: string;
 }
 
+export interface RenewDistributedLockInput {
+  readonly resource: string;
+  readonly ownerId: string;
+  readonly fencingToken: number;
+  readonly nowIso: string;
+  readonly ttlMs: number;
+}
+
 export interface DistributedLockStore {
   readonly acquire: (
     input: AcquireDistributedLockInput,
   ) => Promise<{ acquired: true; lease: DistributedLockLease } | { acquired: false; reason: 'already_locked'; lease: DistributedLockLease }>;
+  readonly renew: (
+    input: RenewDistributedLockInput,
+  ) => Promise<{ renewed: true; lease: DistributedLockLease } | { renewed: false; reason: 'missing_lock' | 'owner_mismatch' | 'stale_fencing_token' | 'expired'; lease?: DistributedLockLease }>;
   readonly release: (
     input: ReleaseDistributedLockInput,
   ) => Promise<{ released: true } | { released: false; reason: 'missing_lock' | 'owner_mismatch' | 'stale_fencing_token'; lease?: DistributedLockLease }>;
@@ -66,6 +77,29 @@ export class InMemoryDistributedLockStore implements DistributedLockStore {
     return { acquired: true, lease };
   }
 
+  async renew(input: RenewDistributedLockInput): Promise<{ renewed: true; lease: DistributedLockLease } | { renewed: false; reason: 'missing_lock' | 'owner_mismatch' | 'stale_fencing_token' | 'expired'; lease?: DistributedLockLease }> {
+    const current = this.records.get(input.resource);
+    if (!current) {
+      return { renewed: false, reason: 'missing_lock' };
+    }
+
+    const validation = validateLease(current.lease, input);
+    if (!validation.valid) {
+      return { renewed: false, reason: validation.reason, lease: current.lease };
+    }
+
+    const renewedLease: DistributedLockLease = {
+      ...current.lease,
+      expiresAtIso: new Date(new Date(input.nowIso).getTime() + input.ttlMs).toISOString(),
+    };
+    this.records.set(input.resource, {
+      lease: renewedLease,
+      lastFencingToken: current.lastFencingToken,
+    });
+
+    return { renewed: true, lease: renewedLease };
+  }
+
   async release(input: ReleaseDistributedLockInput): Promise<{ released: true } | { released: false; reason: 'missing_lock' | 'owner_mismatch' | 'stale_fencing_token'; lease?: DistributedLockLease }> {
     const current = this.records.get(input.resource);
     if (!current) {
@@ -90,16 +124,9 @@ export class InMemoryDistributedLockStore implements DistributedLockStore {
       return { valid: false, reason: 'missing_lock' };
     }
 
-    if (new Date(current.lease.expiresAtIso).getTime() <= new Date(input.nowIso).getTime()) {
-      return { valid: false, reason: 'expired', lease: current.lease };
-    }
-
-    if (current.lease.ownerId !== input.ownerId) {
-      return { valid: false, reason: 'owner_mismatch', lease: current.lease };
-    }
-
-    if (current.lease.fencingToken !== input.fencingToken) {
-      return { valid: false, reason: 'stale_fencing_token', lease: current.lease };
+    const validation = validateLease(current.lease, input);
+    if (!validation.valid) {
+      return { valid: false, reason: validation.reason, lease: current.lease };
     }
 
     return { valid: true, lease: current.lease };
@@ -109,4 +136,23 @@ export class InMemoryDistributedLockStore implements DistributedLockStore {
     this.globalFencingCounter += 1;
     return this.globalFencingCounter;
   }
+}
+
+function validateLease(
+  lease: DistributedLockLease,
+  input: ValidateDistributedLockInput,
+): { valid: true } | { valid: false; reason: 'owner_mismatch' | 'stale_fencing_token' | 'expired' } {
+  if (new Date(lease.expiresAtIso).getTime() <= new Date(input.nowIso).getTime()) {
+    return { valid: false, reason: 'expired' };
+  }
+
+  if (lease.ownerId !== input.ownerId) {
+    return { valid: false, reason: 'owner_mismatch' };
+  }
+
+  if (lease.fencingToken !== input.fencingToken) {
+    return { valid: false, reason: 'stale_fencing_token' };
+  }
+
+  return { valid: true };
 }

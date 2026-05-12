@@ -23,6 +23,7 @@ import type { ToolSet } from '@ai-orchestrator/tools';
 
 import type { ExecutionTelemetry } from '../telemetry.js';
 import type { RunStepRecorder } from '../persistence/run-step-recorder.js';
+import type { ExecutionLeaseGuard } from '../leases/execution-lease-authority.js';
 import {
   estimateObservationTokens,
   summarizeObservation,
@@ -129,6 +130,7 @@ export class RoleRunner {
       runStepRecorder: RunStepRecorder;
       costTracker: RoleRunCostTracker;
       tools: ToolSet;
+      leaseGuard?: ExecutionLeaseGuard;
     },
   ) {
     this.tools = input.tools;
@@ -480,6 +482,7 @@ export class RoleRunner {
   }
 
   private async executeTool(request: ToolCallRequest, signal?: AbortSignal): Promise<unknown> {
+    await this.input.leaseGuard?.requireValid();
     const result = await this.tools.execute(
       {
         toolName: request.toolName,

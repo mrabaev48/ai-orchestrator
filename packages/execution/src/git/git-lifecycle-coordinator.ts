@@ -13,6 +13,7 @@ import type { StateStore } from '@ai-orchestrator/state';
 import { buildStepPolicyGateRequest } from '../steps/step-policy-gate.js';
 import { completeSideEffect, reserveSideEffect } from '../idempotency/side-effect-dedup-guard.js';
 import type { PolicyDecisionRecorder } from '../persistence/policy-decision-recorder.js';
+import type { ExecutionLeaseGuard } from '../leases/execution-lease-authority.js';
 import { makeArtifact, truncateText } from '../runtime-utils.js';
 
 const execFileAsync = promisify(execFile);
@@ -52,6 +53,7 @@ export class GitLifecycleCoordinator {
       config: RuntimeConfig;
       policyDecisionRecorder: PolicyDecisionRecorder;
       executors?: GitLifecycleExecutors;
+      leaseGuard?: ExecutionLeaseGuard;
     },
   ) {}
 
@@ -119,6 +121,7 @@ export class GitLifecycleCoordinator {
           inputHashSeed: `${input.runId}:${input.taskId}:git_commit:${commitMessage}`,
           reasonCodes: ['REPO_CHANGES_PRESENT'],
         }));
+        await this.input.leaseGuard?.requireValid();
         const committed = await this.createCommit(input.workspaceRoot, commitMessage);
         commitStatus = committed.ok ? 'created' : 'failed';
         const commitPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;
@@ -199,6 +202,7 @@ export class GitLifecycleCoordinator {
                 inputHashSeed: `${input.runId}:${input.taskId}:git_push:${branchName}:${commitSha}`,
                 reasonCodes: ['APPROVAL_GATE_PASSED'],
               }));
+              await this.input.leaseGuard?.requireValid();
               const isPushed = await this.pushBranch(input.workspaceRoot, branchName);
               pushStatus = isPushed ? 'pushed' : 'failed';
               const pushPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;
@@ -291,6 +295,7 @@ export class GitLifecycleCoordinator {
             inputHashSeed: `${input.runId}:${input.taskId}:pr_draft:${branchName}:${prTitle}`,
             reasonCodes: ['PUSH_SUCCESSFUL'],
           }));
+          await this.input.leaseGuard?.requireValid();
           const isPrCreated = await this.createPullRequestDraft(input.workspaceRoot, branchName, prTitle, prBody);
           prStatus = isPrCreated ? 'created' : 'failed';
           const prPolicyDecisionId = state.policyDecisions.at(-1)?.decisionId;

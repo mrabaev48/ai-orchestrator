@@ -21,6 +21,8 @@ export * from './queue/dead-letter-handler.js';
 export * from './queue/replay-controller.js';
 
 export * from './locks/fencing-token-guard.js';
+export * from './leases/execution-lease-authority.js';
+export * from './leases/lease-protected-state-store.js';
 export * from './idempotency/side-effect-dedup-guard.js';
 export * from './cancellation/propagate-abort.js';
 export * from './locks/distributed-lock-store-factory.js';
