@@ -1,13 +1,7 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
-import type { DomainEventType } from '@ai-orchestrator/core';
-
-export class BacklogExportQueryDto {
-  @IsOptional()
-  @IsIn(['json', 'md'])
-  format?: 'json' | 'md';
-}
+import { DOMAIN_EVENT_TYPES, type DomainEventType } from '@ai-orchestrator/core';
 
 export class HistoryQueryDto {
   @IsOptional()
@@ -40,33 +34,16 @@ export class HistoryQueryDto {
   limit?: number;
 }
 
+export class BacklogExportQueryDto extends HistoryQueryDto {
+  @IsOptional()
+  @IsIn(['json', 'md'])
+  format?: 'json' | 'md';
+}
+
 export class EventHistoryQueryDto extends HistoryQueryDto {
   @IsOptional()
   @IsString()
-  @IsIn([
-    'BOOTSTRAP_COMPLETED',
-    'DISCOVERY_COMPLETED',
-    'ARCHITECTURE_ANALYZED',
-    'BACKLOG_PLANNED',
-    'TASK_SPLIT',
-    'RELEASE_ASSESSED',
-    'STATE_INTEGRITY_CHECKED',
-    'EXPORT_PREPARED',
-    'TASK_SELECTED',
-    'PROMPT_GENERATED',
-    'ROLE_EXECUTED',
-    'APPROVAL_REQUESTED',
-    'APPROVAL_APPROVED',
-    'APPROVAL_REJECTED',
-    'APPROVAL_RESUMED',
-    'REVIEW_APPROVED',
-    'REVIEW_REJECTED',
-    'TEST_PASSED',
-    'TEST_FAILED',
-    'TASK_COMPLETED',
-    'TASK_BLOCKED',
-    'STATE_COMMITTED',
-  ])
+  @IsIn(DOMAIN_EVENT_TYPES)
   eventType?: DomainEventType;
 }
 

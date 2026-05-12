@@ -45,7 +45,7 @@ export class DashboardQueryController {
     @Query() query: BacklogExportQueryDto,
   ): Promise<{ format: 'json' | 'md'; content: string }> {
     const format = query.format ?? 'json';
-    const exportView = await this.dashboardReadApiService.getBacklogExport();
+    const exportView = await this.dashboardReadApiService.getBacklogExport(query.orgId, query.projectId);
 
     return {
       format,

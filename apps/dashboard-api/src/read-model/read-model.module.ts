@@ -20,9 +20,9 @@ import type { DashboardApiConfig } from '../config/dashboard-config.js';
         createStateStore(
           config.runtime,
           createEmptyProjectState({
-            projectId: 'dashboard-api',
-            projectName: 'Dashboard API',
-            summary: 'Read-only dashboard query state',
+            projectId: config.project.projectId,
+            projectName: config.project.projectName,
+            summary: config.project.summary,
           }),
         ),
     },

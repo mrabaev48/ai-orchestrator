@@ -141,16 +141,13 @@ export class DashboardQueryService {
   async getFailures(query: FailureHistoryQueryInput = {}): Promise<PaginatedView<FailureHistoryItemView>> {
     const { limit, offset } = normalizeHistoryQuery(query);
     const state = await this.stateStore.load();
-    const filtered = applyPagination(
-      [...state.failures]
-        .filter((failure) => (query.taskId ? failure.taskId === query.taskId : true))
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
-      offset,
-      limit,
-    );
+    const failures = [...state.failures]
+      .filter((failure) => (query.taskId ? failure.taskId === query.taskId : true))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    const filtered = applyPagination(failures, offset, limit);
 
     return toFailureHistoryView(filtered, {
-      total: filtered.length,
+      total: failures.length,
       limit,
       offset,
     });
@@ -159,14 +156,11 @@ export class DashboardQueryService {
   async getDecisions(query: HistoryQueryInput = {}): Promise<PaginatedView<DecisionHistoryItemView>> {
     const { limit, offset } = normalizeHistoryQuery(query);
     const state = await this.stateStore.load();
-    const decisions = applyPagination(
-      [...state.decisions].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
-      offset,
-      limit,
-    );
+    const allDecisions = [...state.decisions].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    const decisions = applyPagination(allDecisions, offset, limit);
 
     return toDecisionHistoryView(decisions, {
-      total: decisions.length,
+      total: allDecisions.length,
       limit,
       offset,
     });
@@ -177,16 +171,13 @@ export class DashboardQueryService {
   ): Promise<PaginatedView<ArtifactHistoryItemView>> {
     const { limit, offset } = normalizeHistoryQuery(query);
     const state = await this.stateStore.load();
-    const artifacts = applyPagination(
-      [...state.artifacts]
-        .filter((artifact) => (query.type ? artifact.type === query.type : true))
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
-      offset,
-      limit,
-    );
+    const allArtifacts = [...state.artifacts]
+      .filter((artifact) => (query.type ? artifact.type === query.type : true))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    const artifacts = applyPagination(allArtifacts, offset, limit);
 
     return toArtifactHistoryView(artifacts, {
-      total: artifacts.length,
+      total: allArtifacts.length,
       limit,
       offset,
     });

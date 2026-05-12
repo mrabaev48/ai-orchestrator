@@ -51,6 +51,11 @@ function makeRuntimeContext(corsOrigins: string[] = []): DashboardRuntimeContext
       host: '127.0.0.1',
       port: 0,
       runtime: runtimeConfig,
+      project: {
+        projectId: 'ai-orchestrator',
+        projectName: 'AI Orchestrator',
+        summary: 'MVP runtime state',
+      },
       security: {
         apiKeys: [
           { id: 'reader', key: 'reader-key', roles: ['dashboard.read'] },

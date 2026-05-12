@@ -39,6 +39,20 @@ test('DashboardQueryService returns backlog export view in both formats', async 
   assert.equal(typeof exportView.json, 'string');
 });
 
+test('DashboardQueryService enforces tenant scope for backlog export', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'project-1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  const service = new DashboardQueryService(new InMemoryStateStore(state));
+
+  await assert.rejects(
+    async () => service.getBacklogExport({ projectId: 'other-project' }),
+    /Tenant project mismatch: requested other-project/,
+  );
+});
+
 test('DashboardQueryService returns paginated history views and latest run summary', async () => {
   const state = createEmptyProjectState({
     projectId: 'project-1',
@@ -94,6 +108,82 @@ test('DashboardQueryService returns paginated history views and latest run summa
   assert.equal(decisions.items[0]?.title, 'Use PostgreSQL');
   assert.equal(artifacts.items[0]?.type, 'run_summary');
   assert.equal(latestRun?.taskId, 'task-1');
+});
+
+test('DashboardQueryService reports total before pagination for in-state history views', async () => {
+  const state = createEmptyProjectState({
+    projectId: 'project-1',
+    projectName: 'Project',
+    summary: 'Summary',
+  });
+  state.failures.push(
+    {
+      id: 'failure-1',
+      taskId: 'task-1',
+      role: 'reviewer',
+      reason: 'Missing tests',
+      symptoms: ['coverage gap'],
+      badPatterns: ['skip tests'],
+      retrySuggested: true,
+      createdAt: '2026-03-10T01:00:00.000Z',
+    },
+    {
+      id: 'failure-2',
+      taskId: 'task-1',
+      role: 'tester',
+      reason: 'Type error',
+      symptoms: ['typecheck failed'],
+      badPatterns: ['unsafe contract'],
+      retrySuggested: true,
+      createdAt: '2026-03-10T02:00:00.000Z',
+    },
+  );
+  state.decisions.push(
+    {
+      id: 'decision-1',
+      title: 'First decision',
+      decision: 'Use current API',
+      rationale: 'Stable contract',
+      affectedAreas: ['api'],
+      createdAt: '2026-03-10T00:00:00.000Z',
+    },
+    {
+      id: 'decision-2',
+      title: 'Second decision',
+      decision: 'Add route tests',
+      rationale: 'Prevent drift',
+      affectedAreas: ['tests'],
+      createdAt: '2026-03-10T01:00:00.000Z',
+    },
+  );
+  state.artifacts.push(
+    {
+      id: 'artifact-1',
+      type: 'run_summary',
+      title: 'First run',
+      metadata: {},
+      createdAt: '2026-03-10T00:00:00.000Z',
+    },
+    {
+      id: 'artifact-2',
+      type: 'run_summary',
+      title: 'Second run',
+      metadata: {},
+      createdAt: '2026-03-10T01:00:00.000Z',
+    },
+  );
+
+  const service = new DashboardQueryService(new InMemoryStateStore(state));
+  const failures = await service.getFailures({ taskId: 'task-1', limit: 1 });
+  const decisions = await service.getDecisions({ limit: 1 });
+  const artifacts = await service.getArtifacts({ type: 'run_summary', limit: 1 });
+
+  assert.equal(failures.items.length, 1);
+  assert.equal(failures.total, 2);
+  assert.equal(decisions.items.length, 1);
+  assert.equal(decisions.total, 2);
+  assert.equal(artifacts.items.length, 1);
+  assert.equal(artifacts.total, 2);
 });
 
 test('DashboardQueryService returns metrics and trace audit views', async () => {

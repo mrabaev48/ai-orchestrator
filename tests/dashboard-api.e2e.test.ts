@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { HealthCheckService } from '@nestjs/terminus';
+import request from 'supertest';
 
 import { DashboardReadApiService } from '@ai-orchestrator/dashboard-api';
 import { DashboardQueryController } from '@ai-orchestrator/dashboard-api';
@@ -10,9 +11,15 @@ import { DashboardReadinessService } from '@ai-orchestrator/dashboard-api';
 import { STATE_STORE } from '@ai-orchestrator/dashboard-api';
 import { createDashboardApiApp } from '@ai-orchestrator/dashboard-api';
 import type { DashboardRuntimeContext } from '@ai-orchestrator/dashboard-api';
-import { computeRunStepChecksum, type RunStepLogEntry } from '@ai-orchestrator/core';
+import { computeRunStepChecksum, makeEvent, type RunStepLogEntry } from '@ai-orchestrator/core';
 import type { StateStore } from '@ai-orchestrator/state';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
+
+const DASHBOARD_PROJECT = {
+  projectId: 'ai-orchestrator',
+  projectName: 'AI Orchestrator',
+  summary: 'MVP runtime state',
+};
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -54,6 +61,7 @@ test('dashboard api health endpoints expose liveness and readiness', async () =>
       host: '127.0.0.1',
       port: 0,
       runtime: runtimeConfig,
+      project: DASHBOARD_PROJECT,
       security: {
         apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }],
       },
@@ -79,7 +87,7 @@ test('dashboard api health endpoints expose liveness and readiness', async () =>
 
     assert.equal(liveness.status, 'ok');
     assert.equal(readiness.status, 'ok');
-    assert.equal(summary.projectName, 'Dashboard API');
+    assert.equal(summary.projectName, 'AI Orchestrator');
   } finally {
     await app.close();
   }
@@ -92,6 +100,7 @@ test('dashboard api query endpoints expose read-only dashboard views', async () 
       host: '127.0.0.1',
       port: 0,
       runtime: runtimeConfig,
+      project: DASHBOARD_PROJECT,
       security: {
         apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }],
       },
@@ -118,7 +127,7 @@ test('dashboard api query endpoints expose read-only dashboard views', async () 
     const latestRun = await queryController.getLatestRunSummary({});
     const readinessScorecard = await queryController.getReadinessScorecard({});
 
-    assert.equal(state.projectId, 'dashboard-api');
+    assert.equal(state.projectId, 'ai-orchestrator');
     assert.deepEqual(milestones, []);
     assert.equal(Array.isArray(backlog.tasks), true);
     assert.equal(Array.isArray(events.items), true);
@@ -134,11 +143,103 @@ test('dashboard api query endpoints expose read-only dashboard views', async () 
   }
 });
 
+test('dashboard api query routes enforce HTTP contracts and validation', async () => {
+  const runtimeConfig = makeRuntimeConfig();
+  const runtimeContext: DashboardRuntimeContext = {
+    config: {
+      host: '127.0.0.1',
+      port: 0,
+      runtime: runtimeConfig,
+      project: DASHBOARD_PROJECT,
+      security: {
+        apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }],
+      },
+      cors: {
+        allowedOrigins: [],
+      },
+    },
+    logger: createLogger(runtimeConfig, { sink: () => {} }),
+  };
+  const app = await createDashboardApiApp(runtimeContext);
+
+  await app.init();
+
+  try {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    const stateStore = app.get<StateStore>(STATE_STORE);
+    const state = await stateStore.load();
+    state.artifacts.push({
+      id: 'release-assessment-http',
+      type: 'release_assessment',
+      title: 'HTTP release readiness assessment',
+      metadata: {
+        runId: 'run-http',
+        productionReadinessReview: JSON.stringify({
+          runId: 'run-http',
+          reviewDateIso: '2026-05-05T00:00:00.000Z',
+          verdict: 'ready',
+          blockers: [],
+          warnings: [],
+          evidence: {
+            blockerCount: 0,
+            warningCount: 0,
+            totalChecks: 1,
+            passedChecks: 1,
+            failedChecks: 0,
+          },
+        }),
+      },
+      createdAt: '2026-05-05T01:00:00.000Z',
+    });
+    await stateStore.save(state);
+    await stateStore.recordEvent(makeEvent('METRIC_RECORDED', {
+      metricType: 'counter',
+      name: 'dashboard_http_route_total',
+      value: 1,
+    }, { runId: 'run-http' }));
+
+    const stateResponse = await request(server)
+      .get('/api/state')
+      .set('x-api-key', 'test-key');
+    const backlogExportResponse = await request(server)
+      .get('/api/backlog/export?format=md&projectId=ai-orchestrator')
+      .set('x-api-key', 'test-key');
+    const reviewResponse = await request(server)
+      .get('/api/readiness/production-review?runId=run-http&projectId=ai-orchestrator')
+      .set('x-api-key', 'test-key');
+    const eventsResponse = await request(server)
+      .get('/api/events?eventType=METRIC_RECORDED')
+      .set('x-api-key', 'test-key');
+    const invalidEventResponse = await request(server)
+      .get('/api/events?eventType=UNKNOWN_EVENT')
+      .set('x-api-key', 'test-key');
+
+    const stateBody = stateResponse.body as { projectId?: unknown };
+    const backlogExportBody = backlogExportResponse.body as { format?: unknown; content?: unknown };
+    const reviewBody = reviewResponse.body as { artifactId?: unknown; verdict?: unknown };
+    const eventsBody = eventsResponse.body as { items?: { type?: unknown }[] };
+
+    assert.equal(stateResponse.status, 200);
+    assert.equal(stateBody.projectId, 'ai-orchestrator');
+    assert.equal(backlogExportResponse.status, 200);
+    assert.equal(backlogExportBody.format, 'md');
+    assert.equal(typeof backlogExportBody.content, 'string');
+    assert.equal(reviewResponse.status, 200);
+    assert.equal(reviewBody.artifactId, 'release-assessment-http');
+    assert.equal(reviewBody.verdict, 'ready');
+    assert.equal(eventsResponse.status, 200);
+    assert.equal(eventsBody.items?.[0]?.type, 'METRIC_RECORDED');
+    assert.equal(invalidEventResponse.status, 400);
+  } finally {
+    await app.close();
+  }
+});
+
 
 test('dashboard api evidence endpoint filters by runId/taskId deterministically', async () => {
   const runtimeConfig = makeRuntimeConfig();
   const runtimeContext: DashboardRuntimeContext = {
-    config: { host: '127.0.0.1', port: 0, runtime: runtimeConfig, security: { apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }] }, cors: { allowedOrigins: [] } },
+    config: { host: '127.0.0.1', port: 0, runtime: runtimeConfig, project: DASHBOARD_PROJECT, security: { apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }] }, cors: { allowedOrigins: [] } },
     logger: createLogger(runtimeConfig, { sink: () => {} }),
   };
   const app = await createDashboardApiApp(runtimeContext);
@@ -149,7 +250,7 @@ test('dashboard api evidence endpoint filters by runId/taskId deterministically'
     const stateStore = app.get<StateStore>(STATE_STORE);
 
     const base = {
-      tenantId: 'default-org', projectId: 'dashboard-api', stepId: 'step-1', attempt: 0, role: 'tester', input: 'in', output: 'out',
+      tenantId: 'default-org', projectId: 'ai-orchestrator', stepId: 'step-1', attempt: 0, role: 'tester', input: 'in', output: 'out',
       status: 'succeeded' as const, idempotencyKey: 'k-1', traceId: 'trace-1', durationMs: 1, createdAt: new Date().toISOString(),
     };
     const step1: RunStepLogEntry = { id: 'ev-1', runId: 'run-a', taskId: 'task-a', ...base, checksum: '' };
@@ -175,7 +276,7 @@ test('dashboard api evidence endpoint filters by runId/taskId deterministically'
 test('dashboard api evidence endpoint surfaces EVIDENCE_INTEGRITY_VIOLATION for tampered chain', async () => {
   const runtimeConfig = makeRuntimeConfig();
   const runtimeContext: DashboardRuntimeContext = {
-    config: { host: '127.0.0.1', port: 0, runtime: runtimeConfig, security: { apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }] }, cors: { allowedOrigins: [] } },
+    config: { host: '127.0.0.1', port: 0, runtime: runtimeConfig, project: DASHBOARD_PROJECT, security: { apiKeys: [{ id: 'test', key: 'test-key', roles: ['dashboard.read'] }] }, cors: { allowedOrigins: [] } },
     logger: createLogger(runtimeConfig, { sink: () => {} }),
   };
   const app = await createDashboardApiApp(runtimeContext);
@@ -186,7 +287,7 @@ test('dashboard api evidence endpoint surfaces EVIDENCE_INTEGRITY_VIOLATION for 
     const stateStore = app.get<StateStore>(STATE_STORE);
 
     const now = Date.now();
-    const base = { tenantId: 'default-org', projectId: 'dashboard-api', runId: 'run-tampered', stepId: 'step-x', attempt: 0, taskId: 'task-x', role: 'tester', input: 'in', output: 'out', status: 'cancellation_requested' as const, idempotencyKey: 'key-1', traceId: 'run-tampered', durationMs: 1 };
+    const base = { tenantId: 'default-org', projectId: 'ai-orchestrator', runId: 'run-tampered', stepId: 'step-x', attempt: 0, taskId: 'task-x', role: 'tester', input: 'in', output: 'out', status: 'cancellation_requested' as const, idempotencyKey: 'key-1', traceId: 'run-tampered', durationMs: 1 };
     const first: RunStepLogEntry = { id: 'ev-1', ...base, createdAt: new Date(now).toISOString(), checksum: '' };
     first.checksum = computeRunStepChecksum({ evidenceId: first.id, tenantId: first.tenantId, projectId: first.projectId, runId: first.runId, stepId: first.stepId, attempt: first.attempt, status: first.status, idempotencyKey: first.idempotencyKey, createdAt: first.createdAt, traceId: first.traceId });
     await stateStore.recordRunStep(first);
