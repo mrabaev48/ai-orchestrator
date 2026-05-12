@@ -106,20 +106,20 @@ class AnthropicMessagesLlmClient implements LlmClient {
         model: this.input.model,
         max_tokens: 4096,
         temperature: this.input.temperature,
+        output_config: {
+          format: {
+            type: 'json_schema',
+            schema: request.schema,
+          },
+        },
         messages: [{
           role: 'user',
-          content: [
-            'Return only JSON matching this JSON Schema.',
-            `Schema name: ${request.schemaName}`,
-            JSON.stringify(request.schema),
-            request.prompt,
-          ].join('\n\n'),
+          content: request.prompt,
         }],
       }),
     }, this.input.timeoutMs);
     const payload = await parseJsonResponse(response, 'Anthropic Messages API');
-    const text = readAnthropicOutputText(payload);
-    return parseGeneratedObject(text, 'Anthropic Messages API') as TOutput;
+    return readAnthropicStructuredOutput(payload) as TOutput;
   }
 }
 
@@ -194,6 +194,16 @@ function readOpenAiOutputText(payload: unknown): string {
     throw new LlmProviderError('OpenAI response output text was empty');
   }
   return text;
+}
+
+function readAnthropicStructuredOutput(payload: unknown): unknown {
+  if (!isRecord(payload)) {
+    throw new LlmProviderError('Anthropic response payload must be an object');
+  }
+  if (payload.parsed_output !== undefined) {
+    return payload.parsed_output;
+  }
+  return parseGeneratedObject(readAnthropicOutputText(payload), 'Anthropic Messages API');
 }
 
 function readAnthropicOutputText(payload: unknown): string {
