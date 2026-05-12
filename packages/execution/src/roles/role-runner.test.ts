@@ -88,6 +88,7 @@ function makeRunner(config = makeConfig()) {
   const telemetry: ExecutionTelemetry = {
     incrementCounter: async () => {},
     recordHistogram: async () => {},
+    recordSpan: async () => {},
   };
   const runner = new RoleRunner({
     stateStore: store,

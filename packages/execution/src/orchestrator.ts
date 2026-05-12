@@ -11,11 +11,11 @@ import {
 } from '@ai-orchestrator/core';
 import type { RoleRegistry } from '@ai-orchestrator/agents';
 import { shouldStopRun } from '@ai-orchestrator/workflow';
-import type { StateStore } from '@ai-orchestrator/state';
+import { InMemoryObservabilityStore, type ObservabilityStore, type StateStore } from '@ai-orchestrator/state';
 import { createLocalToolSet } from '@ai-orchestrator/tools';
 import { type Logger, type RuntimeConfig, WorkflowPolicyError } from '@ai-orchestrator/shared';
 
-import { StateStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.js';
+import { ObservabilityStoreExecutionTelemetry, type ExecutionTelemetry } from './telemetry.js';
 import {
   createWorkspaceManager,
   type WorkspaceManager,
@@ -49,6 +49,7 @@ export type {
 
 export interface OrchestratorOverrides {
   executionLeaseAuthority?: ExecutionLeaseAuthority;
+  observabilityStore?: ObservabilityStore;
   telemetry?: ExecutionTelemetry;
   workspaceManager?: WorkspaceManager;
 }
@@ -87,7 +88,8 @@ export class Orchestrator {
       },
     };
     const guardedStateStore = createLeaseProtectedStateStore(stateStore, this.leaseGuard);
-    this.telemetry = overrides?.telemetry ?? new StateStoreExecutionTelemetry(guardedStateStore, logger);
+    const observabilityStore = overrides?.observabilityStore ?? new InMemoryObservabilityStore();
+    this.telemetry = overrides?.telemetry ?? new ObservabilityStoreExecutionTelemetry(observabilityStore, logger);
     const workspaceManager = overrides?.workspaceManager
       ?? createWorkspaceManager({
         mode: config.workflow.workspaceManagerMode ?? 'git-worktree',

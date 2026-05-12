@@ -23,6 +23,12 @@ The PostgreSQL state backend uses explicit, versioned schema migrations. Runtime
 - Runtime verification fails if the history table is missing, behind the required version, non-contiguous, unknown, or checksum-mismatched.
 - Failed migrations are rolled back and surfaced as structured `StateStoreError` diagnostics with the migration id, name, and checksum.
 
+## Observability Storage
+
+- Migration `observability_telemetry_store` creates dedicated `telemetry_metrics` and `telemetry_spans` tables. These tables are operational telemetry storage, not the domain event stream.
+- `OBSERVABILITY_RETENTION_DAYS` controls the `expires_at` timestamp for newly written telemetry independently from state snapshots and `domain_events`.
+- Runtime processes do not purge expired telemetry automatically on write. Schedule an operator-owned purge that calls the observability store retention path, or run an equivalent reviewed SQL cleanup against rows where `expires_at <= now()`.
+
 ## Rollback Expectations
 
 Migrations are forward-only. If a migration fails, fix the database or migration issue, then rerun `pnpm state:migrate`. If a successfully applied migration must be reverted, restore from a database backup or apply a reviewed corrective migration in a follow-up release.

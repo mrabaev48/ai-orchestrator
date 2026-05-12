@@ -17,7 +17,7 @@ import {
 } from '@ai-orchestrator/core';
 import { Orchestrator, type ExecutionLeaseAuthority, type ExecutionLeaseHandle } from '@ai-orchestrator/execution';
 import { SchemaValidationError, WorkflowPolicyError } from '@ai-orchestrator/shared';
-import { InMemoryStateStore } from '@ai-orchestrator/state';
+import { InMemoryObservabilityStore, InMemoryStateStore } from '@ai-orchestrator/state';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 import type {
   AgentRole,
@@ -536,6 +536,7 @@ test('runCycle returns idle for non-executable forced task', async () => {
 
 test('runCycle returns deterministic idle reason when global run lock is unavailable', async () => {
   const store = new InMemoryStateStore(makeState());
+  const observabilityStore = new InMemoryObservabilityStore();
   const records: Record<string, unknown>[] = [];
   const config = makeRuntimeConfig();
   config.logging.level = 'info';
@@ -549,28 +550,23 @@ test('runCycle returns deterministic idle reason when global run lock is unavail
   };
   const orchestrator = new Orchestrator(store, makeRegistry(), makeRuntimeConfig(), logger, {
     executionLeaseAuthority,
+    observabilityStore,
   });
 
   const result = await orchestrator.runCycle();
   const idleRecord = records.find((record) => record.event === 'cycle_idle_lock_unavailable');
-  const metricEvent = store.events.find((event) => event.eventType === 'METRIC_RECORDED');
+  const metricRecord = observabilityStore.metrics.find((record) => record.name === 'run_lock_contention_total');
   assert.equal(result.status, 'idle');
   assert.equal(result.stopReason, 'run_lock_unavailable');
   assert.equal(typeof result.runId, 'string');
   assert.notEqual(idleRecord, undefined);
   assert.equal(idleRecord?.message, 'Run cycle skipped because global run lock is unavailable');
-  assert.notEqual(metricEvent, undefined);
-  const metricPayload = metricEvent?.payload as {
-    metricType: string;
-    name: string;
-    value: number;
-    tags: { lock_resource: string; runId?: string };
-  } | undefined;
-  assert.equal(metricPayload?.metricType, 'counter');
-  assert.equal(metricPayload?.name, 'run_lock_contention_total');
-  assert.equal(metricPayload?.value, 1);
-  assert.equal(metricPayload?.tags.lock_resource, 'global-run-cycle');
-  assert.equal(typeof metricPayload?.tags.runId, 'string');
+  assert.notEqual(metricRecord, undefined);
+  assert.equal(metricRecord?.metricType, 'counter');
+  assert.equal(metricRecord?.value, 1);
+  assert.equal(metricRecord?.tags.lock_resource, 'global-run-cycle');
+  assert.equal(typeof metricRecord?.tags.runId, 'string');
+  assert.equal(store.events.some((event) => event.eventType === 'METRIC_RECORDED'), false);
 });
 
 test('runSingleTask executes the requested task when executable', async () => {

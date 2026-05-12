@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 export const POSTGRES_SCHEMA_MIGRATIONS_TABLE = 'schema_migrations';
 
-export const POSTGRES_REQUIRED_SCHEMA_VERSION = 7;
+export const POSTGRES_REQUIRED_SCHEMA_VERSION = 8;
 
 export interface PostgresMigration {
   readonly id: number;
@@ -26,7 +26,7 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
           id UUID PRIMARY KEY,
           event_type TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL,
-          run_id UUID,
+          run_id TEXT,
           payload_json JSONB NOT NULL
         )`,
         `CREATE TABLE IF NOT EXISTS ${table('decision_log')} (
@@ -214,6 +214,59 @@ export function createPostgresMigrations(table: (name: string) => string): Postg
         `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS checkpoint_run_id TEXT`,
         `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS checkpoint_step_id TEXT`,
         `ALTER TABLE ${table('failure_log')} ADD COLUMN IF NOT EXISTS dead_lettered_at TIMESTAMPTZ`,
+      ],
+    },
+    {
+      id: 8,
+      name: 'observability_telemetry_store',
+      statements: [
+        `CREATE TABLE IF NOT EXISTS ${table('telemetry_metrics')} (
+          id UUID PRIMARY KEY,
+          org_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          run_id TEXT,
+          correlation_id TEXT,
+          name TEXT NOT NULL,
+          metric_type TEXT NOT NULL,
+          value DOUBLE PRECISION NOT NULL,
+          tags_json JSONB NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          expires_at TIMESTAMPTZ
+        )`,
+        `CREATE INDEX IF NOT EXISTS telemetry_metrics_tenant_created_at_idx
+          ON ${table('telemetry_metrics')} (org_id, project_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS telemetry_metrics_tenant_name_created_at_idx
+          ON ${table('telemetry_metrics')} (org_id, project_id, name, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS telemetry_metrics_tenant_run_created_at_idx
+          ON ${table('telemetry_metrics')} (org_id, project_id, run_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS telemetry_metrics_tenant_expires_at_idx
+          ON ${table('telemetry_metrics')} (org_id, project_id, expires_at)
+          WHERE expires_at IS NOT NULL`,
+        `CREATE TABLE IF NOT EXISTS ${table('telemetry_spans')} (
+          id UUID PRIMARY KEY,
+          org_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          run_id UUID,
+          correlation_id TEXT,
+          span_name TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          task_id TEXT,
+          role TEXT,
+          tool_name TEXT,
+          tags_json JSONB NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          expires_at TIMESTAMPTZ
+        )`,
+        `CREATE INDEX IF NOT EXISTS telemetry_spans_tenant_created_at_idx
+          ON ${table('telemetry_spans')} (org_id, project_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS telemetry_spans_tenant_run_created_at_idx
+          ON ${table('telemetry_spans')} (org_id, project_id, run_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS telemetry_spans_tenant_filters_created_at_idx
+          ON ${table('telemetry_spans')} (org_id, project_id, task_id, role, tool_name, status, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS telemetry_spans_tenant_expires_at_idx
+          ON ${table('telemetry_spans')} (org_id, project_id, expires_at)
+          WHERE expires_at IS NOT NULL`,
       ],
     },
   ]);

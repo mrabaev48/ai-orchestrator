@@ -395,6 +395,7 @@ export class RoleRunner {
         `Tool ${request.toolName} timed out at step ${step}`,
         withParentSignal(context.abortSignal),
       );
+      const durationMs = Date.now() - startedAt;
       await this.input.runStepRecorder.record({
         runId: context.runId,
         ...(context.taskId ? { taskId: context.taskId } : {}),
@@ -406,17 +407,21 @@ export class RoleRunner {
         },
         output,
         status: 'succeeded',
-        durationMs: Date.now() - startedAt,
+        durationMs,
       });
       await this.input.telemetry.incrementCounter({
         name: 'tool_invocation_total',
         runId: context.runId,
         tags: { toolName: request.toolName, role: roleName, status: 'ok' },
       });
-      await this.input.telemetry.recordHistogram({
-        name: 'span_tool_invocation_duration_ms',
-        value: Date.now() - startedAt,
+      await this.input.telemetry.recordSpan({
+        spanName: 'tool_invocation',
+        durationMs,
+        status: 'ok',
         runId: context.runId,
+        ...(context.taskId ? { taskId: context.taskId } : {}),
+        role: roleName,
+        toolName: request.toolName,
         tags: {
           taskId: context.taskId ?? 'unknown',
           role: roleName,
@@ -441,6 +446,7 @@ export class RoleRunner {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const status = statusForRunStepFailure(error);
+      const durationMs = Date.now() - startedAt;
       await this.input.runStepRecorder.record({
         runId: context.runId,
         ...(context.taskId ? { taskId: context.taskId } : {}),
@@ -452,17 +458,21 @@ export class RoleRunner {
         },
         output: message,
         status,
-        durationMs: Date.now() - startedAt,
+        durationMs,
       });
       await this.input.telemetry.incrementCounter({
         name: 'tool_invocation_total',
         runId: context.runId,
         tags: { toolName: request.toolName, role: roleName, status: 'error' },
       });
-      await this.input.telemetry.recordHistogram({
-        name: 'span_tool_invocation_duration_ms',
-        value: Date.now() - startedAt,
+      await this.input.telemetry.recordSpan({
+        spanName: 'tool_invocation',
+        durationMs,
+        status: 'error',
         runId: context.runId,
+        ...(context.taskId ? { taskId: context.taskId } : {}),
+        role: roleName,
+        toolName: request.toolName,
         tags: {
           taskId: context.taskId ?? 'unknown',
           role: roleName,

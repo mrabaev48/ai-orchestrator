@@ -22,14 +22,18 @@ import { ConfigError, type Logger, type RuntimeConfig } from '@ai-orchestrator/s
 import { createLlmClient, type LlmClient } from '@ai-orchestrator/llm';
 import {
   InMemoryStateStore,
+  InMemoryObservabilityStore,
+  PostgresObservabilityStore,
   PostgresMigrationRunner,
   PostgresStateStore,
+  type ObservabilityStore,
   type StateStore,
 } from '@ai-orchestrator/state';
 
 export interface RuntimeApplicationContext {
   initialState: ProjectState;
   stateStore: ApplicationStateStore;
+  observabilityStore: ObservabilityStore;
   roleRegistry: ApplicationRoleRegistry;
   orchestrator: Orchestrator;
 }
@@ -57,12 +61,16 @@ export function createRuntimeApplicationContext(input: {
   });
 
   const stateStore = createStateStore(input.config, initialState);
+  const observabilityStore = createObservabilityStore(input.config, initialState);
   const roleRegistry = createRoleRegistryForConfig(input.config, input.llmClient);
-  const orchestrator = new Orchestrator(stateStore, roleRegistry, input.config, input.logger);
+  const orchestrator = new Orchestrator(stateStore, roleRegistry, input.config, input.logger, {
+    observabilityStore,
+  });
 
   return {
     initialState,
     stateStore,
+    observabilityStore,
     roleRegistry,
     orchestrator,
   };
@@ -144,6 +152,20 @@ export function createStateStore(config: RuntimeConfig, initialState: ProjectSta
     : new PostgresStateStore(config.state.postgresDsn, initialState, {
       schema: config.state.postgresSchema,
       migrationMode: config.state.postgresMigrationMode ?? 'verify',
+    });
+}
+
+export function createObservabilityStore(config: RuntimeConfig, initialState: ProjectState): ObservabilityStore {
+  const retentionPolicy = {
+    ...(config.observability?.retentionDays ? { retentionDays: config.observability.retentionDays } : {}),
+  };
+  return config.state.backend === 'memory'
+    ? new InMemoryObservabilityStore(retentionPolicy)
+    : new PostgresObservabilityStore(config.state.postgresDsn, {
+      schema: config.state.postgresSchema,
+      orgId: initialState.orgId,
+      projectId: initialState.projectId,
+      ...retentionPolicy,
     });
 }
 

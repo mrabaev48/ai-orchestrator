@@ -40,6 +40,7 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   assert.equal(config.tools.maxModifiedFiles, 200);
   assert.equal(config.tools.packageManager, 'pnpm');
   assert.equal(config.tools.persistToolEvidence, true);
+  assert.equal(config.observability?.retentionDays, 30);
 });
 
 test('loadRuntimeConfig normalizes allowlisted shell commands', () => {
@@ -119,6 +120,17 @@ test('loadRuntimeConfig supports explicit PostgreSQL migration mode', () => {
   });
 
   assert.equal(config.state.postgresMigrationMode, 'auto');
+});
+
+test('loadRuntimeConfig supports independent observability retention configuration', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      OBSERVABILITY_RETENTION_DAYS: '14',
+    },
+  });
+
+  assert.equal(config.observability?.retentionDays, 14);
 });
 
 test('loadRuntimeConfig supports workspace manager mode and ttl configuration', () => {

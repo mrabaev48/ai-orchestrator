@@ -1,4 +1,5 @@
 import type { DomainEvent, SliSnapshot } from '@ai-orchestrator/core';
+import type { TelemetrySpanRecord } from '../observability/observability-store.js';
 
 function percentile95(values: number[]): number {
   if (values.length === 0) {
@@ -9,7 +10,10 @@ function percentile95(values: number[]): number {
   return sorted[index] ?? 0;
 }
 
-export function buildSliSnapshotFromEvents(events: DomainEvent[]): SliSnapshot {
+export function buildSliSnapshotFromEvents(
+  events: DomainEvent[],
+  telemetrySpans: readonly TelemetrySpanRecord[] = [],
+): SliSnapshot {
   const terminal = events.filter((event) => event.eventType === 'TASK_COMPLETED' || event.eventType === 'TASK_BLOCKED');
   const total = terminal.length;
 
@@ -23,16 +27,11 @@ export function buildSliSnapshotFromEvents(events: DomainEvent[]): SliSnapshot {
     return payload.code === 'STEP_CANCELLED';
   }).length;
 
-  const latencies = events
-    .filter((event) => event.eventType === 'METRIC_RECORDED')
-    .map((event) => {
-      const payload = event.payload as { name?: string; value?: number };
-      if (payload.name !== 'span_task_duration_ms' || typeof payload.value !== 'number') {
-        return null;
-      }
-      return payload.value;
-    })
-    .filter((value): value is number => value !== null);
+  const latencies = telemetrySpans.length > 0
+    ? telemetrySpans
+      .filter((span) => span.spanName === 'task_run')
+      .map((span) => span.durationMs)
+    : legacyTaskDurationLatencies(events);
 
   const denominator = total === 0 ? 1 : total;
   return {
@@ -42,4 +41,17 @@ export function buildSliSnapshotFromEvents(events: DomainEvent[]): SliSnapshot {
     p95LatencyMs: percentile95(latencies),
     sampleSize: total,
   };
+}
+
+function legacyTaskDurationLatencies(events: readonly DomainEvent[]): number[] {
+  return events
+    .filter((event) => event.eventType === 'METRIC_RECORDED')
+    .map((event) => {
+      const payload = event.payload as { name?: string; value?: number };
+      if (payload.name !== 'span_task_duration_ms' || typeof payload.value !== 'number') {
+        return null;
+      }
+      return payload.value;
+    })
+    .filter((value): value is number => value !== null);
 }

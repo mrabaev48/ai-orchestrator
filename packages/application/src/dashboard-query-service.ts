@@ -16,7 +16,7 @@ import type {
   ReadinessScorecardView,
   ProductionReadinessReviewView,
 } from './read-models.js';
-import type { ApplicationStateStore } from './ports.js';
+import type { ApplicationObservabilityStore, ApplicationStateStore } from './ports.js';
 import {
   toArtifactHistoryView,
   toBacklogExportView,
@@ -89,13 +89,16 @@ export interface ReadinessScorecardAuditContext {
 
 export class DashboardQueryService {
   private readonly stateStore: ApplicationStateStore;
+  private readonly observabilityStore: ApplicationObservabilityStore | undefined;
   private readonly readinessPolicy: ReadinessScorecardPolicy;
 
   constructor(
     stateStore: ApplicationStateStore,
     readinessPolicy: ReadinessScorecardPolicy = DEFAULT_READINESS_SCORECARD_POLICY,
+    observabilityStore?: ApplicationObservabilityStore,
   ) {
     this.stateStore = stateStore;
+    this.observabilityStore = observabilityStore;
     this.readinessPolicy = readinessPolicy;
   }
 
@@ -250,39 +253,35 @@ export class DashboardQueryService {
 
   async getMetricsAudit(query: HistoryQueryInput = {}): Promise<PaginatedView<MetricRollupItemView>> {
     const { limit, offset } = normalizeHistoryQuery(query);
-    const events = await this.stateStore.listEvents({ eventType: 'METRIC_RECORDED' });
+    const metrics = this.observabilityStore
+      ? await this.observabilityStore.listMetrics({
+        ...(query.runId ? { runId: query.runId } : {}),
+        ...(query.correlationId ? { correlationId: query.correlationId } : {}),
+      })
+      : [];
     const buckets = new Map<string, MetricRollupItemView>();
 
-    for (const event of events) {
-      const payload = event.payload;
-      const metricName = typeof payload.name === 'string' ? payload.name : null;
-      const metricType = parseMetricType(payload.metricType);
-      const metricValue = typeof payload.value === 'number' ? payload.value : null;
-
-      if (!metricName || !metricType || metricValue === null) {
-        continue;
-      }
-
-      const tags = parseStringRecord(payload.tags);
-      const key = `${metricType}:${metricName}:${JSON.stringify(tags)}`;
+    for (const metric of metrics) {
+      const tags = metric.tags;
+      const key = `${metric.metricType}:${metric.name}:${JSON.stringify(tags)}`;
       const existing = buckets.get(key);
       if (!existing) {
         buckets.set(key, {
-          name: metricName,
-          metricType,
-          total: metricValue,
+          name: metric.name,
+          metricType: metric.metricType,
+          total: metric.value,
           sampleCount: 1,
-          lastValue: metricValue,
-          lastSeenAt: event.createdAt,
+          lastValue: metric.value,
+          lastSeenAt: metric.createdAt,
           tags,
         });
         continue;
       }
 
-      existing.total += metricValue;
+      existing.total += metric.value;
       existing.sampleCount += 1;
-      existing.lastValue = metricValue;
-      existing.lastSeenAt = event.createdAt;
+      existing.lastValue = metric.value;
+      existing.lastSeenAt = metric.createdAt;
     }
 
     const items = applyPagination(
@@ -296,38 +295,31 @@ export class DashboardQueryService {
 
   async getTraceAudit(query: TraceAuditQueryInput = {}): Promise<PaginatedView<SpanAuditItemView>> {
     const { limit, offset } = normalizeHistoryQuery(query);
-    const events = await this.stateStore.listEvents({ eventType: 'METRIC_RECORDED' });
-    const spans = events
-      .map((event) => {
-        const payload = event.payload;
-        const metricName = typeof payload.name === 'string' ? payload.name : null;
-        const tags = parseStringRecord(payload.tags);
-        if (payload.metricType !== 'histogram' || !metricName?.startsWith('span_')) {
-          return null;
-        }
-        return {
-          spanName: metricName,
-          ...(event.runId ? { runId: event.runId } : {}),
-          ...(event.correlationId ? { correlationId: event.correlationId } : {}),
-          ...(typeof payload.taskId === 'string' ? { taskId: payload.taskId } : {}),
-          ...(typeof payload.taskId !== 'string' && tags.taskId ? { taskId: tags.taskId } : {}),
-          ...(typeof payload.role === 'string' ? { role: payload.role } : {}),
-          ...(typeof payload.role !== 'string' && tags.role ? { role: tags.role } : {}),
-          ...(typeof payload.toolName === 'string' ? { toolName: payload.toolName } : {}),
-          ...(typeof payload.toolName !== 'string' && tags.toolName ? { toolName: tags.toolName } : {}),
-          status: payload.status === 'error' || tags.status === 'error' ? 'error' : 'ok',
-          durationMs: typeof payload.value === 'number' ? payload.value : 0,
-          createdAt: event.createdAt,
-        };
+    const spans = this.observabilityStore
+      ? await this.observabilityStore.listSpans({
+        ...(query.runId ? { runId: query.runId } : {}),
+        ...(query.correlationId ? { correlationId: query.correlationId } : {}),
+        ...(query.taskId ? { taskId: query.taskId } : {}),
+        ...(query.role ? { role: query.role } : {}),
+        ...(query.toolName ? { toolName: query.toolName } : {}),
+        ...(query.status ? { status: query.status } : {}),
       })
-      .filter((item): item is SpanAuditItemView => item !== null)
-      .filter((item) => (query.runId ? item.runId === query.runId : true))
-      .filter((item) => (query.correlationId ? item.correlationId === query.correlationId : true))
-      .filter((item) => (query.taskId ? item.taskId === query.taskId : true))
-      .filter((item) => (query.role ? item.role === query.role : true))
-      .filter((item) => (query.toolName ? item.toolName === query.toolName : true))
-      .filter((item) => (query.status ? item.status === query.status : true));
-    const items = applyPagination(spans, offset, limit);
+      : [];
+    const items = applyPagination(
+      spans.map((span) => ({
+        spanName: span.spanName,
+        ...(span.runId ? { runId: span.runId } : {}),
+        ...(span.correlationId ? { correlationId: span.correlationId } : {}),
+        ...(span.taskId ? { taskId: span.taskId } : {}),
+        ...(span.role ? { role: span.role } : {}),
+        ...(span.toolName ? { toolName: span.toolName } : {}),
+        status: span.status,
+        durationMs: span.durationMs,
+        createdAt: span.createdAt,
+      })),
+      offset,
+      limit,
+    );
     return { total: spans.length, limit, offset, items };
   }
 
@@ -487,30 +479,6 @@ function parseIssueList(value: unknown): { checkId: string; title: string; detai
 function applyPagination<TItem>(items: TItem[], offset: number, limit: number): TItem[] {
   return items.slice(offset, offset + limit);
 }
-
-function parseMetricType(value: unknown): MetricRollupItemView['metricType'] | null {
-  if (value === 'counter' || value === 'histogram' || value === 'gauge') {
-    return value;
-  }
-
-  return null;
-}
-
-function parseStringRecord(value: unknown): Record<string, string> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return {};
-  }
-
-  const result: Record<string, string> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item === 'string') {
-      result[key] = item;
-    }
-  }
-
-  return result;
-}
-
 
 function assertTenantScope(state: { orgId: string; projectId: string }, scope: TenantScopeInput): void {
   if (scope.orgId && scope.orgId !== state.orgId) { throw new Error(`Tenant org mismatch: requested ${scope.orgId}`); }

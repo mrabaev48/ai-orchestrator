@@ -6,7 +6,7 @@ import {
   createEmptyProjectState,
   makeEvent,
 } from '@ai-orchestrator/core';
-import { InMemoryStateStore } from '@ai-orchestrator/state';
+import { InMemoryObservabilityStore, InMemoryStateStore } from '@ai-orchestrator/state';
 
 test('DashboardQueryService returns state summary view from current state', async () => {
   const state = createEmptyProjectState({
@@ -193,26 +193,33 @@ test('DashboardQueryService returns metrics and trace audit views', async () => 
     summary: 'Summary',
   });
   const store = new InMemoryStateStore(state);
-  await store.recordEvent(makeEvent('METRIC_RECORDED', {
+  const observabilityStore = new InMemoryObservabilityStore();
+  await observabilityStore.recordMetric({
     metricType: 'counter',
     name: 'task_run_total',
     value: 1,
+    runId: 'run-1',
+    correlationId: 'run-1',
     tags: { taskId: 'task-1', status: 'completed' },
-  }, { runId: 'run-1' }));
-  await store.recordEvent(makeEvent('METRIC_RECORDED', {
-    metricType: 'histogram',
-    name: 'span_tool_invocation_duration_ms',
-    value: 42,
+  });
+  await observabilityStore.recordSpan({
+    spanName: 'tool_invocation',
+    durationMs: 42,
+    status: 'ok',
+    runId: 'run-1',
+    correlationId: 'run-1',
+    taskId: 'task-1',
+    role: 'coder',
+    toolName: 'file_read',
     tags: { taskId: 'task-1', role: 'coder', toolName: 'file_read', status: 'ok', span: 'tool_invocation' },
-  }, { runId: 'run-1' }));
+  });
 
-  const service = new DashboardQueryService(store);
+  const service = new DashboardQueryService(store, undefined, observabilityStore);
   const metrics = await service.getMetricsAudit();
   const traces = await service.getTraceAudit({ status: 'ok', runId: 'run-1', correlationId: 'run-1' });
 
-  assert.equal(metrics.items.some((item) => item.name === 'span_tool_invocation_duration_ms'), true);
   assert.equal(metrics.items.some((item) => item.name === 'task_run_total'), true);
-  assert.equal(traces.items[0]?.spanName, 'span_tool_invocation_duration_ms');
+  assert.equal(traces.items[0]?.spanName, 'tool_invocation');
   assert.equal(traces.items[0]?.correlationId, 'run-1');
   assert.equal(traces.items[0]?.durationMs, 42);
 });

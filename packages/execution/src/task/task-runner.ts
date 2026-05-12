@@ -278,10 +278,12 @@ export class TaskRunner {
         runId,
         tags: { taskId: task.id, status: taskResult.status },
       });
-      await this.input.telemetry.recordHistogram({
-        name: 'span_task_run_duration_ms',
-        value: Date.now() - taskStartedAt,
+      await this.input.telemetry.recordSpan({
+        spanName: 'task_run',
+        durationMs: Date.now() - taskStartedAt,
+        status: taskResult.status === 'completed' ? 'ok' : 'error',
         runId,
+        taskId: task.id,
         tags: { taskId: task.id, status: taskResult.status, span: 'task_run' },
       });
       return taskResult;

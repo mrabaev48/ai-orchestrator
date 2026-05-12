@@ -9,6 +9,7 @@ import { StateStoreError } from '@ai-orchestrator/shared';
 import {
   createPostgresMigrations,
   InMemoryStateStore,
+  InMemoryObservabilityStore,
   POSTGRES_REQUIRED_SCHEMA_VERSION,
   PostgresMigrationRunner,
   validatePostgresMigrations,
@@ -123,6 +124,16 @@ test('Postgres failure_log migrations include the full failure contract fields',
   ]);
 });
 
+test('Postgres migrations include dedicated observability telemetry storage', () => {
+  const migrations = createPostgresMigrations((name) => name);
+  const observabilityMigration = migrations.find((migration) => migration.name === 'observability_telemetry_store');
+
+  assert.ok(observabilityMigration);
+  assert.equal(observabilityMigration.statements.some((statement) => statement.includes('CREATE TABLE IF NOT EXISTS telemetry_metrics')), true);
+  assert.equal(observabilityMigration.statements.some((statement) => statement.includes('CREATE TABLE IF NOT EXISTS telemetry_spans')), true);
+  assert.equal(observabilityMigration.statements.some((statement) => statement.includes('expires_at')), true);
+});
+
 test('Postgres migrations expose stable checksums and required schema version', () => {
   const migrations = createPostgresMigrations((name) => name);
 
@@ -156,20 +167,55 @@ test('Postgres migration runner applies pending migrations and records history',
 
   assert.equal(result.requiredVersion, POSTGRES_REQUIRED_SCHEMA_VERSION);
   assert.equal(result.appliedVersion, POSTGRES_REQUIRED_SCHEMA_VERSION);
-  assert.deepEqual(pool.appliedRows.map((row) => row.id), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(pool.appliedRows.map((row) => row.id), [1, 2, 3, 4, 5, 6, 7, 8]);
   assert.equal(pool.queries.some((query) => query.sql.includes('CREATE SCHEMA IF NOT EXISTS')), true);
   assert.equal(pool.queries.filter((query) => query.sql === 'BEGIN').length, POSTGRES_REQUIRED_SCHEMA_VERSION);
 });
 
 test('Postgres migration runner applies only missing migrations from contiguous history', async () => {
   const migrations = createPostgresMigrations((name) => name);
-  const pool = new FakeMigrationPool(migrations.slice(0, 6).map(toAppliedMigration));
+  const pool = new FakeMigrationPool(migrations.slice(0, 7).map(toAppliedMigration));
   const runner = new PostgresMigrationRunner(pool, { migrations });
 
   const result = await runner.applyPendingMigrations();
 
   assert.equal(result.appliedVersion, POSTGRES_REQUIRED_SCHEMA_VERSION);
-  assert.deepEqual(pool.insertedMigrationIds, [7]);
+  assert.deepEqual(pool.insertedMigrationIds, [8]);
+});
+
+test('InMemoryObservabilityStore keeps telemetry outside state snapshots and purges expired records', async () => {
+  const state = makeState();
+  const stateStore = new InMemoryStateStore(state);
+  const observabilityStore = new InMemoryObservabilityStore({ retentionDays: 1 });
+
+  await observabilityStore.recordMetric({
+    name: 'task_run_total',
+    metricType: 'counter',
+    value: 1,
+    runId: 'run-1',
+    tags: { taskId: 'task-1', status: 'completed' },
+    createdAt: '2026-05-01T00:00:00.000Z',
+  });
+  await observabilityStore.recordSpan({
+    spanName: 'task_run',
+    durationMs: 42,
+    status: 'ok',
+    runId: 'run-1',
+    taskId: 'task-1',
+    tags: { taskId: 'task-1' },
+    createdAt: '2026-05-01T00:00:00.000Z',
+  });
+
+  const loadedState = await stateStore.load();
+  assert.equal(loadedState.artifacts.length, 0);
+  assert.equal((await stateStore.listEvents()).length, 0);
+  assert.equal((await observabilityStore.listMetrics()).length, 1);
+  assert.equal((await observabilityStore.listSpans()).length, 1);
+
+  const purged = await observabilityStore.purgeExpired('2026-05-02T00:00:00.001Z');
+  assert.equal(purged, 2);
+  assert.equal((await observabilityStore.listMetrics()).length, 0);
+  assert.equal((await observabilityStore.listSpans()).length, 0);
 });
 
 test('Postgres migration runner rejects checksum mismatches', async () => {

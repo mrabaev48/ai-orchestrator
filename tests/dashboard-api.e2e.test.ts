@@ -8,11 +8,11 @@ import { DashboardReadApiService } from '@ai-orchestrator/dashboard-api';
 import { DashboardQueryController } from '@ai-orchestrator/dashboard-api';
 import { HealthController } from '@ai-orchestrator/dashboard-api';
 import { DashboardReadinessService } from '@ai-orchestrator/dashboard-api';
-import { STATE_STORE } from '@ai-orchestrator/dashboard-api';
+import { OBSERVABILITY_STORE, STATE_STORE } from '@ai-orchestrator/dashboard-api';
 import { createDashboardApiApp } from '@ai-orchestrator/dashboard-api';
 import type { DashboardRuntimeContext } from '@ai-orchestrator/dashboard-api';
 import { computeRunStepChecksum, makeEvent, type RunStepLogEntry } from '@ai-orchestrator/core';
-import type { StateStore } from '@ai-orchestrator/state';
+import type { ObservabilityStore, StateStore } from '@ai-orchestrator/state';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 
 const DASHBOARD_PROJECT = {
@@ -167,6 +167,7 @@ test('dashboard api query routes enforce HTTP contracts and validation', async (
   try {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
     const stateStore = app.get<StateStore>(STATE_STORE);
+    const observabilityStore = app.get<ObservabilityStore>(OBSERVABILITY_STORE);
     const state = await stateStore.load();
     state.artifacts.push({
       id: 'release-assessment-http',
@@ -192,11 +193,13 @@ test('dashboard api query routes enforce HTTP contracts and validation', async (
       createdAt: '2026-05-05T01:00:00.000Z',
     });
     await stateStore.save(state);
-    await stateStore.recordEvent(makeEvent('METRIC_RECORDED', {
+    await observabilityStore.recordMetric({
       metricType: 'counter',
       name: 'dashboard_http_route_total',
       value: 1,
-    }, { runId: 'run-http' }));
+      runId: 'run-http',
+      tags: { route: '/api/state' },
+    });
 
     const stateResponse = await request(server)
       .get('/api/state')
@@ -207,7 +210,10 @@ test('dashboard api query routes enforce HTTP contracts and validation', async (
     const reviewResponse = await request(server)
       .get('/api/readiness/production-review?runId=run-http&projectId=ai-orchestrator')
       .set('x-api-key', 'test-key');
-    const eventsResponse = await request(server)
+    const metricsResponse = await request(server)
+      .get('/api/audit/metrics')
+      .set('x-api-key', 'test-key');
+    const metricEventsResponse = await request(server)
       .get('/api/events?eventType=METRIC_RECORDED')
       .set('x-api-key', 'test-key');
     const invalidEventResponse = await request(server)
@@ -217,7 +223,8 @@ test('dashboard api query routes enforce HTTP contracts and validation', async (
     const stateBody = stateResponse.body as { projectId?: unknown };
     const backlogExportBody = backlogExportResponse.body as { format?: unknown; content?: unknown };
     const reviewBody = reviewResponse.body as { artifactId?: unknown; verdict?: unknown };
-    const eventsBody = eventsResponse.body as { items?: { type?: unknown }[] };
+    const metricsBody = metricsResponse.body as { items?: { name?: unknown }[] };
+    const metricEventsBody = metricEventsResponse.body as { items?: { type?: unknown }[] };
 
     assert.equal(stateResponse.status, 200);
     assert.equal(stateBody.projectId, 'ai-orchestrator');
@@ -227,8 +234,10 @@ test('dashboard api query routes enforce HTTP contracts and validation', async (
     assert.equal(reviewResponse.status, 200);
     assert.equal(reviewBody.artifactId, 'release-assessment-http');
     assert.equal(reviewBody.verdict, 'ready');
-    assert.equal(eventsResponse.status, 200);
-    assert.equal(eventsBody.items?.[0]?.type, 'METRIC_RECORDED');
+    assert.equal(metricsResponse.status, 200);
+    assert.equal(metricsBody.items?.[0]?.name, 'dashboard_http_route_total');
+    assert.equal(metricEventsResponse.status, 200);
+    assert.equal(metricEventsBody.items?.length, 0);
     assert.equal(invalidEventResponse.status, 400);
   } finally {
     await app.close();

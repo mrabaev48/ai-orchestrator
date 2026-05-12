@@ -83,6 +83,55 @@ export interface ApplicationStateStore {
   markTaskDone: (taskId: string, summary: string, options?: StateWriteOptions) => Promise<StateMutationResult>;
 }
 
+export type TelemetryMetricType = 'counter' | 'histogram' | 'gauge';
+export type TelemetrySpanStatus = 'ok' | 'error';
+
+export interface ApplicationTelemetryMetricRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly metricType: TelemetryMetricType;
+  readonly value: number;
+  readonly tags: Record<string, string>;
+  readonly createdAt: string;
+  readonly runId?: string;
+  readonly correlationId?: string;
+}
+
+export interface ApplicationTelemetrySpanRecord {
+  readonly id: string;
+  readonly spanName: string;
+  readonly durationMs: number;
+  readonly status: TelemetrySpanStatus;
+  readonly tags: Record<string, string>;
+  readonly createdAt: string;
+  readonly runId?: string;
+  readonly correlationId?: string;
+  readonly taskId?: string;
+  readonly role?: string;
+  readonly toolName?: string;
+}
+
+export interface ApplicationTelemetryMetricsQuery {
+  readonly runId?: string;
+  readonly correlationId?: string;
+  readonly name?: string;
+  readonly metricType?: TelemetryMetricType;
+}
+
+export interface ApplicationTelemetrySpansQuery {
+  readonly runId?: string;
+  readonly correlationId?: string;
+  readonly taskId?: string;
+  readonly role?: string;
+  readonly toolName?: string;
+  readonly status?: TelemetrySpanStatus;
+}
+
+export interface ApplicationObservabilityStore {
+  listMetrics: (query?: ApplicationTelemetryMetricsQuery) => Promise<ApplicationTelemetryMetricRecord[]>;
+  listSpans: (query?: ApplicationTelemetrySpansQuery) => Promise<ApplicationTelemetrySpanRecord[]>;
+}
+
 export type DedupFinalizeStatus = 'succeeded' | 'failed';
 
 export interface DedupRegistryEntry {

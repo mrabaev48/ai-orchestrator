@@ -1,6 +1,5 @@
-import { makeEvent } from '@ai-orchestrator/core';
 import type { Logger } from '@ai-orchestrator/shared';
-import type { StateStore } from '@ai-orchestrator/state';
+import type { ObservabilityStore, TelemetryMetricType, TelemetrySpanStatus } from '@ai-orchestrator/state';
 
 export interface CounterMetricInput {
   name: string;
@@ -10,17 +9,30 @@ export interface CounterMetricInput {
   tags?: Record<string, string>;
 }
 
+export interface SpanMetricInput {
+  spanName: string;
+  durationMs: number;
+  status: TelemetrySpanStatus;
+  runId?: string;
+  correlationId?: string;
+  taskId?: string;
+  role?: string;
+  toolName?: string;
+  tags?: Record<string, string>;
+}
+
 export interface ExecutionTelemetry {
   incrementCounter: (input: CounterMetricInput) => Promise<void>;
   recordHistogram: (input: CounterMetricInput) => Promise<void>;
+  recordSpan: (input: SpanMetricInput) => Promise<void>;
 }
 
-export class StateStoreExecutionTelemetry implements ExecutionTelemetry {
-  private readonly stateStore: StateStore;
+export class ObservabilityStoreExecutionTelemetry implements ExecutionTelemetry {
+  private readonly observabilityStore: ObservabilityStore;
   private readonly logger: Logger;
 
-  constructor(stateStore: StateStore, logger: Logger) {
-    this.stateStore = stateStore;
+  constructor(observabilityStore: ObservabilityStore, logger: Logger) {
+    this.observabilityStore = observabilityStore;
     this.logger = logger;
   }
 
@@ -32,30 +44,54 @@ export class StateStoreExecutionTelemetry implements ExecutionTelemetry {
     await this.recordMetric('histogram', input);
   }
 
-  private async recordMetric(metricType: 'counter' | 'histogram', input: CounterMetricInput): Promise<void> {
-    const metricValue = input.value ?? 1;
-    const metricEvent = makeEvent(
-      'METRIC_RECORDED',
-      {
-        metricType,
-        name: input.name,
-        value: metricValue,
+  async recordSpan(input: SpanMetricInput): Promise<void> {
+    try {
+      await this.observabilityStore.recordSpan({
+        spanName: input.spanName,
+        durationMs: input.durationMs,
+        status: input.status,
+        ...(input.runId ? { runId: input.runId } : {}),
+        ...(input.correlationId ?? input.runId ? { correlationId: input.correlationId ?? input.runId } : {}),
+        ...(input.taskId ? { taskId: input.taskId } : {}),
+        ...(input.role ? { role: input.role } : {}),
+        ...(input.toolName ? { toolName: input.toolName } : {}),
         tags: {
           ...(input.tags ?? {}),
           ...(input.runId ? { runId: input.runId } : {}),
           ...(input.correlationId ? { correlationId: input.correlationId } : {}),
         },
-      },
-      {
-        ...(input.runId ? { runId: input.runId } : {}),
-        ...(input.correlationId ? { correlationId: input.correlationId } : {}),
-      },
-    );
-
-    try {
-      await this.stateStore.recordEvent(metricEvent);
+      });
     } catch {
-      this.logger.warn('Unable to persist telemetry metric event', {
+      this.logger.warn('Unable to persist telemetry span', {
+        event: 'telemetry_span_record_failed',
+        ...(input.runId ? { runId: input.runId } : {}),
+        data: {
+          spanName: input.spanName,
+          durationMs: input.durationMs,
+          status: input.status,
+          tags: input.tags ?? {},
+        },
+      });
+    }
+  }
+
+  private async recordMetric(metricType: TelemetryMetricType, input: CounterMetricInput): Promise<void> {
+    const metricValue = input.value ?? 1;
+    try {
+      await this.observabilityStore.recordMetric({
+        metricType,
+        name: input.name,
+        value: metricValue,
+        ...(input.runId ? { runId: input.runId } : {}),
+        ...(input.correlationId ?? input.runId ? { correlationId: input.correlationId ?? input.runId } : {}),
+        tags: {
+          ...(input.tags ?? {}),
+          ...(input.runId ? { runId: input.runId } : {}),
+          ...(input.correlationId ? { correlationId: input.correlationId } : {}),
+        },
+      });
+    } catch {
+      this.logger.warn('Unable to persist telemetry metric', {
         event: 'telemetry_metric_record_failed',
         ...(input.runId ? { runId: input.runId } : {}),
         data: {

@@ -103,6 +103,9 @@ const runtimeConfigSchema = z.strictObject({
     level: logLevelSchema,
     format: logFormatSchema,
   }),
+  observability: z.strictObject({
+    retentionDays: z.number().int().positive().optional(),
+  }).optional(),
 });
 
 const envSchema = z.object({
@@ -150,6 +153,7 @@ const envSchema = z.object({
   TOOL_PERSIST_EVIDENCE: z.stringbool().default(true),
   LOG_LEVEL: logLevelSchema.default('info'),
   LOG_FORMAT: logFormatSchema.default('json'),
+  OBSERVABILITY_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
   RUNTIME_CONFIG_FILE: z.string().trim().min(1).optional(),
 });
 
@@ -271,6 +275,10 @@ export function loadRuntimeConfig(options: LoadRuntimeConfigOptions = {}): Runti
       level: env.data.LOG_LEVEL,
       format: env.data.LOG_FORMAT,
       ...fileConfig.logging,
+    },
+    observability: {
+      retentionDays: env.data.OBSERVABILITY_RETENTION_DAYS,
+      ...fileConfig.observability,
     },
   };
 
