@@ -10,17 +10,18 @@ import {
   evaluateHumanOverride,
   evaluateKillSwitch,
 } from '@ai-orchestrator/application';
-import { createRuntimeApplicationContext } from '@ai-orchestrator/runtime';
+import { createRuntimeApplicationContext, migratePostgresState } from '@ai-orchestrator/runtime';
 import {
   createLogger,
   loadRuntimeConfig,
   OrchestratorError,
   ConfigError,
   SafetyViolationError,
+  type RuntimeConfig,
 } from '@ai-orchestrator/shared';
 import { authorizeControlPlaneCommand } from './authz/rbac-abac.js';
 
-type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'run-task' | 'show-state' | 'export-backlog' | 'resume-failure' | 'replay-failure';
+type CommandName = 'bootstrap' | 'analyze-architecture' | 'plan-backlog' | 'generate-docs' | 'assess-release' | 'check-state' | 'prepare-export' | 'run-cycle' | 'run-task' | 'show-state' | 'export-backlog' | 'resume-failure' | 'replay-failure' | 'state-migrate';
 
 const RESTRICTED_COMMANDS = new Set<CommandName>([
   'bootstrap',
@@ -34,6 +35,7 @@ const RESTRICTED_COMMANDS = new Set<CommandName>([
   'run-task',
   'resume-failure',
   'replay-failure',
+  'state-migrate',
 ]);
 
 async function main(): Promise<void> {
@@ -81,6 +83,12 @@ async function main(): Promise<void> {
       ...(ownerTeam ? { ownerTeam } : {}),
     },
   });
+
+  if (command === 'state-migrate') {
+    await migrateState(runtimeConfig);
+    return;
+  }
+
   const application = createRuntimeApplicationContext({
     config: runtimeConfig,
     logger,
@@ -167,6 +175,16 @@ async function main(): Promise<void> {
     default:
       throw new ConfigError(`Unknown command: ${String(command)}`);
   }
+}
+
+async function migrateState(config: RuntimeConfig): Promise<void> {
+  const result = await migratePostgresState(config);
+  console.log(JSON.stringify({
+    status: 'ok',
+    requiredVersion: result.requiredVersion,
+    appliedVersion: result.appliedVersion,
+    appliedMigrationIds: result.appliedMigrationIds,
+  }));
 }
 
 async function resumeFailure(service: ControlPlaneService, failureId?: string): Promise<void> {

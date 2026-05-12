@@ -32,6 +32,7 @@ test('loadRuntimeConfig applies defaults and normalizes paths', () => {
   assert.equal(config.workflow.workspaceBranchTtlHours, 24);
   assert.equal(config.workflow.qualityGateMode, 'tooling');
   assert.equal(config.workflow.roleProviderMode, 'production');
+  assert.equal(config.state.postgresMigrationMode, 'verify');
   assert.equal(config.tools.allowedWritePaths[0], '/tmp/workspace/src');
   assert.equal(config.tools.allowedWritePaths[1], '/tmp/workspace/tests');
   assert.equal(config.tools.allowedShellCommands.includes('node'), true);
@@ -107,6 +108,17 @@ test('loadRuntimeConfig supports distributed lock configuration', () => {
   assert.equal(config.workflow.runLockProvider, 'postgresql');
   assert.equal(config.workflow.runLockDsn, 'postgresql://localhost:5432/ai_orchestrator');
   assert.equal(config.workflow.fencingTtlMs, 90_000);
+});
+
+test('loadRuntimeConfig supports explicit PostgreSQL migration mode', () => {
+  const config = loadRuntimeConfig({
+    env: {
+      TOOL_ALLOWED_WRITE_PATHS: '.',
+      STATE_POSTGRES_MIGRATION_MODE: 'auto',
+    },
+  });
+
+  assert.equal(config.state.postgresMigrationMode, 'auto');
 });
 
 test('loadRuntimeConfig supports workspace manager mode and ttl configuration', () => {
@@ -370,6 +382,19 @@ test('loadRuntimeConfig rejects invalid postgresql dsn scheme', () => {
         env: {
           STATE_BACKEND: 'postgresql',
           POSTGRES_DSN: 'mysql://localhost/db',
+          TOOL_ALLOWED_WRITE_PATHS: '.',
+        },
+      }),
+    ConfigError,
+  );
+});
+
+test('loadRuntimeConfig rejects invalid PostgreSQL migration mode', () => {
+  assert.throws(
+    () =>
+      loadRuntimeConfig({
+        env: {
+          STATE_POSTGRES_MIGRATION_MODE: 'manual',
           TOOL_ALLOWED_WRITE_PATHS: '.',
         },
       }),

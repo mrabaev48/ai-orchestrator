@@ -22,34 +22,38 @@ import type {
   StateStore,
   StateWriteOptions,
 } from '../StateStore.js';
-import { createPostgresMigrations } from './migrations.js';
 import { expectedRevisionFor, stateRevisionConflict } from '../revision.js';
 import { buildFailureRecord } from '../failure-record.js';
+import { PostgresMigrationRunner } from './PostgresMigrationRunner.js';
+import {
+  isPgUniqueViolation,
+  loadPgPool,
+  quotePostgresIdentifier,
+  type PgPoolLike,
+  type PgTransactionClient,
+} from './pg.js';
 
-interface PgPoolLike {
-  connect: () => Promise<PgClientLike>;
-  query: (sql: string, values?: readonly unknown[]) => Promise<{ rows: unknown[] }>;
-}
-
-interface PgClientLike {
-  query: (sql: string, values?: readonly unknown[]) => Promise<{ rows: unknown[] }>;
-  release: () => void;
-}
-
-interface PgModule {
-  Pool: new (options: { connectionString: string }) => PgPoolLike;
+export interface PostgresStateStoreOptions {
+  readonly schema?: string;
+  readonly migrationMode?: 'verify' | 'auto';
 }
 
 export class PostgresStateStore implements StateStore {
   private readonly poolPromise: Promise<PgPoolLike>;
   private readonly initialState: ProjectState;
   private readonly schema: string;
+  private readonly migrationMode: 'verify' | 'auto';
   private initialization: Promise<void> | null = null;
 
-  constructor(connectionString: string, initialState: ProjectState, schema = 'public') {
+  constructor(
+    connectionString: string,
+    initialState: ProjectState,
+    schemaOrOptions: string | PostgresStateStoreOptions = 'public',
+  ) {
     this.poolPromise = loadPgPool(connectionString);
     this.initialState = initialState;
-    this.schema = schema;
+    this.schema = typeof schemaOrOptions === 'string' ? schemaOrOptions : schemaOrOptions.schema ?? 'public';
+    this.migrationMode = typeof schemaOrOptions === 'string' ? 'verify' : schemaOrOptions.migrationMode ?? 'verify';
   }
 
   private get tenantScope(): { orgId: string; projectId: string } {
@@ -482,9 +486,7 @@ export class PostgresStateStore implements StateStore {
   }
 
   private table(name: string): string {
-    const normalizedSchema = this.schema.replace(/"/g, '""');
-    const normalizedTable = name.replace(/"/g, '""');
-    return `"${normalizedSchema}"."${normalizedTable}"`;
+    return `${quotePostgresIdentifier(this.schema)}.${quotePostgresIdentifier(name)}`;
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -495,20 +497,22 @@ export class PostgresStateStore implements StateStore {
   private async initialize(): Promise<void> {
     const pool = await this.poolPromise;
     try {
-      await pool.query(`CREATE SCHEMA IF NOT EXISTS "${this.schema.replace(/"/g, '""')}"`);
-      const migrations = createPostgresMigrations((name) => this.table(name));
-      for (const migration of migrations) {
-        for (const statement of migration.statements) {
-          await pool.query(statement);
-        }
+      const runner = new PostgresMigrationRunner(pool, { schema: this.schema });
+      if (this.migrationMode === 'auto') {
+        await runner.applyPendingMigrations();
+        return;
       }
+      await runner.verifySchemaCompatibility();
     } catch (error) {
+      if (error instanceof StateStoreError) {
+        throw error;
+      }
       throw new StateStoreError('Unable to initialize PostgreSQL state store', { cause: error });
     }
   }
 
   private async insertSnapshot(
-    client: PgClientLike,
+    client: PgTransactionClient,
     state: ProjectState,
     options: StateWriteOptions = {},
   ): Promise<number> {
@@ -546,7 +550,7 @@ export class PostgresStateStore implements StateStore {
     }
   }
 
-  private async lockAndLoadCurrentSnapshotRevision(client: PgClientLike): Promise<number> {
+  private async lockAndLoadCurrentSnapshotRevision(client: PgTransactionClient): Promise<number> {
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
       [this.tenantScope.orgId, this.tenantScope.projectId],
@@ -563,7 +567,7 @@ export class PostgresStateStore implements StateStore {
     return revision == null ? 0 : Number(revision);
   }
 
-  private async insertEvent(client: PgClientLike, event: DomainEvent): Promise<void> {
+  private async insertEvent(client: PgTransactionClient, event: DomainEvent): Promise<void> {
     await client.query(
       `INSERT INTO ${this.table('domain_events')} (
         id, org_id, project_id, event_type, created_at, run_id, payload_json
@@ -580,7 +584,7 @@ export class PostgresStateStore implements StateStore {
     );
   }
 
-  private async withTransaction<T>(action: (client: PgClientLike) => Promise<T>): Promise<T> {
+  private async withTransaction<T>(action: (client: PgTransactionClient) => Promise<T>): Promise<T> {
     const pool = await this.poolPromise;
     const client = await pool.connect();
     try {
@@ -598,35 +602,4 @@ export class PostgresStateStore implements StateStore {
       client.release();
     }
   }
-}
-
-async function loadPgPool(connectionString: string): Promise<PgPoolLike> {
-  try {
-    const pgModule = asPgModule(await importOptionalModule('pg'));
-    return new pgModule.Pool({ connectionString });
-  } catch (error) {
-    throw new StateStoreError(
-      'PostgreSQL backend requires the "pg" package to be installed and resolvable at runtime',
-      { cause: error },
-    );
-  }
-}
-
-async function importOptionalModule(moduleName: string): Promise<unknown> {
-  return await import(moduleName);
-}
-
-function asPgModule(module: unknown): PgModule {
-  if (isRecord(module) && typeof module.Pool === 'function') {
-    return module as unknown as PgModule;
-  }
-  throw new StateStoreError('PostgreSQL backend loaded an invalid "pg" module');
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isPgUniqueViolation(error: unknown): boolean {
-  return isRecord(error) && error.code === '23505';
 }

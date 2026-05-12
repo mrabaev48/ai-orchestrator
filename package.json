@@ -12,6 +12,7 @@
     "check-state": "tsx apps/control-plane/src/cli.ts check-state",
     "prepare-export": "tsx apps/control-plane/src/cli.ts prepare-export",
     "run-cycle": "tsx apps/control-plane/src/cli.ts run-cycle",
+    "state:migrate": "tsx apps/control-plane/src/cli.ts state-migrate",
     "show-state": "tsx apps/control-plane/src/cli.ts show-state",
     "export-backlog": "tsx apps/control-plane/src/cli.ts export-backlog",
     "dashboard-api:start": "tsx apps/dashboard-api/src/main.ts",

@@ -7,9 +7,15 @@ import {
 } from '@ai-orchestrator/core';
 import { StateStoreError } from '@ai-orchestrator/shared';
 import {
+  createPostgresMigrations,
   InMemoryStateStore,
+  POSTGRES_REQUIRED_SCHEMA_VERSION,
+  PostgresMigrationRunner,
+  validatePostgresMigrations,
+  type PostgresAppliedMigration,
+  type PostgresMigration,
 } from '@ai-orchestrator/state';
-import { createPostgresMigrations } from '../packages/state/src/postgres/migrations.js';
+import type { PgPoolLike, PgQueryResult, PgTransactionClient } from '../packages/state/src/postgres/pg.js';
 
 function makeState() {
   const state = createEmptyProjectState({
@@ -115,6 +121,85 @@ test('Postgres failure_log migrations include the full failure contract fields',
     'ALTER TABLE failure_log ADD COLUMN IF NOT EXISTS checkpoint_step_id TEXT',
     'ALTER TABLE failure_log ADD COLUMN IF NOT EXISTS dead_lettered_at TIMESTAMPTZ',
   ]);
+});
+
+test('Postgres migrations expose stable checksums and required schema version', () => {
+  const migrations = createPostgresMigrations((name) => name);
+
+  assert.equal(migrations.at(-1)?.id, POSTGRES_REQUIRED_SCHEMA_VERSION);
+  assert.equal(migrations.every((migration) => /^[a-f0-9]{64}$/.test(migration.checksum)), true);
+});
+
+test('Postgres migration validation rejects duplicate migration ids', () => {
+  const migrations = createPostgresMigrations((name) => name);
+  const duplicate = [
+    migrations[0],
+    { ...migrations[1], id: migrations[0]?.id ?? 1 },
+    ...migrations.slice(2),
+  ].filter((migration): migration is PostgresMigration => migration != null);
+
+  assert.throws(
+    () => {
+      validatePostgresMigrations(duplicate);
+    },
+    /duplicate ids|ordered by ascending id/,
+  );
+});
+
+test('Postgres migration runner applies pending migrations and records history', async () => {
+  const pool = new FakeMigrationPool();
+  const runner = new PostgresMigrationRunner(pool, {
+    migrations: createPostgresMigrations((name) => name),
+  });
+
+  const result = await runner.applyPendingMigrations();
+
+  assert.equal(result.requiredVersion, POSTGRES_REQUIRED_SCHEMA_VERSION);
+  assert.equal(result.appliedVersion, POSTGRES_REQUIRED_SCHEMA_VERSION);
+  assert.deepEqual(pool.appliedRows.map((row) => row.id), [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(pool.queries.some((query) => query.sql.includes('CREATE SCHEMA IF NOT EXISTS')), true);
+  assert.equal(pool.queries.filter((query) => query.sql === 'BEGIN').length, POSTGRES_REQUIRED_SCHEMA_VERSION);
+});
+
+test('Postgres migration runner applies only missing migrations from contiguous history', async () => {
+  const migrations = createPostgresMigrations((name) => name);
+  const pool = new FakeMigrationPool(migrations.slice(0, 6).map(toAppliedMigration));
+  const runner = new PostgresMigrationRunner(pool, { migrations });
+
+  const result = await runner.applyPendingMigrations();
+
+  assert.equal(result.appliedVersion, POSTGRES_REQUIRED_SCHEMA_VERSION);
+  assert.deepEqual(pool.insertedMigrationIds, [7]);
+});
+
+test('Postgres migration runner rejects checksum mismatches', async () => {
+  const migrations = createPostgresMigrations((name) => name);
+  const pool = new FakeMigrationPool([
+    {
+      ...toAppliedMigration(migrations[0]!),
+      checksum: '0'.repeat(64),
+    },
+  ]);
+  const runner = new PostgresMigrationRunner(pool, { migrations });
+
+  await assert.rejects(
+    async () => runner.verifySchemaCompatibility(),
+    /checksum mismatch/,
+  );
+});
+
+test('Postgres verify-only compatibility check does not run schema DDL when history is missing', async () => {
+  const pool = new FakeMigrationPool([], { historyTableMissing: true });
+  const runner = new PostgresMigrationRunner(pool, {
+    migrations: createPostgresMigrations((name) => name),
+  });
+
+  await assert.rejects(
+    async () => runner.verifySchemaCompatibility(),
+    /not migrated to the required version/,
+  );
+  assert.equal(pool.queries.some((query) => query.sql.includes('CREATE SCHEMA')), false);
+  assert.equal(pool.queries.some((query) => query.sql === 'BEGIN'), false);
 });
 
 test('InMemoryStateStore rejects stale whole-snapshot saves without losing newer state', async () => {
@@ -279,5 +364,84 @@ function isRevisionConflict(error: unknown): boolean {
     && typeof error.details === 'object'
     && 'code' in error.details
     && error.details.code === 'STATE_REVISION_CONFLICT';
+}
+
+interface FakeQuery {
+  readonly sql: string;
+  readonly values?: readonly unknown[];
+}
+
+interface FakeMigrationPoolOptions {
+  readonly historyTableMissing?: boolean;
+}
+
+class FakeMigrationPool implements PgPoolLike, PgTransactionClient {
+  readonly queries: FakeQuery[] = [];
+  readonly appliedRows: PostgresAppliedMigration[];
+  readonly insertedMigrationIds: number[] = [];
+
+  constructor(
+    appliedRows: readonly PostgresAppliedMigration[] = [],
+    private readonly options: FakeMigrationPoolOptions = {},
+  ) {
+    this.appliedRows = appliedRows.map((migration) => ({ ...migration }));
+  }
+
+  async connect(): Promise<PgTransactionClient> {
+    return this;
+  }
+
+  release(): void {
+    return undefined;
+  }
+
+  async query<Row extends Record<string, unknown> = Record<string, unknown>>(
+    sql: string,
+    values?: readonly unknown[],
+  ): Promise<PgQueryResult<Row>> {
+    this.queries.push(values ? { sql, values } : { sql });
+
+    if (sql.includes('SELECT id, name, checksum, applied_at, execution_ms')) {
+      if (this.options.historyTableMissing) {
+        throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
+      }
+      return {
+        rows: this.appliedRows.map((migration) => ({
+          id: migration.id,
+          name: migration.name,
+          checksum: migration.checksum,
+          applied_at: migration.appliedAt,
+          execution_ms: migration.executionMs,
+        } as unknown as Row)),
+      };
+    }
+
+    if (sql.includes('INSERT INTO') && sql.includes('schema_migrations')) {
+      const [id, name, checksum, executionMs] = values ?? [];
+      if (typeof id !== 'number' || typeof name !== 'string' || typeof checksum !== 'string') {
+        throw new Error('Invalid fake migration insert values');
+      }
+      this.insertedMigrationIds.push(id);
+      this.appliedRows.push({
+        id,
+        name,
+        checksum,
+        appliedAt: '2026-05-12T00:00:00.000Z',
+        executionMs: typeof executionMs === 'number' ? executionMs : 0,
+      });
+    }
+
+    return { rows: [] };
+  }
+}
+
+function toAppliedMigration(migration: PostgresMigration): PostgresAppliedMigration {
+  return {
+    id: migration.id,
+    name: migration.name,
+    checksum: migration.checksum,
+    appliedAt: '2026-05-12T00:00:00.000Z',
+    executionMs: 1,
+  };
 }
 

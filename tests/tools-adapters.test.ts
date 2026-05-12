@@ -106,7 +106,7 @@ test('tools adapter requires explicit workspace context for unified execution', 
   ) => ReturnType<typeof tools.execute>;
 
   await assert.rejects(
-    () => executeWithoutOptions({
+    async () => executeWithoutOptions({
       toolName: 'shell_exec',
       input: { command: 'node', args: ['--version'] },
     }),

@@ -22,6 +22,7 @@ test('bootstrap writes initial state with memory backend', () => {
           LLM_PROVIDER: 'mock',
           LLM_MODEL: 'gpt-test',
           STATE_BACKEND: 'memory',
+          WORKFLOW_ROLE_PROVIDER_MODE: 'synthetic',
           TOOL_ALLOWED_WRITE_PATHS: '.',
         },
         encoding: 'utf8',
@@ -43,6 +44,7 @@ test('bootstrap fails fast on invalid config', () => {
       env: {
         ...process.env,
         STATE_BACKEND: 'memory',
+        WORKFLOW_ROLE_PROVIDER_MODE: 'synthetic',
         MAX_STEPS_PER_RUN: '0',
         TOOL_ALLOWED_WRITE_PATHS: '.',
       },
@@ -63,6 +65,7 @@ test('run-task fails fast without --task-id', () => {
       env: {
         ...process.env,
         STATE_BACKEND: 'memory',
+        WORKFLOW_ROLE_PROVIDER_MODE: 'synthetic',
         TOOL_ALLOWED_WRITE_PATHS: '.',
       },
       encoding: 'utf8',
@@ -71,6 +74,26 @@ test('run-task fails fast without --task-id', () => {
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Missing --task-id argument for run-task command/);
+});
+
+test('state-migrate requires PostgreSQL backend', () => {
+  const result = spawnSync(
+    tsxBinPath,
+    [cliPath, 'state-migrate'],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        STATE_BACKEND: 'memory',
+        WORKFLOW_ROLE_PROVIDER_MODE: 'synthetic',
+        TOOL_ALLOWED_WRITE_PATHS: '.',
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /state-migrate requires STATE_BACKEND=postgresql/);
 });
 
 test('run-task fails with deterministic error for missing task in state', () => {
@@ -82,6 +105,7 @@ test('run-task fails with deterministic error for missing task in state', () => 
       env: {
         ...process.env,
         STATE_BACKEND: 'memory',
+        WORKFLOW_ROLE_PROVIDER_MODE: 'synthetic',
         TOOL_ALLOWED_WRITE_PATHS: '.',
       },
       encoding: 'utf8',
@@ -103,6 +127,7 @@ test('run-task is blocked by kill-switch without human override', () => {
       env: {
         ...process.env,
         STATE_BACKEND: 'memory',
+        WORKFLOW_ROLE_PROVIDER_MODE: 'synthetic',
         TOOL_ALLOWED_WRITE_PATHS: '.',
         CONTROL_PLANE_KILL_SWITCH_ACTIVE: 'true',
       },
@@ -123,6 +148,7 @@ test('run-task accepts human override while kill-switch is active', () => {
       env: {
         ...process.env,
         STATE_BACKEND: 'memory',
+        WORKFLOW_ROLE_PROVIDER_MODE: 'synthetic',
         TOOL_ALLOWED_WRITE_PATHS: '.',
         CONTROL_PLANE_KILL_SWITCH_ACTIVE: 'true',
         CONTROL_PLANE_HUMAN_OVERRIDE_TOKEN: 'override-token',
