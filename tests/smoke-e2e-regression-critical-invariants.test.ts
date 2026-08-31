@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -14,6 +14,21 @@ import type { DomainEventType } from '@ai-orchestrator/core';
 import { Orchestrator } from '@ai-orchestrator/execution';
 import { createLogger, type RuntimeConfig } from '@ai-orchestrator/shared';
 import { InMemoryStateStore } from '@ai-orchestrator/state';
+import { createScratchGitRepo, removeScratchGitRepo } from './support/scratch-git-repo.js';
+
+// GitWorktreeWorkspaceManager (the default workspace manager mode) shells out
+// to real git against `tools.allowedWritePaths[0]`. Use an isolated scratch
+// repo here instead of the real ai-orchestrator checkout — never point this
+// at process.cwd(), see tests/support/scratch-git-repo.ts for why.
+let scratchRepoRoot: string;
+
+before(async () => {
+  scratchRepoRoot = await createScratchGitRepo('smoke-e2e-repo');
+});
+
+after(async () => {
+  await removeScratchGitRepo(scratchRepoRoot);
+});
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -37,7 +52,7 @@ function makeRuntimeConfig(): RuntimeConfig {
       qualityGateMode: 'synthetic',
     },
     tools: {
-      allowedWritePaths: [process.cwd()],
+      allowedWritePaths: [scratchRepoRoot],
       typescriptDiagnosticsEnabled: true,
       allowedShellCommands: ['node', 'npm', 'pnpm', 'git', 'rg', 'tsx', 'tsc'],
       persistToolEvidence: true,

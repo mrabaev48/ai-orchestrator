@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -35,6 +35,21 @@ import type {
   RoleResponse,
   RoleStepResult,
 } from '@ai-orchestrator/core';
+import { createScratchGitRepo, removeScratchGitRepo } from './support/scratch-git-repo.js';
+
+// GitWorktreeWorkspaceManager (the default workspace manager mode) shells out
+// to real git against `tools.allowedWritePaths[0]`. Use an isolated scratch
+// repo here instead of the real ai-orchestrator checkout — never point this
+// at process.cwd(), see tests/support/scratch-git-repo.ts for why.
+let scratchRepoRoot: string;
+
+before(async () => {
+  scratchRepoRoot = await createScratchGitRepo('run-cycle-repo');
+});
+
+after(async () => {
+  await removeScratchGitRepo(scratchRepoRoot);
+});
 
 function makeRuntimeConfig(): RuntimeConfig {
   return {
@@ -58,7 +73,7 @@ function makeRuntimeConfig(): RuntimeConfig {
       qualityGateMode: 'synthetic',
     },
     tools: {
-      allowedWritePaths: [process.cwd()],
+      allowedWritePaths: [scratchRepoRoot],
       typescriptDiagnosticsEnabled: true,
       allowedShellCommands: ['node', 'npm', 'pnpm', 'git', 'rg', 'tsx', 'tsc'],
       persistToolEvidence: true,
@@ -169,6 +184,10 @@ function makeGitLifecycleTestHarness(input: {
   const executors: GitLifecycleExecutors = {
     workspaceHasGitChanges: async () => input.workspaceHasGitChanges,
     currentGitBranch: async () => input.currentGitBranch ?? 'task-1-run-test',
+    // Always mocked so detectRiskyActionsFromCommit() (reached when the
+    // approval gate is enabled) never falls through to a real `git show`
+    // against workspaceRoot, which in these tests is process.cwd().
+    readCommitNameStatus: async () => [],
   };
   const createCommit = input.createCommit;
   const pushBranch = input.pushBranch;

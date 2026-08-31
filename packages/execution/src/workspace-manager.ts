@@ -4,7 +4,18 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import { createKeyedAsyncMutex } from './locks/keyed-async-mutex.js';
+import { gitSubprocessEnv } from './git/git-subprocess-env.js';
+
 const execFileAsync = promisify(execFile);
+const GIT_ENV = gitSubprocessEnv();
+
+// Shared across every GitWorktreeWorkspaceManager instance (not per-instance)
+// so that two instances constructed against the same repoRoot still
+// serialize their `git worktree`/`git branch` admin operations against each
+// other. Concurrent, unlocked worktree add/prune/remove calls against the
+// same repo are a known trigger for git worktree admin corruption.
+const worktreeMutex = createKeyedAsyncMutex();
 
 export interface WorkspaceAllocationInput {
   runId: string;
@@ -79,9 +90,11 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
     const branchName = `orchestrator/run-${timestamp}-${input.runId}`;
 
     try {
-      await this.cleanupStaleWorktreesAndBranches();
-      const baseBranch = await this.currentBranch();
-      await this.git(['worktree', 'add', '--detach', workspaceRoot, baseBranch], this.repoRoot);
+      await worktreeMutex.runExclusive(this.repoRoot, async () => {
+        await this.cleanupStaleWorktreesAndBranches();
+        const baseBranch = await this.currentBranch();
+        await this.git(['worktree', 'add', '--detach', workspaceRoot, baseBranch], this.repoRoot);
+      });
       await this.git(['checkout', '-b', branchName], workspaceRoot);
       const initialDiff = await captureWorkspaceDiff(workspaceRoot);
 
@@ -95,12 +108,14 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
           return;
         }
         isCleaned = true;
-        try {
-          await this.git(['worktree', 'remove', '--force', workspaceRoot], this.repoRoot);
-        } finally {
-          await rm(workspaceRoot, { recursive: true, force: true });
-          await this.git(['branch', '-D', branchName], this.repoRoot).catch(() => {});
-        }
+        await worktreeMutex.runExclusive(this.repoRoot, async () => {
+          try {
+            await this.git(['worktree', 'remove', '--force', workspaceRoot], this.repoRoot);
+          } finally {
+            await rm(workspaceRoot, { recursive: true, force: true });
+            await this.git(['branch', '-D', branchName], this.repoRoot).catch(() => {});
+          }
+        });
       };
 
       return {
@@ -127,7 +142,7 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
   }
 
   private async git(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
-    return await execFileAsync('git', args, { cwd });
+    return await execFileAsync('git', args, { cwd, env: GIT_ENV });
   }
 
   private async cleanupStaleWorktreesAndBranches(): Promise<void> {
@@ -175,8 +190,8 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
 
 async function captureWorkspaceDiff(cwd: string): Promise<string> {
   const [status, diff] = await Promise.all([
-    execFileAsync('git', ['status', '--short', '--untracked-files=all'], { cwd }),
-    execFileAsync('git', ['diff', '--no-ext-diff'], { cwd }),
+    execFileAsync('git', ['status', '--short', '--untracked-files=all'], { cwd, env: GIT_ENV }),
+    execFileAsync('git', ['diff', '--no-ext-diff'], { cwd, env: GIT_ENV }),
   ]);
 
   const chunks = [status.stdout.trim(), diff.stdout.trim()].filter((entry) => entry.length > 0);
