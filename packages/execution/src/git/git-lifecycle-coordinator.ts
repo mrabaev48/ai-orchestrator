@@ -15,8 +15,10 @@ import { completeSideEffect, reserveSideEffect } from '../idempotency/side-effec
 import type { PolicyDecisionRecorder } from '../persistence/policy-decision-recorder.js';
 import type { ExecutionLeaseGuard } from '../leases/execution-lease-authority.js';
 import { makeArtifact, truncateText } from '../runtime-utils.js';
+import { gitSubprocessEnv } from './git-subprocess-env.js';
 
 const execFileAsync = promisify(execFile);
+const GIT_ENV = gitSubprocessEnv();
 
 export type GitLifecycleStatus = 'ok' | 'approval_pending';
 
@@ -470,6 +472,7 @@ export class GitLifecycleCoordinator {
     try {
       const { stdout } = await execFileAsync('git', ['status', '--short', '--untracked-files=all'], {
         cwd: workspaceRoot,
+        env: GIT_ENV,
       });
       return stdout.trim().length > 0;
     } catch {
@@ -482,7 +485,10 @@ export class GitLifecycleCoordinator {
       return this.input.executors.currentGitBranch(workspaceRoot);
     }
     try {
-      const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { cwd: workspaceRoot });
+      const { stdout } = await execFileAsync('git', ['branch', '--show-current'], {
+        cwd: workspaceRoot,
+        env: GIT_ENV,
+      });
       const branch = stdout.trim();
       return branch.length > 0 ? branch : null;
     } catch {
@@ -498,9 +504,9 @@ export class GitLifecycleCoordinator {
       return this.input.executors.createCommit(workspaceRoot, commitMessage);
     }
     try {
-      await execFileAsync('git', ['add', '-A'], { cwd: workspaceRoot });
-      await execFileAsync('git', ['commit', '-m', commitMessage], { cwd: workspaceRoot });
-      const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: workspaceRoot });
+      await execFileAsync('git', ['add', '-A'], { cwd: workspaceRoot, env: GIT_ENV });
+      await execFileAsync('git', ['commit', '-m', commitMessage], { cwd: workspaceRoot, env: GIT_ENV });
+      const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: workspaceRoot, env: GIT_ENV });
       return { ok: true, commitSha: stdout.trim() };
     } catch {
       return { ok: false };
@@ -512,7 +518,10 @@ export class GitLifecycleCoordinator {
       return this.input.executors.pushBranch(workspaceRoot, branchName);
     }
     try {
-      await execFileAsync('git', ['push', '--set-upstream', 'origin', branchName], { cwd: workspaceRoot });
+      await execFileAsync('git', ['push', '--set-upstream', 'origin', branchName], {
+        cwd: workspaceRoot,
+        env: GIT_ENV,
+      });
       return true;
     } catch {
       return false;
@@ -532,7 +541,7 @@ export class GitLifecycleCoordinator {
       await execFileAsync(
         'gh',
         ['pr', 'create', '--draft', '--head', branchName, '--title', title, '--body', body],
-        { cwd: workspaceRoot },
+        { cwd: workspaceRoot, env: GIT_ENV },
       );
       return true;
     } catch {
@@ -548,7 +557,7 @@ export class GitLifecycleCoordinator {
       const { stdout } = await execFileAsync(
         'git',
         ['show', '--name-status', '--format=', '--no-renames', commitSha],
-        { cwd: workspaceRoot },
+        { cwd: workspaceRoot, env: GIT_ENV },
       );
       return stdout
         .split('\n')
