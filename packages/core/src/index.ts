@@ -34,3 +34,4 @@ export * from './run-step-transition-table.js';
 export * from './retry/retry-policy.js';
 
 export * from './multitenancy-tenant-scope.js';
+export * from './tenancy.js';
