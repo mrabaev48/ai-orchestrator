@@ -35,3 +35,4 @@ export * from './retry/retry-policy.js';
 
 export * from './multitenancy-tenant-scope.js';
 export * from './tenancy.js';
+export * from './config/project-config.js';

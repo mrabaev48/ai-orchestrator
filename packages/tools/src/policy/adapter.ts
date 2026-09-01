@@ -1,14 +1,10 @@
 import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
+import type { SafeWriteMode } from '@ai-orchestrator/core';
 import { SafetyViolationError } from '@ai-orchestrator/shared';
 
-export type SafeWriteMode =
-  | 'read-only'
-  | 'propose-only'
-  | 'sandbox-write'
-  | 'workspace-write'
-  | 'protected-write';
+export type { SafeWriteMode };
 
 export interface ToolPolicyAdapter {
   assertWriteAllowed: (targetPath: string) => string;
