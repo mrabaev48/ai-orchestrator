@@ -12,7 +12,7 @@
 | ✅ Готово | Принято, критерии приёмки выполнены |
 | 🚫 Заблокирован | Не может быть начат (ждёт зависимость/решение) |
 
-**Всего тасков:** 182 · **Готово:** 2 · **В работе:** 0 · **Осталось:** 180
+**Всего тасков:** 182 · **Готово:** 3 · **В работе:** 0 · **Осталось:** 179
 
 ## 01 · foundation-contracts (P0)
 
@@ -20,7 +20,7 @@
 |---|---|---|---|------------|
 | [0101](01-foundation-contracts/0101-tenant-project-repository-types.md) | Доменные типы Tenant / Project / Repository | S | — | ✅ Готово   |
 | [0102](01-foundation-contracts/0102-project-config-contract.md) | Контракт ProjectConfig и правила наследования | M | 0101 | ✅ Готово   |
-| [0103](01-foundation-contracts/0103-policy-narrowing-invariant.md) | Инвариант «дочерняя политика только сужает» | S | 0102 | ⬜ Не начат |
+| [0103](01-foundation-contracts/0103-policy-narrowing-invariant.md) | Инвариант «дочерняя политика только сужает» | S | 0102 | ✅ Готово   |
 | [0104](01-foundation-contracts/0104-run-context-contract.md) | Контракт RunContext | S | 0101, 0102 | ⬜ Не начат |
 | [0105](01-foundation-contracts/0105-scoped-state-store-port.md) | Порт ScopedStateStore | M | 0101 | ⬜ Не начат |
 | [0106](01-foundation-contracts/0106-bindscope-legacy-adapter.md) | Адаптер bindScope: ScopedStateStore → StateStore | S | 0105 | ⬜ Не начат |
