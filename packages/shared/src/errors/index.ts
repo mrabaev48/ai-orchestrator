@@ -6,7 +6,8 @@ export type ErrorCode =
   | 'LLM_PROVIDER_ERROR'
   | 'SCHEMA_VALIDATION_ERROR'
   | 'SAFETY_VIOLATION_ERROR'
-  | 'STATE_INTEGRITY_ERROR';
+  | 'STATE_INTEGRITY_ERROR'
+  | 'POLICY_ESCALATION_ERROR';
 
 export type StepBoundary = 'role_execution' | 'tool_invocation' | 'workflow_step';
 
@@ -158,6 +159,23 @@ export class StateIntegrityError extends OrchestratorError {
     super('STATE_INTEGRITY_ERROR', message, {
       ...options,
       exitCode: 9,
+      needsHumanDecision: options.needsHumanDecision ?? true,
+    });
+  }
+}
+
+export interface PolicyEscalationErrorDetails {
+  field: string;
+  parentValue: unknown;
+  childValue: unknown;
+  reason: string;
+}
+
+export class PolicyEscalationError extends OrchestratorError {
+  constructor(message: string, options: ErrorOptions = {}) {
+    super('POLICY_ESCALATION_ERROR', message, {
+      ...options,
+      exitCode: 10,
       needsHumanDecision: options.needsHumanDecision ?? true,
     });
   }
