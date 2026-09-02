@@ -55,7 +55,7 @@ const ALLOWED_WORKSPACE_DEPENDENCIES = new Map<string, ReadonlySet<string>>([
     ]),
   ],
   ['@ai-orchestrator/state', new Set(['@ai-orchestrator/core', '@ai-orchestrator/shared'])],
-  ['@ai-orchestrator/tools', new Set(['@ai-orchestrator/shared'])],
+  ['@ai-orchestrator/tools', new Set(['@ai-orchestrator/shared', '@ai-orchestrator/core'])],
   [
     '@ai-orchestrator/execution',
     new Set([

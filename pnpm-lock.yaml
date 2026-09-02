@@ -309,6 +309,9 @@ importers:
 
   packages/tools:
     dependencies:
+      '@ai-orchestrator/core':
+        specifier: workspace:*
+        version: link:../core
       '@ai-orchestrator/shared':
         specifier: workspace:*
         version: link:../shared

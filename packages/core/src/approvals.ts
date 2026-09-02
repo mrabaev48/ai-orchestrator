@@ -1,15 +1,8 @@
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed';
+import type { ApprovalRequestedAction } from './config/project-config.js';
 
-export type ApprovalRequestedAction =
-  | 'git_push'
-  | 'pr_draft'
-  | 'db_migration'
-  | 'file_delete'
-  | 'api_breaking_change'
-  | 'dependency_bump'
-  | 'security_auth_change'
-  | 'production_config_change'
-  | 'bulk_file_change';
+export type { ApprovalRequestedAction };
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'resumed' | 'completed';
 
 export interface ApprovalRequest {
   id: string;
